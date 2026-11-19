@@ -27,7 +27,8 @@ ANCHORS (this is what keeps pages true)
     <a class="tm-node" href="payments.html" data-src="src/pay/charge.ts#chargeCard">...</a>
   path = file or folder relative to the repo root (exact case). #name = a function/class/route/config key that
   literally appears in that file (whole word, case-sensitive). #name is optional; folders take no #name.
-  #name may be any literal text in the file, e.g. a route: data-src="server/api.ts#/api/orders".
+  #name may be any literal text in the file, e.g. a route: data-src="server/api.ts#/api/orders" (the whole-word
+  rule only checks the characters just before and after the text).
 - The user can click any box to see its real code (read live from the repo around #name) and its wires.
 - Only anchor code you have actually read. Never invent paths.
 - `{{CMD}} check` reports broken (path or name gone) and changed (code changed after the page was written).
@@ -42,12 +43,14 @@ Pages are working documents for engineers, read next to the code. They are not l
 - Never accent a single word in a headline.
 - Structure must carry information: numbers only for a real sequence; a panel (.tm-card) only for things that
   belong together; never a card inside a card; never wrap every paragraph in a box; at most one callout per section.
-- One emphasis per page: the key path (.is-key on the 3-5 boxes along it). Everything else stays quiet.
+- One emphasis per page: the main path (.is-key on the boxes of the main round trip, return leg included,
+  usually 3-7). Everything else stays quiet.
 - No gradients, shadows, glows, background patterns or animation. Don't add any.
 - Colors come only from the kit tokens. Status colors mean status, never decoration.
 - Monospace only for real code: paths, symbols, commands.
 - Boxes: 2-4 word titles taken from the code, one path line, at most one short sentence. At most 4 boxes per
-  layer and 12 per map. More: split it – overview here, detail on the module's own page.
+  layer; aim for about 12 per map, never more than 16. Do not drop a part that matters (an auth boundary, the
+  store) to stay under the number: merge minor neighbours instead, or give the detail its own page.
 - Readability comes from few crossings: order boxes in each layer so wires run straight down, put a box under
   the box that calls it, and prefer wires between neighbouring layers. Real loops (a callback, a reply going
   back up) are fine: draw them, truemap routes them.

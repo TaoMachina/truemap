@@ -141,7 +141,7 @@ function agentLoopHint() {
 
 function printCheck(result, indent = '') {
   const bad = result.anchors.filter((a) => a.state !== 'ok');
-  out(`${indent}check: ${result.counts.ok} ok, ${result.counts.changed} changed, ${result.counts.broken} broken`);
+  out(`${indent}check: ${result.counts.ok} ok, ${result.counts.changed} changed, ${result.counts.broken} broken${result.wireCount ? `; wires: ${result.wireCount - (result.wires || []).length} of ${result.wireCount} drawn` : ''}`);
   for (const a of bad) out(`${indent}  - ${a.state}: ${q(a.src)}  # ${a.reason}`);
   for (const w of result.wires || []) out(`${indent}  - wire not drawn: ${q(w.from)} -> ${q(w.to)}  # ${w.reason}`);
   for (const l of result.layout || []) out(`${indent}  - layout: ${l}`);
@@ -371,7 +371,7 @@ function cmdOutline(root) {
   out('tree:   # folder, files, approx lines, biggest files');
   for (const d of o.dirs) out(`  - ${q(d.path)}  files=${d.files} lines=${d.lines}  ${d.top.join(', ')}`);
   if (o.entries.length) out(`likely_entry_points: ${o.entries.map(q).join(', ')}`);
-  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: one layer per role (entry points, modules, storage, external), 5-12 boxes, data-to wires with labels, data-src on every box that stands for code. Run \`${CMD} guide\` for the kit if you have not.`);
+  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: layers in the order a request travels (entry points, handlers, core, executors and storage, outside the code), 8-14 boxes, data-to wires with labels, data-src on every box that stands for code. Run \`${CMD} guide\` for the kit if you have not.`);
 }
 
 function cmdGuide() {
