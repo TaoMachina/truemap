@@ -41,6 +41,7 @@
   // ---------- wires: <div class="tm-node" id="orders" data-to="payments payments-db:reads"> ----------
   const SVGNS = 'http://www.w3.org/2000/svg';
   function drawWires() {
+    document.documentElement.style.setProperty('--tm-vw', `${document.documentElement.clientWidth}px`);
     for (const map of document.querySelectorAll('.tm-map, .tm-blueprint')) {
       map.querySelector(':scope > svg.tm-wires')?.remove();
       const sources = [...map.querySelectorAll('[data-to]')];
@@ -88,7 +89,8 @@
               d = `M${sx},${sy} V${my - rr} Q${sx},${my} ${sx + dir * rr},${my} H${tx - dir * rr} Q${tx},${my} ${tx},${my + rr} V${ty}`;
             }
             head = `M${tx - 4.5},${ty - 1} L${tx + 4.5},${ty - 1} L${tx},${ty + 6} Z`;
-            mid = Math.abs(tx - sx) < 2 ? { x: tx + 2, y: (sy + ty) / 2 } : { x: Math.min(sx, tx) + Math.abs(tx - sx) / 2 - 20, y: my - 9 };
+            // the label sits by the box the wire leaves, so it is clear which wire it names
+            mid = { x: sx - 2, y: Math.min(sy + 10, my - 6) };
           } else if (b.b <= a.t + 2) { // above
             const sx = a.cx; const sy = a.t; const tx = b.cx; const ty = b.b + 6;
             const my = sy - Math.max(12, Math.min(22, (sy - ty) / 2));
