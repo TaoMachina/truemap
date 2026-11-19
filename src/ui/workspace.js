@@ -349,17 +349,26 @@
   }
   const scrollChat = () => { msgsEl.scrollTop = msgsEl.scrollHeight; };
   let hoverLit = null;
+  let pinnedFocus = null;
+  const endPreview = () => {
+    msgsEl.querySelector('li.lit')?.classList.remove('lit');
+    const keep = pinnedFocus && pinnedFocus.page === state.page ? pinnedFocus.msg : null;
+    hoverLit = keep ? '__pinned' : null;
+    toFrame(keep ? { ...keep, scroll: false } : { type: 'clear-focus' });
+  };
+  const unpin = () => { pinnedFocus = null; if (hoverLit === '__pinned') hoverLit = null; };
   msgsEl.addEventListener('mouseover', (e) => {
     const host = e.target.closest('li.has-ref, a.ref');
     const ids = host ? [...new Set([...(host.matches('a.ref') ? [host] : host.querySelectorAll('a.ref'))].flatMap((r) => r.dataset.focus.split(',')).filter(Boolean))] : null;
     const key = ids ? ids.join(',') : null;
     if (key === hoverLit || (!key && (hoverLit === '__pinned' || !hoverLit))) return;
+    if (!ids) return endPreview();
     msgsEl.querySelector('li.lit')?.classList.remove('lit');
     hoverLit = key;
-    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: false, transient: true }); }
-    else toFrame({ type: 'clear-focus' });
+    if (host.matches('li')) host.classList.add('lit');
+    toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: false, transient: true });
   });
-  msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); } });
+  msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') endPreview(); });
   msgsEl.addEventListener('click', (e) => {
     const cc = e.target.closest('.cc-row');
     if (cc) { if (cc.dataset.page !== state.page) { state.pendingOpen = cc.dataset.src; go(cc.dataset.page); } else toFrame({ type: 'open-box', src: cc.dataset.src }); return; }
@@ -385,6 +394,7 @@
   function pointAt(items, note, who, page) {
     const target = page && state.pages.some((p) => p.page === page) ? page : state.page;
     const msg = { type: 'focus', items, note: note || '', who: who || agentName() };
+    pinnedFocus = { page: target, msg }; hoverLit = '__pinned';
     if (target && target !== state.page) { state.pendingFocus = msg; go(target); } else toFrame(msg);
   }
 
@@ -506,7 +516,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !inspecting() || !menu.hidden || !$('moreMenu').hidden) return;
     if (e.target.closest?.('.insp-comment') && e.target.value) return;
-    closeInspector(); toFrame({ type: 'clear-focus' }); e.stopPropagation();
+    closeInspector(); unpin(); toFrame({ type: 'clear-focus' }); e.stopPropagation();
   }, true);
 
   // "Ask about this": the box goes along with the next message.
@@ -903,7 +913,7 @@
       $('litPill').hidden = !n || !!d.transient;
       $('litText').textContent = n === 1 ? '1 box lit' : `${n} boxes lit`;
     } else if (d.type === 'focus-cleared') {
-      $('litPill').hidden = true;
+      $('litPill').hidden = true; unpin();
     } else if (d.type === 'plan-act') {
       if (d.act === 'approve') {
         if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { approving: true }); }
@@ -928,7 +938,7 @@
     }
   });
 
-  $('litClear').onclick = () => { toFrame({ type: 'clear-focus' }); $('litPill').hidden = true; };
+  $('litClear').onclick = () => { unpin(); toFrame({ type: 'clear-focus' }); $('litPill').hidden = true; };
 
   // ---------- live events from the server ----------
   let closedTimer = null;
@@ -993,10 +1003,10 @@
         if (d.page && state.pages.some((p) => p.page === d.page)) go(d.page, { force: true });
         renderHeader();
       } else if (d.type === 'show') {
-        if (d.clear) toFrame({ type: 'clear-focus' });
+        if (d.clear) { unpin(); toFrame({ type: 'clear-focus' }); }
         else pointAt(d.focus || [], d.note || '', AGENTS[d.agent] || agentName(), d.page);
       } else if (d.type === 'plan') {
-        if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); }
+        msgsEl.querySelector('li.lit')?.classList.remove('lit'); unpin();
         $('litPill').hidden = true; toFrame({ type: 'clear-focus' });
         state.plan = d.plan || null; renderPlan(); sendPlan(); renderNotes();
       } else if (d.type === 'changes-base') {
