@@ -1,6 +1,7 @@
 // The local truemap server: one per repo, started on demand by the CLI, invisible to the user.
 // Serves the workspace UI, the .truemap pages (with the SDK injected), a chat queue between
 // the browser and the agent's CLI (listen/reply), and live updates over Server-Sent Events.
+import { spawn } from 'node:child_process';
 import { createServer, request as httpRequest } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
@@ -706,6 +707,23 @@ setInterval(() => { if (clients.size > 0) scheduleChecks(); }, 30_000).unref();
 setInterval(() => {
   if (!listener && (agentState === 'working' || agentState === 'idle') && Date.now() - lastAgentActivity > 20 * 60 * 1000) setAgentState('offline');
 }, 60_000).unref();
+
+// truemap's own files can change under a running server (an upgrade in place, a local build). New files
+// served by old code break pages, so the server hands over to a fresh one on the same address at once;
+// open tabs reconnect and reload, and a waiting listen returns 'timeout' so the agent simply listens again.
+let handingOver = false;
+setInterval(() => {
+  if (handingOver || buildId() === BUILD) return;
+  handingOver = true;
+  finishListen({ status: 'timeout' });
+  broadcast({ type: 'closing', restart: true });
+  try { const st = JSON.parse(readFileSync(statePath, 'utf8')); if (st.pid === process.pid) rmSync(statePath, { force: true }); } catch { /* ignore */ }
+  for (const srv of [server, content]) { srv.close(); srv.closeAllConnections?.(); }
+  setTimeout(() => {
+    spawn(process.execPath, [join(PKG_DIR, 'src', 'server.js'), root], { detached: true, stdio: 'ignore', windowsHide: true, cwd: root }).unref();
+    process.exit(0);
+  }, 300);
+}, 2000).unref();
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
