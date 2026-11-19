@@ -64,6 +64,29 @@ async function takeSnapshot(kind, extra = {}) {
 }
 const changeCache = new Map(); // base -> { at, promise }
 
+// ---------- what changed in a turn comes to the user, in the conversation ----------
+let lastPostedChanges = snapshots.posted || '';
+async function postChanges(base = 'turn') {
+  if (base === 'turn' && !snapshots.turn) return null;
+  const r = await changes(root, base, snapshots).catch(() => null);
+  if (!r || r.error || !r.files) return r;
+  const key = `${r.base.kind}:${snapshots[r.base.kind]?.tree || ''}:${r.now}`;
+  if (key === lastPostedChanges) return r;
+  lastPostedChanges = key; snapshots.posted = key; saveSnapshots();
+  const p = plan && snapshots.plan?.slug === plan.slug && r.base.kind === 'plan' ? planCheck(root, plan, r) : null;
+  remember({
+    role: 'agent', kind: 'changes', id: `c${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName,
+    text: `Changed ${r.files} file${r.files > 1 ? 's' : ''}`,
+    changes: {
+      base: r.base.kind, label: r.base.label, files: r.files, add: r.add, del: r.del,
+      boxes: r.boxes.slice(0, 16).map((b) => ({ src: b.src, name: b.name, add: b.add, del: b.del, pages: b.pages, files: b.files.map((x) => x.path) })),
+      unmapped: r.unmapped.flatMap((g) => g.files).slice(0, 30).map((x) => ({ path: x.path, add: x.add, del: x.del })),
+      notDone: p ? p.planned.filter((x) => !x.changed).map((x) => x.name || x.box) : [],
+    },
+  });
+  return r;
+}
+
 // ---------- plans ----------
 let plan = (() => { try { return currentPlan(root); } catch { return null; } })();
 function setPlan(p) {
@@ -153,11 +176,13 @@ function deliverQueue() {
   if (listener && (listener.res.destroyed || listener.res.writableEnded)) { clearTimeout(listener.timer); listener = null; setAgentState('idle'); }
   if (!listener || queue.length === 0) return;
   const messages = queue.splice(0, queue.length);
-  takeSnapshot('turn');
+  // The code is photographed before the agent hears the message, so its first edit is never part of "before".
+  const { res, timer } = listener; clearTimeout(timer); listener = null;
   setAgentState('working');
   lastAgentActivity = Date.now();
   broadcast({ type: 'delivered', ids: messages.map((m) => m.id) });
-  finishListen({ status: 'message', messages, ...(plan && plan.status === 'review' ? { plan_waiting: plan.title } : {}) });
+  const body = { status: 'message', messages, ...(plan && plan.status === 'review' ? { plan_waiting: plan.title } : {}) };
+  takeSnapshot('turn').catch(() => null).finally(() => { if (!res.writableEnded) sendJson(res, 200, body); });
 }
 
 function scheduleCloseCheck() {
@@ -473,6 +498,8 @@ const server = createServer(async (req, res) => {
     }
     if (p === '/api/agent/listen' && req.method === 'POST') {
       const b = await readBody(req);
+      // the agent listens again: its turn is over, so what it changed goes to the user
+      postChanges('turn'); // posts only when something changed since the turn began, and only once
       if (listener) finishListen({ status: 'replaced' });
       lastAgentActivity = Date.now();
       noteAgent(b.agent);
@@ -533,7 +560,7 @@ const server = createServer(async (req, res) => {
       noteAgent(b.agent);
       const base = ['turn', 'plan', 'head', 'main'].includes(b.base) ? b.base : 'auto';
       const r = await changesFor(base, true);
-      if (b.open !== false) broadcast({ type: 'view', view: 'changes', base });
+      if (b.open !== false && !r.error && r.files) await postChanges(r.base.kind);
       return sendJson(res, 200, { ...r, browsers: clients.size });
     }
     if (p === '/api/agent/plan' && req.method === 'POST') {

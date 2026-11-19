@@ -370,11 +370,11 @@ async function cmdChanges(root, args, opts) {
       if (st.rewritten) out(`    report_history: ${q(st.rewritten)}`);
     }
   }
-  out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
+  out(`browser: ${r.browsers ? 'shown to the user as a card in the conversation; changed boxes carry their lines on the map' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
   if (r.plan && r.plan.status !== 'done') steps.push(`When the plan is built, run \`${CMD} plan --done\`. If some steps are not built, say so in your reply (or add --step "3=not_built:why" so it shows beside the facts).`);
   if (r.plan?.steps?.some((x) => x.conflict)) steps.push('Some steps you reported done name files with no changes: fix the work or correct your report (the user sees both, and the report history).');
-  if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
+  if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They see it as a card in the conversation and on the map; a box opens its diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
   block('next_step', steps.join('\n'));

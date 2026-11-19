@@ -13,9 +13,9 @@ Your agent keeps a map of the project in your repo: small boxes in groups, each 
 Coding agents write code faster than anyone can read it. Review is the bottleneck, and a wall of text or a 40-file diff is the wrong place to do it.
 
 - **Review the plan before the work.** For a change that touches several parts, the agent draws what it will add and touch on the map. Click a box to comment, then approve or ask for changes. The agent waits.
-- **Review the change after the work.** Changed boxes carry their +/− lines; files no box covers are listed by folder. Click a box to see its diff. Measured from when the agent picked up your message, from when you approved the plan, or against your main branch.
+- **See the change after the work.** When the agent finishes a turn, a card in the conversation lists the boxes it changed (+/- lines) and files no box covers; the changed boxes carry their lines on the map. Click one to see its diff, next to what the plan said.
 - **Ask, and the answer points.** Answers come as short steps; each step lights up the boxes it is about. Escape or a click on empty space brings back the plain map.
-- **Click any box.** What it does, what to know, why it is built that way, what it calls, and the real code (read live from your repo) when you want it.
+- **Click a box to follow it; double-click to comment.** A click lights its connections. A double-click opens a small card right there with what it is and a comment field; Details shows the real code, read live from your repo.
 - **A map that stays true.** Every box carries a `data-src="path#name"` anchor. When that code changes or disappears, the box is marked and the agent fixes the map.
 - **Many projects.** Every project with truemap running is one click away, and the tab tells you when another one needs you (a plan to review, a new reply).
 - **Any agent.** Claude Code, Codex, OpenCode, Cursor CLI, or agents inside hosts such as T3 Code: anything that can run a shell command.
@@ -48,7 +48,7 @@ your repo/
 | `npx -y truemap-cli [page]` | Opens the workspace in your browser, or switches the tab you already have open |
 | `npx -y truemap-cli outline` | A compact outline of the repo, so the first map takes minutes |
 | `npx -y truemap-cli plan --file plan.json` | Draws a plan on the map for review; `--approve` / `--done` from the terminal |
-| `npx -y truemap-cli changes [--base head\|main]` | What changed, by box; opens the Changes view |
+| `npx -y truemap-cli changes [--base head\|main]` | What changed, by box; also posted to the conversation after each turn |
 | `npx -y truemap-cli listen` | Waits for your next message, comments or approval |
 | `npx -y truemap-cli reply "…" --listen` | Shows the answer in the panel, then keeps listening |
 | `npx -y truemap-cli show [page] --focus ids --note "…"` | Points at the map while explaining |

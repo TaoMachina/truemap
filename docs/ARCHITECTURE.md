@@ -43,7 +43,7 @@ We own three distribution points:
 |---|---|
 | `npx -y truemap-cli [page]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. Prints the check result for the page and a `next_step` |
 | `npx -y truemap-cli plan --file plan.json` / `--approve` / `--done` | Draws a plan on its map for review; `listen` returns the approval or the requested changes |
-| `npx -y truemap-cli changes [--base turn\|plan\|head\|main]` | What changed, by box, and opens the Changes view |
+| `npx -y truemap-cli changes [--base turn\|plan\|head\|main]` | What changed, by box; also posted to the conversation after each turn |
 | `npx -y truemap-cli outline` | A compact repo outline (folders, sizes, manifests, likely entry points) so the first blueprint is fast |
 | `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
 | `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-] [--focus ids]` | Shows the answer in the chat and lights up the boxes it is about. With `--listen` it keeps listening in the same call |
@@ -67,7 +67,7 @@ browser workspace (http://127.0.0.1:<port>/?t=<token>)
  ├─ plan bar (when a plan is in review): Approve / Request changes
  ├─ center: the page in a sandboxed iframe from a SEPARATE origin (http://127.0.0.1:<contentPort>)
  │    the injected SDK lays out maps, routes connections, marks stale / changed / planned boxes
- └─ panel (collapsible): Conversation | Changes tabs; the inspector replaces it while a box is open
+ └─ panel (collapsible): the conversation (with a card of what changed after each turn); the inspector replaces it while a box is open
         │  SSE (server → browser) + fetch POST (browser → server)
 local server (src/server.js, one per repo, detached, auto-exits when idle)
  ├─ chat queue between browser and agent

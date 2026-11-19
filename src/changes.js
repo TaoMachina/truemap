@@ -103,6 +103,15 @@ export function attribute(root, files) {
       for (const p of (also || '').split(/[\s,]+/).filter(Boolean)) anchors.push({ page, src: m[1], path: p.replace(/^\.?\//, '') });
     }
   }
+  const names = new Map();
+  for (const { page } of pages) {
+    let html = '';
+    try { html = readFileSync(join(root, FOLDER, page), 'utf8'); } catch { continue; }
+    for (const m of html.matchAll(/<[^>]*\sdata-src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+      const nm = m[0].match(/\sdata-name\s*=\s*["']([^"']+)["']/i)?.[1];
+      if (nm && !names.has(m[1])) names.set(m[1], nm);
+    }
+  }
   const boxes = new Map(); // src -> { src, pages:Set, files:[] }
   const unmapped = [];
   for (const f of files) {
@@ -116,7 +125,7 @@ export function attribute(root, files) {
     }
   }
   const sum = (list, k) => list.reduce((n, f) => n + (f[k] || 0), 0);
-  const boxList = [...boxes.values()].map((b) => ({ src: b.src, pages: [...b.pages], files: b.files, add: sum(b.files, 'add'), del: sum(b.files, 'del') }))
+  const boxList = [...boxes.values()].map((b) => ({ src: b.src, name: names.get(b.src) || '', pages: [...b.pages], files: b.files, add: sum(b.files, 'add'), del: sum(b.files, 'del') }))
     .sort((a, b) => (b.add + b.del) - (a.add + a.del));
   const folders = new Map();
   const dirOf = (p) => p.replace(/\/?[^/]*$/, '');

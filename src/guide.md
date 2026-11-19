@@ -134,9 +134,10 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
 - Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 
 SHOW WHAT YOU CHANGED (after you edited code)
-- Run `{{CMD}} changes`. It prints what changed by box, plus files no box covers, and opens the Changes view:
-  changed boxes carry their +/- lines and the user opens the diff from a box.
-  The base is the moment you picked up the user's message (or approved plan); --base head|main for others.
+- It comes to the user by itself: when your turn ends (you listen again), the conversation gets a card with
+  the boxes you changed (+/- lines), files no box covers, and planned boxes with no changes; the changed boxes
+  carry their lines on the map and open their diff. Run `{{CMD}} changes` to see the same summary yourself
+  (--base head|main for other comparisons); it also posts the card.
 - If a change adds something that matters (a new module, route or store), add a box for it to the map.
 
 DRAFTS (the everyday way to explain)

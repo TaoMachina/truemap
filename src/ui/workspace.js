@@ -270,10 +270,30 @@
     renderWorking();
     scrollChat(); requestAnimationFrame(scrollChat); setTimeout(scrollChat, 300);
   }
+  // What changed in a turn: one card in the conversation, badges on the map, the diff from the box.
+  function changesCard(c) {
+    const d = (a, x) => `<span class="delta">${[a ? `<span class="a">+${a}</span>` : '', x ? `<span class="d">−${x}</span>` : ''].filter(Boolean).join(' ') || '±0'}</span>`;
+    const rows = c.boxes.map((b) => `<button type="button" class="cc-row" data-src="${esc(b.src)}" data-page="${esc(b.pages?.includes(state.page) ? state.page : (b.pages?.[0] || state.page))}"><b>${esc(b.name || b.src.split('#')[1] || b.src)}</b>${d(b.add, b.del)}</button>`).join('');
+    const loose = c.unmapped?.length ? `<details class="cc-loose"><summary>${c.unmapped.length} file${c.unmapped.length > 1 ? 's' : ''} not on the map</summary>${c.unmapped.map((x) => `<div><code>${esc(x.path)}</code>${d(x.add, x.del)}</div>`).join('')}<button type="button" class="text-btn" data-act="map-these">Ask the agent to map these</button></details>` : '';
+    const notDone = c.notDone?.length ? `<p class="cc-warn">Planned, no changes: ${esc(c.notDone.join(', '))}</p>` : '';
+    return `<div class="cc"><div class="cc-head"><b>Changed ${c.files} file${c.files > 1 ? 's' : ''}</b>${d(c.add, c.del)}</div>${rows ? `<div class="cc-rows">${rows}</div>` : ''}${notDone}${loose}<p class="cc-hint">Click a box to see its diff.</p></div>`;
+  }
+  let latestChanges = null;
+  function showChangeBadges() {
+    toFrame({ type: 'changes', on: false, items: latestChanges ? latestChanges.boxes.filter((b) => !b.pages || b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del })) : [] });
+  }
   function appendEntry(e, scroll = true, live = false) {
     msgsEl.querySelector('.intro')?.remove();
     if (e.role !== lastRole) { msgsEl.appendChild(whoLine(e.role, e.at, e.agent)); lastRole = e.role; }
     const el = document.createElement('div');
+    if (e.kind === 'changes' && e.changes) {
+      el.className = 'msg agent';
+      el.innerHTML = changesCard(e.changes);
+      latestChanges = e.changes; showChangeBadges();
+      msgsEl.appendChild(el); renderWorking(); if (scroll) scrollChat();
+      if (live && !panelOpen()) { state.unread = true; renderBadge(); }
+      return;
+    }
     if (e.role === 'agent') {
       el.className = 'msg agent';
       el.innerHTML = e.ask && e.text.trim() === e.ask.question.trim() ? '' : md(e.text);
@@ -321,6 +341,13 @@
   });
   msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); } });
   msgsEl.addEventListener('click', (e) => {
+    const cc = e.target.closest('.cc-row');
+    if (cc) { if (cc.dataset.page !== state.page) { state.pendingOpen = cc.dataset.src; go(cc.dataset.page); } else toFrame({ type: 'open-box', src: cc.dataset.src }); return; }
+    if (e.target.closest('[data-act="map-these"]')) {
+      const files = [...e.target.closest('.cc').querySelectorAll('.cc-loose code')].map((c) => c.textContent);
+      send(`These changed files are not on the map yet. Add boxes for the ones that matter (or say why they don't need one): ${files.join(', ')}`, { context: [], noNotes: true });
+      return;
+    }
     const ref = e.target.closest('[data-focus]');
     if (ref) { e.preventDefault(); hoverLit = '__pinned'; pointAt(ref.dataset.focus.split(',').filter(Boolean), '', ''); return; }
     const step = e.target.closest('li.has-ref');
@@ -415,8 +442,8 @@
     inspBody.innerHTML = `
       <div class="insp-name"><h2>${esc(box.label)}</h2>${box.tag ? `<code>${esc(box.tag)}</code>` : ''}</div>
       ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>${box.planNote ? `<p class="insp-why">${esc(box.planNote)}</p>` : ''}` : ''}
-      ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed since this box was last checked.'}</div>` : ''}
-      ${box.mark === 'changed' && box.src ? '<details class="insp-drift" open><summary>What changed in its code</summary><div class="code-box"><div class="code-note">Reading the diff…</div></div></details>' : ''}
+      ${box.mark && !(box.mark === 'changed' && latestChanges?.boxes?.some((x) => x.src === box.src)) ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed since this box was last checked.'}</div>` : ''}
+      ${box.mark === 'changed' && box.src && !latestChanges?.boxes?.some((x) => x.src === box.src) ? '<details class="insp-drift" open><summary>What changed in its code</summary><div class="code-box"><div class="code-note">Reading the diff…</div></div></details>' : ''}
       ${unbuiltNote(box)}${changeSection(box)}
       ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
       ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
@@ -614,10 +641,10 @@
   }
   // The inspector shows what changed in a box while you review changes.
   function changeSection(box) {
-    if (!showingChanges() || !ch.data?.boxes) return '';
-    const b = ch.data.boxes.find((x) => x.src === box.src);
+    const b = latestChanges?.boxes?.find((x) => x.src === box.src);
     if (!b) return '';
-    return `<div class="insp-change"><div><span>${esc(ch.data.base.label)}</span>${b.files.length > 1 ? delta(b.add, b.del) : ''}</div>${b.files.map((f, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(f.path)}"><summary><span>${esc(f.path)}${f.shared ? `<span class="shared">shared with ${plural(f.shared, 'other box')}</span>` : ''}</span>${delta(f.add, f.del)}</summary><div class="code-box"></div></details>`).join('')}</div>`;
+    ch.data = { base: { kind: latestChanges.base, label: latestChanges.label } };
+    return `<div class="insp-change"><div><span>Changed in the last turn</span>${delta(b.add, b.del)}</div>${b.files.map((p, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(p)}"><summary><span>${esc(p)}</span></summary><div class="code-box"></div></details>`).join('')}</div>`;
   }
   function wireChangeSection() {
     for (const d of inspBody.querySelectorAll('.insp-change details')) {
@@ -625,7 +652,7 @@
       d.addEventListener('toggle', load); load();
     }
   }
-  setInterval(() => { if (document.visibilityState === 'visible') loadChanges(); }, 10_000);
+
 
   // ---------- plan review: the agent's plan on the map, approve or ask for changes ----------
   // Requesting changes is a mode of the composer: a heading says so, Send sends the request (comments included).
@@ -672,7 +699,7 @@
     const p = state.plan; if (!act || !p) return;
     if (act === 'open') go(p.page);
     else if (act === 'hide') { state.planHidden = `${p.slug}:${p.status}`; renderPlan(); }
-    else if (act === 'changes') { ch.base = 'plan'; ch.data = null; setPanel(true); setTab('changes'); }
+    else if (act === 'changes') { setPanel(true); scrollChat(); }
     else if (act === 'request') { setPanel(true); setTab('convo'); setRequest(true); }
     else if (act === 'approve') {
       // comments written before approving still go to the agent, first
@@ -835,7 +862,7 @@
       if (d.page && d.page !== state.page) setCurrent(d.page);
       closeInspector();
       if (state.pendingFocus) { const pf = state.pendingFocus; state.pendingFocus = null; setTimeout(() => toFrame({ type: 'focus', note: '', who: agentName(), ...pf }), 60); }
-      renderHeader(); sendMarks(); sendChangeMarks(); sendPlan(); renderPlan();
+      renderHeader(); sendMarks(); showChangeBadges(); sendPlan(); renderPlan();
       if (state.pendingOpen) { const src = state.pendingOpen; state.pendingOpen = null; setTimeout(() => toFrame({ type: 'open-box', src }), 80); }
       syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
@@ -914,7 +941,7 @@
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';
         state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
         state.plan = d.plan || null;
-        renderAll(); renderAgent(); renderNotes(); loadChanges(); renderPlan();
+        renderAll(); renderAgent(); renderNotes(); renderPlan();
         const last = [...state.history].reverse().find((h) => h.role === 'agent');
         if (!panelOpen() && !narrow() && (state.plan?.status === 'review' || (last?.ask && !state.history.some((h) => h.kind === 'answer' && h.at > last.at)))) setPanel(true, false);
         const fromHash = decodeURIComponent((location.hash.match(/page=([^&]+)/) || [])[1] || '');
@@ -950,9 +977,8 @@
         $('litPill').hidden = true; toFrame({ type: 'clear-focus' });
         state.plan = d.plan || null; renderPlan(); sendPlan(); renderNotes();
       } else if (d.type === 'changes-base') {
-        loadChanges();
       } else if (d.type === 'view') {
-        if (d.view === 'changes') { if (d.base && d.base !== 'auto' && !ch.userBase) { ch.base = d.base; ch.data = null; } setPanel(true); setTab('changes'); }
+        if (d.view === 'changes') { setPanel(true); scrollChat(); }
       } else if (d.type === 'closing') {
         es.close(); setConn('closed');
       }

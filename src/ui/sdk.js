@@ -158,10 +158,15 @@
   // Click a box: a small card beside it with what it is and a comment field, so your eyes stay on the map.
   // If the inspector is already open on the right, it follows the box.
   function openBox(box) {
+    // a second click on the selected box lets go of it
+    if (selected === box) { select(null); post({ type: 'deselect' }); return; }
+    select(box);
+    post({ type: 'peek-if-open', page: pagePath(), box: boxInfo(box) });
+  }
+  function cardFor(box) {
     select(box);
     const existing = [...notes.values()].find((n) => n.el === box);
-    openCard({ target: box, noteId: existing?.id || null, view: !existing });
-    post({ type: 'peek-if-open', page: pagePath(), box: boxInfo(box) });
+    openCard({ target: box, noteId: existing?.id || null });
   }
   function peek(el) {
     select(el);
@@ -610,9 +615,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     if (!box || t.closest('a[href],button,input,select,textarea,label,summary,.tm-ask,[role=tab]')) return;
     e.preventDefault();
     getSelection()?.removeAllRanges();
-    select(box);
-    const existing = [...notes.values()].find((n) => n.el === box);
-    openCard({ target: box, noteId: existing?.id || null });
+    cardFor(box);
   }, true);
 
   document.addEventListener('mouseup', (e) => {
@@ -635,7 +638,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
     if (e.key === 'Escape' && (focusSet.length || focusNote)) { clearFocus(); post({ type: 'focus-cleared' }); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); openBox(e.target); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); cardFor(e.target); return; }
   });
 
   // ---------- decisions: <form class="tm-ask" data-tm-ask="question"> ----------
@@ -736,7 +739,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
       if (names.length) post({ type: 'changes-names', items: names });
     } else if (d.type === 'open-box') {
       const el = d.id ? document.getElementById(d.id) : [...document.querySelectorAll('[data-src]')].find((x) => x.getAttribute('data-src') === d.src);
-      if (el) { reveal([el], 'nearest'); peek(el); }
+      if (el) { reveal([el], 'nearest'); select(el); peek(el); }
     } else if (d.type === 'clear-focus') {
       clearFocus();
     } else if (d.type === 'highlight') {
