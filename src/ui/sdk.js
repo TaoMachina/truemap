@@ -151,6 +151,8 @@
     if (selected === el) return;
     selected?.removeAttribute('data-tm-selected');
     selected = el || null; selected?.setAttribute('data-tm-selected', '');
+    // the selected box's own lines stay lit while its inspector is open
+    for (const w of document.querySelectorAll('.tm-dg-edge, .tm-dg-head, .tm-dg-label')) w.classList.toggle('is-sel', !!el?.id && (w.dataset.from === el.id || w.dataset.to === el.id));
     if (!el && document.activeElement?.matches?.('.tm-node, .tm-step')) document.activeElement.blur();
   }
   function peek(el) {
@@ -305,7 +307,7 @@
     .bubble-x:hover { color: #fff; background: rgba(255,255,255,.1); }
     .ring.noted { border-color: rgba(20, 20, 19, .35); }
     @media (prefers-color-scheme: dark) { .ring { border-color: #f2f2ee; } .ring.noted { border-color: rgba(242, 242, 238, .45); } }
-    .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #141413; color: #fff;
+    .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #ffe27a; color: #141413;
       font: 600 11px/20px "Commit Mono", ui-monospace, Consolas, monospace; text-align: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(20,20,19,.25); }
     .select-btn { position: absolute; all: unset; position: absolute; cursor: pointer; background: #141413; color: #fff; font: 500 12.5px/1 "Instrument Sans", system-ui, sans-serif; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px -8px rgba(20,20,19,.5); }
     .select-btn:hover { background: #141413; }
@@ -624,7 +626,7 @@
         for (const el of document.querySelectorAll('[data-src]')) {
           if (el.getAttribute('data-src') !== it.src) continue;
           el.setAttribute('data-tm-change', '');
-          el.setAttribute('data-tm-delta', it.add == null ? 'binary' : `+${it.add} −${it.del}`);
+          el.setAttribute('data-tm-delta', it.add == null ? 'binary' : [it.add ? '+' + it.add : '', it.del ? '−' + it.del : ''].filter(Boolean).join(' ') || '±0');
           names.push({ src: it.src, name: clean(el.getAttribute('data-name'), 60) || labelOf(el) });
         }
       }

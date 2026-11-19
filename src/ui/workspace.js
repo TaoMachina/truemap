@@ -187,7 +187,7 @@
     const r = resultFor(state.page); const st = stateOf(r);
     const chip = $('checkChip');
     if (!r || r.missing || !r.anchors?.length || state.conn === 'closed') { chip.hidden = true; return; }
-    chip.hidden = false;
+    chip.hidden = !st;
     const { changed, broken } = r.counts;
     chip.dataset.state = st || 'ok';
     $('checkText').textContent = broken ? S.broken(broken) + (changed ? `, ${S.changed(changed)}` : '') : changed ? S.changed(changed) : S.ok;
@@ -243,6 +243,9 @@
     const count = state.notes.length;
     const reviewing = state.plan?.status === 'review' && state.plan.page === state.page;
     $('send').textContent = planRequest || (reviewing && count) ? `Request changes${count ? ` (${count})` : ''}` : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
+    const rq = planBar.querySelector('[data-pb="request"]');
+    if (rq) { rq.textContent = count && reviewing ? `Request changes (${count})` : 'Request changes'; rq.classList.toggle('primary', !!(count && reviewing)); planBar.querySelector('[data-pb="approve"]')?.classList.toggle('primary', !(count && reviewing)); }
+    $('send').classList.toggle('quiet', !!(reviewing && count));
     if (!planRequest) input.placeholder = count ? S.placeholderNotes : S.placeholder;
   }
 
@@ -437,9 +440,6 @@
       renderNotes(); syncFrameNotes();
       panelWasClosed = false; closeInspector(); input.focus();
     };
-    const widen = () => app.classList.toggle('wide-panel', !!inspBody.querySelector('.insp-code[open], .insp-change details[open]'));
-    for (const d of inspBody.querySelectorAll('details')) d.addEventListener('toggle', widen);
-    widen();
     const code = inspBody.querySelector('.insp-code');
     if (code) code.addEventListener('toggle', () => { if (code.open && !code.dataset.loaded) { code.dataset.loaded = '1'; loadCode(box, code.querySelector('.code-box'), seq); } });
     inspBody.querySelector('.open-ed')?.addEventListener('click', (e) => e.stopPropagation());
@@ -508,15 +508,14 @@
       unbuilt: on && ch.data.plan ? ch.data.plan.planned.filter((p) => !p.changed).map((p) => ({ box: p.box, src: p.src, what: p.what })) : [],
     });
   }
-  const delta = (a, d) => `<span class="delta">${a == null ? 'binary' : `<span class="a">+${a}</span> <span class="d">−${d}</span>`}</span>`;
+  const delta = (a, d) => `<span class="delta">${a == null ? 'binary' : [a ? `<span class="a">+${a}</span>` : '', d ? `<span class="d">−${d}</span>` : ''].filter(Boolean).join(' ') || '±0'}</span>`;
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   function renderChanges() {
     const el = $('changes'); const r = ch.data;
     if (!r) { el.innerHTML = '<p class="ch-empty">Reading the working tree…</p>'; return; }
     if (r.error) { el.innerHTML = `<p class="ch-empty">Changes need a git repository with at least one commit (${esc(r.error)}).</p>`; return; }
     const opts = r.bases.map((k) => `<option value="${k}"${k === r.base.kind ? ' selected' : ''}>${esc(k === r.base.kind ? r.base.label : BASES[k])}</option>`).join('');
-    let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select></div>`;
-    html += `<p class="ch-sum">${r.files ? `${plural(r.files, 'file')} changed ${delta(r.add, r.del)}` : 'Nothing changed.'}${r.base.at ? ` Measured from ${esc(timeOf(r.base.at))}.` : ''}</p>`;
+    let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select><span class="ch-sum">${r.files ? `${plural(r.files, 'file')} ${delta(r.add, r.del)}` : 'Nothing changed'}</span></div>`;
     if (r.plan) {
       const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
       html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes have changes${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} outside the plan` : ''}. Open a box to check its diff against what was planned.</p>`;
@@ -558,11 +557,15 @@
     el.innerHTML = html;
   }
   function diffHtml(text) {
-    const rows = [];
+    const rows = []; let oldN = 0; let newN = 0;
     for (const l of String(text || '').split('\n')) {
-      if (/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(l)) continue;
-      const cls = l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : '';
-      rows.push(`<span class="${cls}">${esc(l) || ' '}</span>`);
+      if (/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename |\\ No newline)/.test(l)) continue;
+      const h = l.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
+      if (h) { oldN = +h[1]; newN = +h[2]; rows.push(`<span class="hunk"><i></i>${esc(l.replace(/^@@[^@]*@@\s?/, '') || '…')}</span>`); continue; }
+      if (!l && !rows.length) continue;
+      const cls = l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : '';
+      const n = cls === 'del' ? oldN++ : newN++; if (cls === '') oldN++;
+      rows.push(`<span class="${cls}"><i>${n}</i>${esc(l.slice(1)) || ' '}</span>`);
     }
     return rows.length ? `<pre>${rows.join('')}</pre>` : '<div class="code-note">No text changes (binary or mode only).</div>';
   }
@@ -608,7 +611,7 @@
     if (!showingChanges() || !ch.data?.boxes) return '';
     const b = ch.data.boxes.find((x) => x.src === box.src);
     if (!b) return '';
-    return `<div class="insp-change"><div><span>${esc(ch.data.base.label)}</span>${delta(b.add, b.del)}</div>${b.files.map((f, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(f.path)}"><summary><span>${esc(f.path)}${f.shared ? `<span class="shared">shared with ${plural(f.shared, 'other box')}</span>` : ''}</span>${delta(f.add, f.del)}</summary><div class="code-box"></div></details>`).join('')}</div>`;
+    return `<div class="insp-change"><div><span>${esc(ch.data.base.label)}</span>${b.files.length > 1 ? delta(b.add, b.del) : ''}</div>${b.files.map((f, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(f.path)}"><summary><span>${esc(f.path)}${f.shared ? `<span class="shared">shared with ${plural(f.shared, 'other box')}</span>` : ''}</span>${delta(f.add, f.del)}</summary><div class="code-box"></div></details>`).join('')}</div>`;
   }
   function wireChangeSection() {
     for (const d of inspBody.querySelectorAll('.insp-change details')) {
@@ -654,6 +657,7 @@
       html += `<div class="pb-acts"><span class="pb-wait">${building ? `Approved. ${esc(agentName())} is building it.` : `Approved. Waiting for ${esc(agentName())} to pick it up.`}</span><button type="button" class="pb-btn" data-pb="changes">See what changed</button><button type="button" class="pb-x" data-pb="hide" aria-label="Hide">×</button></div>`;
     }
     planBar.innerHTML = html;
+    renderNotes(); // the request button carries the comment count
   }
   planBar.addEventListener('click', async (e) => {
     const act = e.target.closest('[data-pb]')?.dataset.pb;
@@ -737,10 +741,8 @@
     let html = '';
     if (s === 'closed') {
       html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen this page, ask your agent to run:${cmdBox(state.cmd + page)}`;
-    } else if (s === 'offline') {
-      html = `<b>No agent is listening.</b> Messages wait here; ask your agent to run${listen}`;
-    } else if (s === 'idle') {
-      html = `<b>${esc(agentName())} stopped listening.</b> Messages wait here; ask it to run${listen}`;
+    } else if ((s === 'offline' || s === 'idle') && (state.pending.size || !state.history.length)) {
+      html = `<b>${s === 'idle' ? `${esc(agentName())} stopped listening.` : 'No agent is listening.'}</b> ${state.pending.size ? 'Your message waits here;' : 'To talk from here,'} ask your agent to run${listen}`;
     } else if (s === 'working' && isStale()) {
       html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped, or be waiting for you in the terminal. Check there, or ask it to run:${listen}<p class="after">If it no longer knows your last comments, send them again.</p>`;
     }

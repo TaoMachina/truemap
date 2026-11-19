@@ -348,7 +348,11 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 .tm-dg-label { position: absolute; z-index: 3; transform: translate(-50%, -50%); font: 400 11px/1.3 var(--dg-code); color: var(--dg-muted); background: var(--dg-bg); padding: 1px 4px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
 .tm-dg-group ~ .tm-dg-label { background: var(--dg-bg); }
 .tm-dg-label.is-hot, .tm-dg-label.is-flow { color: var(--dg-ink); }
-.tm-dg-label.is-dup:not(.is-hot):not(.is-flow):not(.is-focus), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus) { visibility: hidden; }
+/* at rest only the main path says its verbs; a hovered or selected box, a lit path or a flow shows the rest */
+.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+.tm-dg-edge.is-sel { stroke: var(--dg-ink); stroke-width: 1.75; }
+.tm-dg-head.is-sel { fill: var(--dg-ink); }
+.tm-dg-label.is-sel { color: var(--dg-ink); }
 /* the agent (or an answer) points at boxes: they get the highlighter, the rest go quiet without fading */
 html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) { opacity: 1; border-color: var(--dg-line); }
 html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) .tm-dg-name, html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) .tm-dg-tag { color: var(--dg-line-strong); }
@@ -373,7 +377,7 @@ html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outli
 .tm-diagram .tm-node[data-plan="new"] { border: 1.5px dashed var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="change"] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="remove"] .tm-dg-name { text-decoration: line-through; }
-.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 10.5px/14px var(--dg-font); padding: 0 6px; border-radius: 8px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
+.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 11px/15px var(--dg-font); padding: 0 7px; border-radius: 8px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
 .tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "Plan: new"; }
 .tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Plan: edit"; }
 .tm-diagram .tm-node[data-plan="change"][data-plan-revised]:not([data-tm-delta])::after { content: "Plan: edit, revised"; background: var(--dg-mark); }
@@ -386,7 +390,7 @@ html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) 
 .tm-dg-edge.is-plan { stroke: var(--dg-ink); stroke-dasharray: 4 3; }
 .tm-dg-head.is-plan { fill: var(--dg-ink); }
 /* the box whose inspector is open */
-.tm-diagram .tm-node[data-tm-selected] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
+.tm-diagram .tm-node[data-tm-selected] { border-color: var(--dg-ink); box-shadow: 0 0 0 3px var(--dg-bg), 0 0 0 5px var(--dg-ink); }
 .tm-dg-probe { position: absolute; visibility: hidden; transform: none; }
 /* flows: tabs, a one-line note, numbered steps */
 .tm-dg-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; }

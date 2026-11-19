@@ -248,7 +248,7 @@
       if (x.same) { if (!adjacent(x)) turning[rank[x.a]] += 1; continue; }
       for (let k = 0; k + 1 < x.chain.length; k++) if (Math.abs((x.chain[k].x ?? 0) - (x.chain[k + 1].x ?? 0)) > 2) turning[x.chain[k].row] += 1;
     }
-    const roomFor = (r, base) => Math.min(lr ? 200 : 110, Math.max(base, 20 + turning[r] * 9));
+    const roomFor = (r, base) => Math.min(lr ? 200 : 130, Math.max(base, 24 + turning[r] * 11));
     for (let r = 0; r < R; r++) {
       const b = bandOf(r);
       if (b.from === r) y += HEAD;
@@ -308,7 +308,7 @@
     const laneY = new Map();
     for (const [row, L] of lanes) {
       const g = gapAfter[row]; const list = [...L.entries()].sort((p, q) => p[1].lo - q[1].lo);
-      const span = g.bottom - g.top; const step = Math.min(7, (span - 18) / Math.max(1, list.length));
+      const span = g.bottom - g.top; const step = Math.min(11, Math.max(6, (span - 16) / Math.max(1, list.length)));
       list.forEach(([key], i) => laneY.set(`${row}|${key}`, g.top + span / 2 + (i - (list.length - 1) / 2) * step));
     }
     for (const x of E) {
