@@ -126,16 +126,11 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
   (then revise and run `plan --file` again with the same title). If the user says "go" in the terminal instead,
   run `{{CMD}} plan --approve`.
 - Plans draw on a page with a <figure class="tm-diagram"> map; convert an older .tm-map page first.
-- Steps: name the files each step touches (`server/hub.ts`) and link boxes ([Runs](#runs)); truemap checks every
-  step against them and shows "names server/hub.ts, which has no changes" to the user.
-- When it is built: put the new boxes on the page for real, with the same id as in the plan's "add" and a data-src
-  on their own new file. `changes` only says which planned boxes have changes in their files; compare each planned
-  item with its diff yourself. Close the plan with your account of every step, shown to the user beside the facts:
-    {{CMD}} plan --done --step "1=done" --step "2=partly:no UI field yet" --step "3=not_built:hub.ts does not start it"
-  (done, partly, not_built, dropped; a reason after a colon for all but done). Every report is kept; a step you
-  report done that names a file with no changes is shown to the user as a conflict. Then
-  `{{CMD}} reply "<what you built and what you did not>" --listen`. Run `{{CMD}} plan --done`. It
-  warns about planned boxes with no changes: tell the user which parts are not built, and why.
+- In steps, name the files they touch (`server/hub.ts`) and link boxes ([Runs](#runs)); the user then sees which
+  ones have no changes.
+- When it is built: put the new boxes on the page for real (same id as in "add", with data-src), run
+  `{{CMD}} plan --done`, then `{{CMD}} changes`, then reply with what you built and anything you did not.
+  (Optional: --step "3=not_built:why" puts your account of a step beside the facts.)
 - Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 
 SHOW WHAT YOU CHANGED (after you edited code)

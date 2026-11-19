@@ -536,16 +536,16 @@ const server = createServer(async (req, res) => {
           // closing a plan takes the agent's account of every step
           let rep2;
           try { rep2 = parseReport(plan, Array.isArray(b.steps) ? b.steps : []); } catch (e) { return sendJson(res, 400, { error: String(e.message || e) }); }
-          if (rep2.missing.length) return sendJson(res, 400, { error: 'report every step', missing: rep2.missing, steps: plan.steps });
-          // every report is kept; a later one never replaces the first without a trace
-          plan = { ...plan, report: rep2.report, reports: [...(plan.reports || []), { at: new Date().toISOString(), report: rep2.report }] };
+          // the account of steps is optional; when given, every report is kept
+          if (rep2.report.some(Boolean)) plan = { ...plan, report: rep2.report, reports: [...(plan.reports || []), { at: new Date().toISOString(), report: rep2.report }] };
           if (snapshots.plan?.slug === plan.slug) { await takeSnapshot('planEnd', { slug: plan.slug }); const r = await changesFor('plan', true); check = r.plan || null; }
           setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
           const sts = check?.steps || [];
-          const tally = ['done', 'partly', 'not_built', 'dropped'].map((k) => [k, plan.report.filter((x) => x?.status === k).length]).filter(([, n]) => n).map(([k, n]) => `${n} ${k.replace('_', ' ')}`).join(', ');
+          const rpt = plan.report || [];
+          const tally = ['done', 'partly', 'not_built', 'dropped'].map((k) => [k, rpt.filter((x) => x?.status === k).length]).filter(([, n]) => n).map(([k, n]) => `${n} ${k.replace('_', ' ')}`).join(', ');
           const conflicts = sts.filter((x) => x.conflict || x.rewritten);
           remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, plan: plan.slug,
-            text: [`**Plan closed: ${plan.title}.** Steps: ${tally}.`, ...plan.report.map((x, i) => x && x.status !== 'done' ? `- Step ${i + 1} ${x.status.replace('_', ' ')}: ${x.note}` : null).filter(Boolean),
+            text: [`**Plan closed: ${plan.title}.**${tally ? ` Steps: ${tally}.` : ''}`, ...rpt.map((x, i) => x && x.status !== 'done' ? `- Step ${i + 1} ${x.status.replace('_', ' ')}: ${x.note}` : null).filter(Boolean),
               ...(conflicts.length ? ['', '**Check before you trust this report:**', ...conflicts.map((x) => `- Step ${x.n}: ${[x.conflict, x.rewritten].filter(Boolean).join(' ')}`)] : []),
               '', 'Open the Changes tab to see each step beside its diff.'].join('\n') });
         }

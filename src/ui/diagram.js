@@ -133,7 +133,7 @@
       let top = base;
       const intra = E.filter((x) => gOf[x.a] === g && gOf[x.b] === g);
       const rowW = members.reduce((n, i) => n + S[i].w, 0) + (members.length - 1) * NODESEP + intra.reduce((n, x) => n + (x.e.lw ? x.e.lw + 30 : 12), 0);
-      const oneRow = !lr && rowW <= room - gutter - 24;
+      const oneRow = !lr && rowW <= (room - gutter - 24) / 0.82;
       for (const i of members) { rank[i] = oneRow ? base : base + local.get(i); localRank[i] = local.get(i); top = Math.max(top, rank[i]); }
       bands.push({ g, from: base, to: top });
       base = top + 1;

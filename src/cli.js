@@ -260,7 +260,7 @@ async function doListen(root, opts) {
       block('next_step', [
         'The user APPROVED your plan. Build it now; changes are measured from this moment.',
         `While you build, post short status lines with \`${CMD} progress "…"\`; no reply is needed to start.`,
-        `When done: put new boxes on the page for real (with data-src); run \`${CMD} changes\` and compare every step with its diff; close with \`${CMD} plan --done --step "1=done" …\` (one --step per step, honest: the user sees your report beside the facts, and every report is kept); then \`${CMD} reply "<what you built and what you did not>" --listen\`${bg}.`,
+        `When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\` and \`${CMD} changes\`, then \`${CMD} reply "<what you built, and anything you did not>" --listen\`${bg}.`,
       ].join('\n'));
       return;
     }
@@ -367,7 +367,7 @@ async function cmdChanges(root, args, opts) {
   }
   out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
-  if (r.plan && r.plan.status !== 'done') steps.push(`Compare each step with the diff yourself, then close the plan with your account of every step: \`${CMD} plan --done --step "1=done" --step "2=not_built:why"\`. The counts above only say where files changed.`);
+  if (r.plan && r.plan.status !== 'done') steps.push(`When the plan is built, run \`${CMD} plan --done\`. If some steps are not built, say so in your reply (or add --step "3=not_built:why" so it shows beside the facts).`);
   if (r.plan?.steps?.some((x) => x.conflict)) steps.push('Some steps you reported done name files with no changes: fix the work or correct your report (the user sees both, and the report history).');
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
