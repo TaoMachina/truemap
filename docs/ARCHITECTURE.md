@@ -44,7 +44,9 @@ We own three distribution points:
 | `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. `--annotate` turns on comment mode. Prints the check result for the page and a `next_step` |
 | `npx -y truemap-cli outline` | A compact repo outline (folders, sizes, manifests, likely entry points) so the first blueprint is fast |
 | `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
-| `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-]` | Shows the answer in the chat. With `--listen` it keeps listening in the same call |
+| `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-] [--focus ids]` | Shows the answer in the chat and lights up the boxes it is about. With `--listen` it keeps listening in the same call |
+| `npx -y truemap-cli show [page] --focus ids [--note "…"] [--clear]` | The agent points at the map: lights up boxes (ids or data-src), dims the rest, pins a note |
+| `npx -y truemap-cli ask "<question>" --option "A \| why" --option "B \| why"` | A choice card in the conversation; waits for the answer. Only for decisions that are hard to undo |
 | `npx -y truemap-cli check [page…]` / `check --ok <page>` | Checks anchors / marks a page as reviewed |
 | `npx -y truemap-cli export <page> [--out f]` | Writes the page as one self-contained HTML file (kit, fonts, images and wires inlined) |
 | `npx -y truemap-cli guide` | The page-writing guide: folder rules, anchors, kit components, decision forms |
@@ -147,3 +149,13 @@ The real test is whether the agent reaches for truemap without being asked:
 - Hooks, MCP server, background agent processes
 - Team features
 - Moving permission prompts into the browser
+
+## The map is the interface (v0.4)
+
+Why: developers mostly no longer read agent-written code line by line, and comprehension drops when they don't (Stack Overflow 2025, Anthropic's Jan 2026 study). What they need first is the logic (paths through the system and the intent behind them), then a way to check it against real code, because summaries can be wrong. So:
+
+- **Click any box: the peek.** The workspace (not the page) shows a panel with the box's description, `data-why`, the real lines around `#name` (`/api/snippet`, git-tracked files only), and its wires in and out. The snippet never enters the page frame.
+- **Behaviours as the way in.** `.tm-flows` buttons light up a path (`data-tm-flow="id id id"`); hovering a box brings its own wires forward. Wires are faint by default; only the main path is strong.
+- **Two-way pointing.** `show`, `reply --focus` and `[text](#id)` links in replies light up boxes and pin a note beside them, live.
+- **Ask rarely.** `ask` puts a choice card in the conversation and waits. The guide limits it to decisions that are hard to undo; otherwise the agent decides and states its assumption.
+- **Navigation.** The map is the table of contents. The top bar keeps the blueprint one click away (`Blueprint › Page`), with back/forward (Alt+←/→).

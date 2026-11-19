@@ -13,8 +13,11 @@ Your coding agent explains the project as HTML pages in your repo: a blueprint o
 Coding agents write code faster than anyone can read it. Their explanations come back as walls of text, and the diagrams they draw are gone after one chat.
 
 - **Pages, not paragraphs.** The agent draws the architecture, a flow, or the options as a page and opens it for you.
+- **Click any box, see the real code.** Every box opens a panel: what it does, why it is built that way, the actual lines it points to (read live from your repo), and what it calls and what calls it.
+- **Follow a behaviour.** "Follow a path" buttons light up how a request travels through the system; hover a box and its own wires come forward.
+- **The agent points back.** While it explains, the agent lights up the boxes it is talking about and pins a note beside them. Its answers link straight to boxes on the map.
 - **Point at it.** Switch on Annotate, click a box or select a sentence, write a comment. Comments go out together, each with the code it points to. It is the agent session you already have open: no login, no extra app.
-- **Click to decide.** When the agent needs your call, the page shows the options. One click and the answer is back with the agent.
+- **Decide only when it matters.** The agent asks only when it is blocked on a choice that is hard to undo; the options show up in the conversation and one click answers.
 - **Pages that stay true.** Every box carries a `data-src="path#name"` anchor. When that code changes or disappears, the box is marked and the agent fixes the page.
 - **It stays in the repo.** Pages live in `.truemap/`, with `index.html` as the blueprint. Plain files you commit, diff and share.
 
@@ -46,7 +49,9 @@ your repo/
 | `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in your browser, or switches the tab you already have open |
 | `npx -y truemap-cli outline` | A compact map of the repo, so the first blueprint takes minutes, not an hour |
 | `npx -y truemap-cli listen` | Waits for your next message or comments from the page |
-| `npx -y truemap-cli reply "…" --listen` | Shows the answer in the conversation panel, then keeps listening |
+| `npx -y truemap-cli reply "…" --listen [--focus ids]` | Shows the answer in the conversation panel (lighting up boxes it is about), then keeps listening |
+| `npx -y truemap-cli show [page] --focus ids --note "…"` | Points at the map while explaining: lights up boxes and pins a note |
+| `npx -y truemap-cli ask "…" --option "A \| why" …` | Asks the user to choose, only when the agent is blocked on a real trade-off |
 | `npx -y truemap-cli check` | Checks every `data-src` anchor against the code, and that every map wire has a target |
 | `npx -y truemap-cli export <page>` | Writes the page as one self-contained HTML file to share (also in the workspace ⋮ menu) |
 | `npx -y truemap-cli guide` | The page-writing guide for agents: the map, anchors, decisions, design rules |

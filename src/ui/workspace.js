@@ -190,6 +190,11 @@
   function renderHeader() {
     const p = state.pages.find((x) => x.page === state.page);
     $('pageTitle').textContent = p ? titleOf(p) : (state.pages.length ? 'Pages' : 'No pages yet');
+    // The blueprint is always one click away.
+    const home = state.pages.find((x) => x.page === 'index.html');
+    const showHome = !!home && !!state.page && state.page !== 'index.html';
+    $('crumbHome').hidden = !showHome; $('crumbSep').hidden = !showHome;
+    if (showHome) { $('crumbHome').textContent = titleOf(home); $('crumbHome').title = `Back to ${titleOf(home)}`; }
     $('pagePath').textContent = state.page ? `.truemap/${state.page}` : '';
     document.title = p ? `${titleOf(p)} – truemap` : 'truemap';
     const r = resultFor(state.page); const st = stateOf(r);
@@ -213,7 +218,11 @@
     if (state.page !== page || force) frame.src = pageUrl(page);
     setCurrent(page);
   }
+  // Back and forward between pages, like a browser (Alt+Left / Alt+Right, mouse side buttons).
+  const nav = { back: [], fwd: [], moving: false };
   function setCurrent(page) {
+    if (state.page && page !== state.page && !nav.moving) { nav.back.push(state.page); nav.fwd = []; if (nav.back.length > 50) nav.back.shift(); }
+    nav.moving = false;
     state.page = page;
     history.replaceState(null, '', `${location.pathname}${location.search}#page=${encodeURIComponent(page)}`);
     api('/api/viewing', { page });
@@ -516,6 +525,8 @@
     const d = e.data;
     if (d.type === 'press') {
       closePeek();
+    } else if (d.type === 'nav') {
+      navigate(d.dir);
     } else if (d.type === 'peek') {
       if (d.box && d.rect) openPeek(d.box, d.rect);
     } else if (d.type === 'loaded') {
@@ -621,6 +632,18 @@
       }
     };
   }
+  function navigate(dir) {
+    const from = dir === 'back' ? nav.back : nav.fwd; const to = dir === 'back' ? nav.fwd : nav.back;
+    while (from.length) {
+      const page = from.pop();
+      if (state.pages.some((p) => p.page === page)) { if (state.page) to.push(state.page); nav.moving = true; go(page); return; }
+    }
+  }
+  $('crumbHome').onclick = () => go('index.html');
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); navigate(e.key === 'ArrowLeft' ? 'back' : 'forward'); }
+  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 3) navigate('back'); else if (e.button === 4) navigate('forward'); });
   renderNotes();
   connect();
 })();

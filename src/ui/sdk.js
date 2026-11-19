@@ -476,8 +476,10 @@
 
   // The workspace's own popovers (the peek) close when the user presses anywhere in the page or hits Escape.
   document.addEventListener('mousedown', () => post({ type: 'press' }), true);
+  document.addEventListener('mouseup', (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); post({ type: 'nav', dir: e.button === 3 ? 'back' : 'forward' }); } }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') post({ type: 'press' });
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); post({ type: 'nav', dir: e.key === 'ArrowLeft' ? 'back' : 'forward' }); return; }
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
     if (e.key === 'Escape' && (focusSet.length || focusNote)) { clearFocus(); post({ type: 'focus-cleared' }); return; }
