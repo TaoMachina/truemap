@@ -1,64 +1,5 @@
-/* truemap page kit. truemap serves this file to every page in .truemap/ (assets/truemap.css).
-   To match a project's own look, put token overrides in .truemap/assets/theme.css – truemap appends it here. */
-
-@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-500-normal.woff2") format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
-@font-face { font-family: "Commit Mono"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/commit-mono-latin-400-normal.woff2") format("woff2"); }
-
-/* One fixed system. Neutrals and ink carry structure; --tm-accent (ink unless the project has its own
-   colour) marks the primary action; a highlighter marks what the agent points at; status colours mean
-   status only. */
-:root {
-  --tm-paper: #ffffff;          /* page background */
-  --tm-sheet: #ffffff;          /* boxes on the map */
-  --tm-wash: #f2f2ef;           /* quiet fills, groups */
-  --tm-ink: #141413;            /* titles, the main path, selection */
-  --tm-text: #2b2b28;           /* body text */
-  --tm-graphite: #6c6c65;       /* secondary text */
-  --tm-pencil: #9a9a92;         /* hints */
-  --tm-rule: #e6e6e1;
-  --tm-rule-strong: #d2d2cb;
-  --tm-accent: #141413;         /* the primary action; the project's own colour when truemap finds one */
-  --tm-mark: #ffe27a;           /* the agent points here */
-  --tm-route: var(--tm-ink);    /* v0.4 name for the key path and links */
-  --tm-route-ink: var(--tm-ink);
-  --tm-route-wash: #f2f2ef;
-  --tm-action: var(--tm-accent);
-  --tm-changed: #a35f00;
-  --tm-changed-wash: #fbf1df;
-  --tm-broken: #c0392b;
-  --tm-broken-wash: #fbe9e6;
-  --tm-fine: #2f7a4f;
-  --tm-fine-wash: #e6f1ea;
-  --tm-radius: 8px;
-  --tm-font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --tm-code: "Commit Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --tm-paper: #161615;
-    --tm-sheet: #161615;
-    --tm-wash: #222220;
-    --tm-ink: #f2f2ee;
-    --tm-text: #dadad4;
-    --tm-graphite: #a0a098;
-    --tm-pencil: #75756e;
-    --tm-rule: #2f2f2c;
-    --tm-rule-strong: #44443f;
-    --tm-accent: #f2f2ee;
-    --tm-mark: #6b5a12;
-    --tm-route-wash: #222220;
-    --tm-changed: #e0a548;
-    --tm-changed-wash: #2c2414;
-    --tm-broken: #ef8574;
-    --tm-broken-wash: #321b18;
-    --tm-fine: #7cc49c;
-    --tm-fine-wash: #16271e;
-  }
-}
+/* truemap page kit: the components. Colours and fonts come from kit/tokens.css (served first) and
+   .truemap/assets/theme.css (served last). */
 
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -282,7 +223,7 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 .tm-option:has(input:checked) { border-color: var(--tm-route); background: var(--tm-route-wash); }
 .tm-ask textarea { width: 100%; min-height: 64px; resize: vertical; font: 14.5px/1.5 var(--tm-font); color: var(--tm-text); background: var(--tm-paper); border: 1px solid var(--tm-rule); border-radius: var(--tm-radius); padding: 10px 12px; }
 .tm-ask textarea:focus { outline: none; border-color: var(--tm-route); }
-.tm-btn { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font: 500 14.5px/1 var(--tm-font); padding: 11px 18px; border-radius: var(--tm-radius); border: 1px solid var(--tm-action); background: var(--tm-action); color: #fff; cursor: pointer; }
+.tm-btn { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font: 500 14.5px/1 var(--tm-font); padding: 11px 18px; border-radius: var(--tm-radius); border: 1px solid var(--tm-action); background: var(--tm-action); color: var(--tm-accent-text); cursor: pointer; }
 .tm-btn:hover { filter: brightness(0.92); }
 .tm-btn.is-quiet { background: transparent; color: var(--tm-route); }
 [data-tm-sent] .tm-btn { background: var(--tm-wash); border-color: var(--tm-rule); color: var(--tm-graphite); cursor: default; }
@@ -410,4 +351,4 @@ html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) 
 /* the agent points here: a highlighter, not a colour code */
 .tm-diagram .tm-node[data-tm-focus] { background: var(--dg-mark); border-color: var(--dg-ink); }
 /* a box whose code was created this turn */
-.tm-diagram .tm-node[data-tm-new][data-tm-delta]::after { background: var(--tm-fine); color: #fff; }
+.tm-diagram .tm-node[data-tm-new][data-tm-delta]::after { background: var(--tm-fine); color: var(--tm-paper); }

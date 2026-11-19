@@ -995,6 +995,7 @@
         else if (state.page && !state.pages.some((p) => p.page === state.page)) state.pages[0] ? go(state.pages[0].page) : showEmpty();
       } else if (d.type === 'changed') {
         const files = d.files || [];
+        if (files.some((f) => !f || f.startsWith('assets/'))) $('tokensCss').href = `/__truemap/tokens.css?v=${Date.now()}`;
         if (state.page && files.some((f) => !f || f === state.page || f.startsWith('assets/'))) reloadFrame();
       } else if (d.type === 'check') {
         state.check = d.check || { results: [] }; renderHeader(); sendMarks(); if (!menu.hidden) renderMenu();

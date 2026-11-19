@@ -20,7 +20,7 @@ FOLDER RULES
 - Write pages in the user's language.
 - Link the kit and nothing else: <link rel="stylesheet" href="assets/truemap.css"> (from a subfolder
   ../assets/truemap.css). No frameworks, no CDNs, no web fonts, no build step, no inline colours.
-  The look is fixed on purpose so every map reads the same; .truemap/assets/theme.css may set --tm-accent only.
+  The components are fixed; colours and fonts belong to the user (see THE USER'S LOOK).
 
 ANCHORS (this is what keeps pages true)
 - Put data-src="path#name" on every box that stands for real code. path = file or folder relative to the repo
@@ -144,6 +144,16 @@ SHOW WHAT YOU CHANGED (after you edited code)
 - Keep the map true after your own changes: for each box you changed, fix its text if it no longer fits, then
   `{{CMD}} check --ok index.html --box <id>`. "Map may be out of date" should only appear for code the map
   hasn't caught up with, not after every turn of yours.
+
+THE USER'S LOOK (colours and fonts)
+- When the user asks for other colours or fonts ("warmer", "blue accent", "like our brand", "bigger code font"),
+  write .truemap/assets/theme.css: override --tm-* tokens in :root for light and again inside
+  @media (prefers-color-scheme: dark) { :root { ... } } for dark. `{{CMD}} theme` lists where the tokens are.
+- It restyles every page, every draft and the workspace around them at once; open tabs update by themselves.
+- Colours and fonts only: never restyle components (boxes, wires, badges). Keep --tm-changed, --tm-broken and
+  --tm-fine easy to tell apart; they mean status. Fonts: only ones installed on the machine (no web fonts).
+- Then run `{{CMD}} theme`: it checks contrast in light and dark. If something is hard to read, fix it or tell the
+  user which colour and let them decide.
 
 DRAFTS (the everyday way to explain)
 - When the user asks how something works, says they don't understand, or you have an idea or a design to show,

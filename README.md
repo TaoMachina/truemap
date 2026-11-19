@@ -20,6 +20,7 @@ Coding agents write code faster than anyone can read it. Review is the bottlenec
 - **Many projects.** Every project with truemap running is one click away, and the tab tells you when another one needs you (a plan to review, a new reply).
 - **Any agent.** Claude Code, Codex, OpenCode, Cursor CLI, or agents inside hosts such as T3 Code: anything that can run a shell command.
 - **It stays in the repo.** Maps live in `.truemap/`. Plain HTML files you commit, diff and share.
+- **Your look.** Light, dark or follow the system. Ask the agent for other colours or fonts ("a blue accent", "like our brand"): it writes `.truemap/assets/theme.css`, every page and the workspace follow, and `truemap theme` checks that everything stays readable.
 
 ## Install
 

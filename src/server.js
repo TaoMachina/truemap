@@ -10,7 +10,7 @@ import { FOLDER, PKG_DIR, VERSION, addrPath, appendPrivate, buildId, stateHome, 
 import { changes, fileDiff, snapshotTree } from './changes.js';
 import { cleanPlan, currentPlan, parseReport, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox, stepCheck } from './plan.js';
 import { checkAll, listPages } from './check.js';
-import { exportPage, kitCss } from './export.js';
+import { exportPage, kitCss, tokensCss } from './export.js';
 import { snippet } from './snippet.js';
 
 const root = resolve(process.argv[2] || process.cwd());
@@ -369,6 +369,10 @@ function serveKit(res) {
 }
 
 function serveUi(res, name) {
+  if (name === 'tokens.css') {
+    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(themeable(tokensCss(root)));
+  }
   const file = safeFile(UI_DIR, name);
   if (!file) return sendText(res, 404, 'not found');
   const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
@@ -656,8 +660,7 @@ const content = createServer((req, res) => {
   const p = new URL(req.url, `http://127.0.0.1:${contentPort}`).pathname;
   try {
     if (p === '/__truemap/sdk.js') {
-      const themeSrc = readFileSync(new URL('./theme.js', import.meta.url), 'utf8').replace(/^export /m, '');
-      const js = `const tmThemeable = (() => {\n${themeSrc}\nreturn themeable;\n})();\n` + [join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
+      const js = [join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
         + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);

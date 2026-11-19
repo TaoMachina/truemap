@@ -21,14 +21,19 @@ export function insideFile(dir, rel) {
   } catch { return null; }
 }
 
-/** The page kit as served: a repo's own assets/truemap.css wins; assets/theme.css is appended. */
+/** The project's theme (.truemap/assets/theme.css), or nothing. */
+export function themeCss(root) {
+  const theme = insideFile(join(root, FOLDER), 'assets/theme.css');
+  return theme ? `\n/* .truemap/assets/theme.css */\n${readFileSync(theme, 'utf8')}` : '';
+}
+/** Colours and fonts in effect: truemap's tokens, then the project's theme. The workspace uses these too. */
+export function tokensCss(root) {
+  return readFileSync(join(KIT_DIR, 'tokens.css'), 'utf8') + themeCss(root);
+}
+/** The page kit as served: tokens, components, theme. A repo's own assets/truemap.css (older setups) replaces the first two. */
 export function kitCss(root) {
-  const folder = join(root, FOLDER);
-  const own = insideFile(folder, 'assets/truemap.css');
-  let css = readFileSync(own || join(KIT_DIR, 'truemap.css'), 'utf8');
-  const theme = insideFile(folder, 'assets/theme.css');
-  if (theme) css += `\n/* .truemap/assets/theme.css */\n${readFileSync(theme, 'utf8')}`;
-  return css;
+  const own = insideFile(join(root, FOLDER), 'assets/truemap.css');
+  return (own ? readFileSync(own, 'utf8') : readFileSync(join(KIT_DIR, 'tokens.css'), 'utf8') + '\n' + readFileSync(join(KIT_DIR, 'truemap.css'), 'utf8')) + themeCss(root);
 }
 
 export function exportPage(root, page) {

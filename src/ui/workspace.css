@@ -1,39 +1,24 @@
-@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-500-normal.woff2") format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
-@font-face { font-family: "Commit Mono"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/commit-mono-latin-400-normal.woff2") format("woff2"); }
-
-/* One fixed system: neutrals and ink carry structure and selection. The accent (ink by default, the
-   project's own colour when truemap finds one) marks the primary action. A highlighter marks what the
-   agent points at. Status colours mean status and nothing else. */
+/* Colours and fonts come from /__truemap/tokens.css (truemap's tokens, then the project's theme.css),
+   so the workspace and the pages always share one look. These names are the workspace's shorthand. */
 :root {
-  --bg: #ffffff;
-  --chrome: #fafaf9;
-  --surface: #f2f2ef;
-  --line: #e6e6e1;
-  --line-strong: #d2d2cb;
-  --ink: #141413;
-  --text: #2b2b28;
-  --muted: #6c6c65;
-  --faint: #9a9a92;
-  --accent: #141413;
-  --accent-text: #ffffff;
-  --mark: #ffe27a;
-  --changed: #a35f00;
-  --broken: #c0392b;
-  --fine: #2f7a4f;
-  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --code: "Commit Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --bg: var(--tm-paper);
+  --chrome: var(--tm-chrome);
+  --surface: var(--tm-wash);
+  --line: var(--tm-rule);
+  --line-strong: var(--tm-rule-strong);
+  --ink: var(--tm-ink);
+  --text: var(--tm-text);
+  --muted: var(--tm-graphite);
+  --faint: var(--tm-pencil);
+  --accent: var(--tm-accent);
+  --accent-text: var(--tm-accent-text);
+  --mark: var(--tm-mark);
+  --changed: var(--tm-changed);
+  --broken: var(--tm-broken);
+  --fine: var(--tm-fine);
+  --font: var(--tm-font);
+  --code: var(--tm-code);
   --panel-w: 420px;
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #161615; --chrome: #1b1b1a; --surface: #252523; --line: #2f2f2c; --line-strong: #44443f;
-    --ink: #f2f2ee; --text: #dadad4; --muted: #a0a098; --faint: #75756e;
-    --accent: #f2f2ee; --accent-text: #141413; --mark: #6b5a12;
-    --changed: #e0a548; --broken: #ef8574; --fine: #7cc49c;
-  }
 }
 
 * { box-sizing: border-box; }

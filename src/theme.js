@@ -1,7 +1,6 @@
 // Dark mode follows the system unless the user picks one. The stylesheets keep plain
 // `@media (prefers-color-scheme: dark)` blocks; this turns each into rules that also answer to a choice:
 //   <html data-theme="dark">  always dark      <html data-theme="light">  always light
-// For a shadow root, the host carries the choice as a class instead (tm-dark / tm-light).
 
 function blocks(css) {
   // top-level `@media (prefers-color-scheme: dark) { ... }` blocks, with their positions
@@ -23,24 +22,26 @@ function scopeRules(body, pick) {
 }
 
 /** CSS for a document: dark when chosen, or when the system is dark and light was not chosen. */
-export function themeable(css, { host = false } = {}) {
+export function themeable(css) {
   const found = blocks(css);
   if (!found.length) return css;
-  const on = host ? ':host(.tm-dark)' : ':root[data-theme="dark"]';
-  const notOff = host ? ':host(:not(.tm-light))' : ':root:not([data-theme="light"])';
   const scope = (prefix) => (sel) => {
     if (!sel) return '';
-    if (!host && sel.startsWith(':root')) return prefix + sel.slice(5);
-    if (!host && /^html\b/.test(sel)) return prefix.replace(':root', 'html') + sel.slice(4);
+    if (sel.startsWith(':root')) return prefix + sel.slice(5);
+    if (/^html\b/.test(sel)) return prefix.replace(':root', 'html') + sel.slice(4);
     return `${prefix} ${sel}`;
   };
   let out = ''; let at = 0; const forced = [];
   for (const b of found) {
     const body = css.slice(b.bodyStart, b.end - 1);
-    out += css.slice(at, b.bodyStart) + scopeRules(body, scope(notOff)) + '}';
-    forced.push(scopeRules(body, scope(on)));
+    out += css.slice(at, b.bodyStart) + scopeRules(body, scope(':root:not([data-theme="light"])')) + '}';
+    forced.push(scopeRules(body, scope(':root[data-theme="dark"]')));
     at = b.end;
   }
-  const scheme = host ? '' : ':root[data-theme="light"] { color-scheme: light; }\n:root[data-theme="dark"] { color-scheme: dark; }\n';
-  return `${out}${css.slice(at)}\n/* the user's choice */\n${scheme}${forced.join('\n')}\n`;
+  return `${out}${css.slice(at)}
+/* the user's choice */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+${forced.join('\n')}
+`;
 }

@@ -9,7 +9,8 @@ import {
 } from './common.js';
 import { checkAll, listPages, markOk, pageInFolder } from './check.js';
 import { outline } from './outline.js';
-import { exportPage } from './export.js';
+import { exportPage, tokensCss } from './export.js';
+import { contrastNotes } from './contrast.js';
 import { writeFileSync } from 'node:fs';
 
 const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap-cli';
@@ -518,6 +519,9 @@ async function cmdCheck(root, args, opts) {
   if (wires) steps.push('Some map wires point at ids that are not on the page, so they are not drawn. Fix the data-to values (ids separated by spaces).');
   const layout = results.reduce((n, r) => n + (r.layout || []).length, 0);
   if (layout) steps.push('Map notes: fix each one; they are what keeps a map readable at a glance (see `' + CMD + ' guide`, THE MAP).');
+  const faint = contrastNotes(tokensCss(root));
+  for (const n of faint) out(`hard to read: ${n}`);
+  if (faint.length) steps.push(`The theme has colours that are hard to read (above): fix .truemap/assets/theme.css, then \`${CMD} theme\`.`);
   if (!broken && !changed && !wires && !layout) steps.push('All pages match the code.');
   block('next_step', steps.join('\n'));
 }
@@ -552,6 +556,22 @@ function cmdOutline(root) {
   block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html with one <figure class="tm-diagram">: 3-5 groups by responsibility in the order a request travels, 7-12 small boxes (data-name, data-tag, data-src), data-to connections with a verb, 1-3 flows. Run \`${CMD} guide\` for the format if you have not.`);
 }
 
+// The user's look: colours and fonts for every page and the workspace, kept in .truemap/assets/theme.css.
+function cmdTheme(root) {
+  const file = join(root, FOLDER, 'assets', 'theme.css');
+  const has = existsSync(file);
+  out(`theme: ${has ? `${FOLDER}/assets/theme.css` : 'none (truemap defaults)'}`);
+  const notes = contrastNotes(tokensCss(root));
+  for (const n of notes) out(`hard to read: ${n}`);
+  block('next_step', [
+    has ? 'Edit .truemap/assets/theme.css to change the look.' : 'To change the look, create .truemap/assets/theme.css.',
+    'Override --tm-* tokens in :root for light, and again inside @media (prefers-color-scheme: dark) { :root { … } } for dark. The tokens and their defaults: ' + join(PKG_DIR, 'kit', 'tokens.css'),
+    'Colours and fonts only; never restyle components. Keep the three status colours (--tm-changed, --tm-broken, --tm-fine) easy to tell apart.',
+    'Every open page and the workspace update by themselves. Run this command again to check contrast.',
+    notes.length ? 'Some colours are hard to read (above). Fix them, or tell the user which ones and let them decide.' : 'Contrast is fine in light and dark.',
+  ].join('\n'));
+}
+
 function cmdGuide() {
   out(readFileSync(join(PKG_DIR, 'src', 'guide.md'), 'utf8').replaceAll('{{CMD}}', CMD));
 }
@@ -575,6 +595,7 @@ usage:
   ${CMD} ask "<question>" --option "A | why" --option "B | why"
                                 ask the user to choose, only when you are blocked on a real trade-off
   ${CMD} draft "<name>"          a new numbered draft page that explains one thing (then open it with truemap <file>)
+  ${CMD} theme                  the user's colours and fonts (.truemap/assets/theme.css), with a contrast check
   ${CMD} plan --file plan.json  before a change that touches 3+ boxes or adds one: show the plan on the map for review
   ${CMD} plan --approve|--done  the user said "go" in the terminal / the plan is built
   ${CMD} changes [--base turn|plan|head|main]
@@ -621,7 +642,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, changes: cmdChanges, plan: cmdPlan, draft: cmdDraft, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, changes: cmdChanges, plan: cmdPlan, draft: cmdDraft, theme: cmdTheme, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();

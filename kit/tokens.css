@@ -1,0 +1,65 @@
+/* truemap tokens: every colour and font the pages and the workspace use. truemap serves them first, then
+   .truemap/assets/theme.css, so a project (or its user) can restyle everything by overriding these. */
+
+@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Commit Mono"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/commit-mono-latin-400-normal.woff2") format("woff2"); }
+
+/* One fixed system. Neutrals and ink carry structure; --tm-accent (ink unless the project has its own
+   colour) marks the primary action; a highlighter marks what the agent points at; status colours mean
+   status only. */
+:root {
+  --tm-paper: #ffffff;          /* page background */
+  --tm-sheet: #ffffff;          /* boxes on the map */
+  --tm-wash: #f2f2ef;           /* quiet fills, groups */
+  --tm-ink: #141413;            /* titles, the main path, selection */
+  --tm-text: #2b2b28;           /* body text */
+  --tm-graphite: #6c6c65;       /* secondary text */
+  --tm-pencil: #9a9a92;         /* hints */
+  --tm-rule: #e6e6e1;
+  --tm-rule-strong: #d2d2cb;
+  --tm-accent: #141413;         /* the primary action; the project's own colour when truemap finds one */
+  --tm-accent-text: #ffffff;    /* text on the accent */
+  --tm-chrome: #fafaf9;         /* the workspace bars and panel */
+  --tm-mark: #ffe27a;           /* the agent points here */
+  --tm-route: var(--tm-ink);    /* v0.4 name for the key path and links */
+  --tm-route-ink: var(--tm-ink);
+  --tm-route-wash: #f2f2ef;
+  --tm-action: var(--tm-accent);
+  --tm-changed: #a35f00;
+  --tm-changed-wash: #fbf1df;
+  --tm-broken: #c0392b;
+  --tm-broken-wash: #fbe9e6;
+  --tm-fine: #2f7a4f;
+  --tm-fine-wash: #e6f1ea;
+  --tm-radius: 8px;
+  --tm-font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --tm-code: "Commit Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tm-paper: #161615;
+    --tm-sheet: #161615;
+    --tm-wash: #222220;
+    --tm-ink: #f2f2ee;
+    --tm-text: #dadad4;
+    --tm-graphite: #a0a098;
+    --tm-pencil: #75756e;
+    --tm-rule: #2f2f2c;
+    --tm-rule-strong: #44443f;
+    --tm-accent: #f2f2ee;
+    --tm-accent-text: #141413;
+    --tm-chrome: #1b1b1a;
+    --tm-mark: #6b5a12;
+    --tm-route-wash: #222220;
+    --tm-changed: #e0a548;
+    --tm-changed-wash: #2c2414;
+    --tm-broken: #ef8574;
+    --tm-broken-wash: #321b18;
+    --tm-fine: #7cc49c;
+    --tm-fine-wash: #16271e;
+  }
+}
