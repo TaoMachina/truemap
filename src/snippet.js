@@ -36,10 +36,19 @@ export function snippet(root, src, around = 10) {
   if (name) {
     const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`(?<![\\p{L}\\p{N}_$])${esc}(?![\\p{L}\\p{N}_$])`, 'u');
-    // Prefer a line that defines the name over one that merely uses it.
-    const defs = /\b(function|class|def|fn|func|const|let|var|type|interface|export|struct|enum|router\.\w+|app\.\w+)\b/;
+    // Prefer the line that defines the name over lines that merely use it:
+    // 1. a keyword right before it (function x, class X, def x, const x = …), or x: / x = a function,
+    //    or a method header at the start of a line (async x(…) {) that is not a call (this.x(…))
+    // 2. any line with a defining keyword   3. the first mention
+    const strong = [
+      new RegExp(`\\b(function\\*?|class|def|fn|func|interface|type|struct|enum|trait|impl|module|const|let|var|val)\\s+${esc}(?![\\p{L}\\p{N}_$])`, 'u'),
+      new RegExp(`(?<![.\\p{L}\\p{N}_$])${esc}\\s*[:=]\\s*(async\\s*)?(function|\\(|[\\p{L}_$][\\p{L}\\p{N}_$]*\\s*=>)`, 'u'),
+      // a method header: name(…) { or name(…): Type { on one line, or name( with the parameters continuing below
+      new RegExp(`^\\s*((public|private|protected|static|async|override|readonly|get|set)\\s+)*${esc}\\s*(<[^>]*>)?\\s*\\((.*\\)\\s*(:[^=]*?)?\\s*\\{\\s*$|[^)]*$)`, 'u'),
+    ];
+    const weak = /\b(function|class|def|fn|func|const|let|var|type|interface|export|struct|enum|router\.\w+|app\.\w+)\b/;
     const hits = lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i >= 0);
-    line = hits.find((i) => defs.test(lines[i])) ?? hits[0] ?? 0;
+    line = hits.find((i) => strong.some((s) => s.test(lines[i]))) ?? hits.find((i) => weak.test(lines[i])) ?? hits[0] ?? 0;
   }
   const start = Math.max(0, line - 3);
   const end = Math.min(lines.length, start + around * 2 + 1);

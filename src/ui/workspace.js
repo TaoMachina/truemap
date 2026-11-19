@@ -347,7 +347,7 @@
 
   // ---------- peek: what a box is, in the code ----------
   const peekEl = $('peek');
-  const closePeek = () => { peekEl.hidden = true; peekEl.innerHTML = ''; };
+  const closePeek = () => { peekEl.hidden = true; peekEl.innerHTML = ''; peekAnchor = null; };
   const pageHref = (href) => {
     const [file, id] = href.split('#');
     const base = state.page && state.page.includes('/') ? state.page.replace(/[^/]+$/, '') : '';
@@ -355,7 +355,9 @@
     for (const p of parts) { if (p === '..') outp.pop(); else if (p && p !== '.') outp.push(p); }
     return { page: outp.join('/'), id };
   };
-  async function openPeek(box, rect) {
+  let peekSeq = 0; let peekAnchor = null;
+  async function openPeek(box, rect, sy = 0) {
+    const seq = ++peekSeq;
     const stage = document.querySelector('.stage').getBoundingClientRect();
     const rel = (list, label) => (list.length ? `<div class="peek-rel"><span>${label}</span>${list.map((c) => `<button type="button" class="ref" data-focus="${esc(c.id)}">${esc(c.label)}${c.via ? ` <i>${esc(c.via)}</i>` : ''}</button>`).join('')}</div>` : '');
     const page = box.href ? pageHref(box.href) : null;
@@ -379,8 +381,10 @@
     let left = rect.r + 12; let top = rect.t;
     if (left + W > stage.width - 12) left = rect.l - W - 12;
     if (left < 12) { left = Math.max(12, Math.min(rect.l, stage.width - W - 12)); top = rect.b + 10; }
-    const place = () => { peekEl.style.left = `${left}px`; peekEl.style.top = `${Math.max(12, Math.min(top, stage.height - H() - 12))}px`; };
+    const place = (dy = 0) => { peekEl.style.left = `${left}px`; peekEl.style.top = `${Math.max(12, Math.min(top - dy, stage.height - H() - 12))}px`; };
     place();
+    // When the page scrolls, the panel moves with its box (and closes once the box has left the view).
+    peekAnchor = { sy, rect, place, stageH: stage.height };
     peekEl.querySelector('.peek-x').onclick = closePeek;
     peekEl.onclick = (ev) => {
       const act = ev.target.closest('[data-act]')?.dataset.act;
@@ -393,7 +397,7 @@
     if (box.src) {
       let sn = {};
       try { sn = await fetch(`/api/snippet?src=${encodeURIComponent(box.src)}&t=${encodeURIComponent(TOKEN)}`).then((r) => r.json()); } catch { sn = { error: 'could not read the code' }; }
-      const code = peekEl.querySelector('.peek-code'); if (!code || peekEl.hidden) return;
+      const code = peekEl.querySelector('.peek-code'); if (seq !== peekSeq || !code || peekEl.hidden) return; // a newer peek won
       if (sn.kind === 'folder') code.innerHTML = `<div class="peek-loading">A folder: ${esc(sn.path)}</div>`;
       else if (sn.error) code.innerHTML = `<div class="peek-loading">${esc(sn.error)}</div>`;
       else {
@@ -528,7 +532,7 @@
     } else if (d.type === 'nav') {
       navigate(d.dir);
     } else if (d.type === 'peek') {
-      if (d.box && d.rect) openPeek(d.box, d.rect);
+      if (d.box && d.rect) openPeek(d.box, d.rect, Number(d.sy) || 0);
     } else if (d.type === 'loaded') {
       if (d.page && d.page !== state.page) setCurrent(d.page);
       closePeek();
@@ -539,7 +543,11 @@
       syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
     } else if (d.type === 'scroll') {
-      state.scroll[d.page] = d.y; closePeek();
+      state.scroll[d.page] = d.y;
+      if (!peekEl.hidden && peekAnchor) {
+        const dy = d.y - peekAnchor.sy;
+        if (peekAnchor.rect.b - dy < 0 || peekAnchor.rect.t - dy > peekAnchor.stageH) closePeek(); else peekAnchor.place(dy);
+      }
     } else if (d.type === 'note' || d.type === 'note-update') {
       const n = d.note || {};
       const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || ''), rect: n.rect && typeof n.rect === 'object' ? { left: +n.rect.left || 0, top: +n.rect.top || 0, right: +n.rect.right || 0, bottom: +n.rect.bottom || 0 } : null };

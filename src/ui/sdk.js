@@ -119,7 +119,7 @@
   }
   function peek(el) {
     const r = el.getBoundingClientRect();
-    post({ type: 'peek', page: pagePath(), box: boxInfo(el), rect: { l: r.left, t: r.top, r: r.right, b: r.bottom } });
+    post({ type: 'peek', page: pagePath(), box: boxInfo(el), rect: { l: r.left, t: r.top, r: r.right, b: r.bottom }, sy: scrollY });
   }
 
   // ---------- annotate ----------
