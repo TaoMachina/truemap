@@ -104,22 +104,27 @@
   const stateOf = (r) => (r?.counts?.broken ? 'broken' : r?.counts?.changed ? 'changed' : '');
   const titleOf = (p) => (p.page === 'index.html' && (!p.title || p.title === 'index') ? 'Blueprint' : p.title || p.page);
 
+  // Drafts are the record of what the agent explained, newest first; other pages after them.
+  const isDraft = (p) => /^drafts\//.test(p.page);
+  const draftNo = (p) => { const n = parseInt(p.page.slice(7), 10); return Number.isFinite(n) ? n : null; };
   function renderMenu() {
     const list = $('pages'); list.innerHTML = '';
     const q = $('filter').value.trim().toLowerCase();
     $('filter').hidden = state.pages.length <= 7;
-    state.pages
-      .filter((p) => !q || `${p.title} ${p.page}`.toLowerCase().includes(q))
-      .forEach((p, i, arr) => {
-        const st = stateOf(resultFor(p.page));
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'page-item' + (p.page === state.page ? ' active' : ''); b.setAttribute('role', 'menuitem');
-        b.innerHTML = `<span class="pi-text"><span class="pi-title">${esc(titleOf(p))}</span><span class="pi-file">${esc(p.page)}</span></span>${st ? `<span class="tri ${st}" title="${st === 'broken' ? 'Out of date' : 'Code changed'}"></span>` : ''}`;
-        b.onclick = () => { closeMenu(); go(p.page); };
-        list.appendChild(b);
-        if (i === 0 && p.page === 'index.html' && arr.length > 1) list.insertAdjacentHTML('beforeend', '<div class="menu-gap"></div>');
-      });
-    if (!state.pages.length) list.innerHTML = '<div class="menu-head">No pages in .truemap/ yet</div>';
+    const match = (p) => !q || `${p.title} ${p.page}`.toLowerCase().includes(q);
+    const drafts = state.pages.filter((p) => isDraft(p) && match(p)).sort((a, b) => (draftNo(b) ?? 0) - (draftNo(a) ?? 0) || b.at - a.at);
+    const pages = state.pages.filter((p) => !isDraft(p) && p.page !== 'index.html' && match(p));
+    const item = (p, num) => {
+      const st = stateOf(resultFor(p.page));
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'page-item' + (p.page === state.page ? ' active' : ''); b.setAttribute('role', 'menuitem');
+      b.innerHTML = `${num != null ? `<span class="pi-num">${num}</span>` : ''}<span class="pi-text"><span class="pi-title">${esc(titleOf(p))}</span><span class="pi-file">${p.at ? esc(timeOf(new Date(p.at).toISOString())) : esc(p.page)}</span></span>${st ? `<span class="tri ${st}" title="${st === 'broken' ? 'Out of date' : 'Code changed'}"></span>` : ''}`;
+      b.onclick = () => { closeMenu(); go(p.page); };
+      list.appendChild(b);
+    };
+    if (drafts.length) { list.insertAdjacentHTML('beforeend', '<div class="menu-label">Drafts</div>'); drafts.forEach((p) => item(p, draftNo(p))); }
+    if (pages.length) { list.insertAdjacentHTML('beforeend', '<div class="menu-label">Pages</div>'); pages.forEach((p) => item(p, null)); }
+    if (!drafts.length && !pages.length) list.innerHTML = `<div class="menu-head">${state.pages.length ? 'No drafts yet. Ask the agent to explain something and it draws one here.' : 'No pages in .truemap/ yet'}</div>`;
   }
   function openMenu() { renderMenu(); menu.hidden = false; $('pageBtn').setAttribute('aria-expanded', 'true'); ($('filter').hidden ? menu.querySelector('.page-item.active, .page-item') : $('filter'))?.focus(); }
   function closeMenu() { menu.hidden = true; $('pageBtn').setAttribute('aria-expanded', 'false'); }
@@ -177,12 +182,12 @@
 
   function renderHeader() {
     const p = state.pages.find((x) => x.page === state.page);
-    $('pageTitle').textContent = p ? titleOf(p) : (state.pages.length ? 'Pages' : 'No pages yet');
-    // The blueprint is always one click away.
+    // The map is always one click away; the switcher names the draft or page you are on, or offers the drafts.
     const home = state.pages.find((x) => x.page === 'index.html');
-    const showHome = !!home && !!state.page && state.page !== 'index.html';
-    $('crumbHome').hidden = !showHome; $('crumbSep').hidden = !showHome;
-    if (showHome) { $('crumbHome').textContent = titleOf(home); $('crumbHome').title = `Back to ${titleOf(home)}`; }
+    const onMap = !state.page || state.page === 'index.html';
+    $('crumbHome').hidden = !home; $('crumbHome').classList.toggle('on', onMap);
+    const nDrafts = state.pages.filter(isDraft).length;
+    $('pageTitle').textContent = !onMap && p ? `${isDraft(p) && draftNo(p) != null ? `#${draftNo(p)} ` : ''}${titleOf(p)}` : nDrafts ? `Drafts (${nDrafts})` : state.pages.length > 1 ? 'Pages' : 'No drafts yet';
     renderProjects();
     const r = resultFor(state.page); const st = stateOf(r);
     const chip = $('checkChip');
@@ -652,7 +657,7 @@
     if (p.status === 'review' && old) {
       html += `<div class="pb-acts"><span class="pb-wait">Read it in the conversation; the agent converts the map first.</span><button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve as text</button></div>`;
     } else if (p.status === 'review') {
-      html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request" title="Send your comments; the agent revises the plan">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve" title="The agent starts building it">Approve</button></div>`;
+      html += '<div class="pb-acts"><button type="button" class="pb-btn" data-pb="open" title="Review it where it is drawn">Show on the map</button></div>';
     } else if (p.status === 'revise') {
       html += `<div class="pb-acts"><span class="pb-wait">Waiting for the revised plan</span></div>`;
     } else if (p.status === 'approved') {
@@ -960,7 +965,7 @@
       if (state.pages.some((p) => p.page === page)) { if (state.page) to.push(state.page); nav.moving = true; go(page); return; }
     }
   }
-  $('crumbHome').onclick = () => go('index.html');
+  $('crumbHome').onclick = () => { if (state.page !== 'index.html') go('index.html'); };
   document.addEventListener('keydown', (e) => {
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); navigate(e.key === 'ArrowLeft' ? 'back' : 'forward'); }
   });

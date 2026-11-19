@@ -737,6 +737,9 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
   window.truemapDiagram?.interact();
   const ready = () => {
     drawWires();
+    // index.html#runs: arriving from a draft's box link lights that box on the map
+    const hashId = decodeURIComponent((location.hash || '').slice(1));
+    if (hashId && /^[\w-]+$/.test(hashId) && document.getElementById(hashId)) setTimeout(() => applyFocus([hashId], '', '', 'center'), 250);
     // Boxes are reachable from the keyboard too.
     for (const b of document.querySelectorAll('.tm-node, .tm-step')) { if (!b.hasAttribute('tabindex') && !b.matches('a[href]')) b.setAttribute('tabindex', '0'); }
     if ('ResizeObserver' in window) new ResizeObserver(scheduleWires).observe(document.body);

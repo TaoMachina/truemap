@@ -1,6 +1,6 @@
 // truemap CLI. Output is plain YAML-ish text written for agents: what happened + next_step.
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -442,6 +442,47 @@ async function cmdPlan(root, args, opts) {
   ].join('\n'));
 }
 
+// A draft: a free-form page that explains one thing, numbered so the drafts read as a record.
+function cmdDraft(root, args, opts) {
+  const name = args.join(' ').trim();
+  if (!name) throw new Error('draft needs a name: truemap draft "how a message is routed"');
+  ensureFolder(root);
+  const dir = join(folderPath(root), 'drafts');
+  mkdirSync(dir, { recursive: true });
+  const nums = readdirSync(dir).map((x) => parseInt(x, 10)).filter(Number.isFinite);
+  const n = (nums.length ? Math.max(...nums) : 0) + 1;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'draft';
+  const file = `drafts/${String(n).padStart(3, '0')}-${slug}.html`;
+  const title = opts.title || name.replace(/^./, (c) => c.toUpperCase());
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  writeFileSync(join(folderPath(root), file), `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<link rel="stylesheet" href="../assets/truemap.css">
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <nav class="tm-crumb"><a href="../index.html">Map</a> / Draft ${n}</nav>
+    <h1 class="tm-title">${esc(title)}</h1>
+    <p class="tm-lede">One or two sentences: what this draft explains or proposes.</p>
+  </header>
+  <section class="tm-section">
+    <h2>…</h2>
+    <p>…</p>
+  </section>
+</main></body>
+</html>
+`);
+  out('status: draft_created');
+  out(`draft: ${q(file)}   # .truemap/${file}`);
+  block('next_step', [
+    `Write the draft: replace the placeholder sections in .truemap/${file}. Free form: any mix of short text, a <figure class="tm-diagram"> (data-plan="new" draws a proposed box dashed), steps, a comparison table, a small interactive bit, or an <iframe> of the running dev server. Link boxes on the map as <a href="../index.html#runs">Runs</a>.`,
+    `Then show it: \`${CMD} ${file}\` (the user's tab switches to it and it is added to their drafts), and answer in one or two lines with \`${CMD} reply "…" --listen\` pointing to it.`,
+  ].join('\n'));
+}
+
 async function cmdProgress(root, args) {
   const state = await liveState(root);
   if (!state) return out('status: no_server');
@@ -530,6 +571,7 @@ usage:
   ${CMD} reply "…" --focus id,id  answer and light up the boxes the answer is about
   ${CMD} ask "<question>" --option "A | why" --option "B | why"
                                 ask the user to choose, only when you are blocked on a real trade-off
+  ${CMD} draft "<name>"          a new numbered draft page that explains one thing (then open it with truemap <file>)
   ${CMD} plan --file plan.json  before a change that touches 3+ boxes or adds one: show the plan on the map for review
   ${CMD} plan --approve|--done  the user said "go" in the terminal / the plan is built
   ${CMD} changes [--base turn|plan|head|main]
@@ -563,6 +605,7 @@ function parseArgs(argv) {
     else if (a === '--approve') opts.approve = true;
     else if (a === '--done') opts.done = true;
     else if (a === '--step') (opts.step ||= []).push(argv[++i]);
+    else if (a === '--title') opts.title = argv[++i];
     else if (a === '--box') (opts.box ||= []).push(argv[++i]);
     else if (a === '--option') (opts.option ||= []).push(argv[++i]);
     else if (a === '--help' || a === '-h') opts.help = true;
@@ -575,7 +618,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, changes: cmdChanges, plan: cmdPlan, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, changes: cmdChanges, plan: cmdPlan, draft: cmdDraft, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();

@@ -139,6 +139,19 @@ SHOW WHAT YOU CHANGED (after you edited code)
   The base is the moment you picked up the user's message (or approved plan); --base head|main for others.
 - If a change adds something that matters (a new module, route or store), add a box for it to the map.
 
+DRAFTS (the everyday way to explain)
+- When the user asks how something works, says they don't understand, or you have an idea or a design to show,
+  draw a draft instead of a long chat answer:
+    {{CMD}} draft "how a message is routed"      creates .truemap/drafts/NNN-how-a-message-is-routed.html
+  Write it, then `{{CMD}} drafts/NNN-….html`: the user's tab switches to it at once and it joins their numbered
+  drafts (the record of what you explained). Keep the chat reply to one or two lines pointing to it.
+- A draft is free form, a whole scrolling page if needed: short text, a <figure class="tm-diagram"> (data-plan="new"
+  draws a proposed box dashed), numbered steps, a comparison table, a decision with its trade-offs, a small
+  interactive bit, even an <iframe> of the running dev server. Pick what makes this one thing clear.
+- Link boxes on the map from a draft as <a href="../index.html#runs">Runs</a>: the map opens with that box lit.
+- Drafts are kept; don't delete them. A draft worth keeping for good can move to .truemap/ as a page.
+- Simple questions still get a short chat answer; a draft is for 3+ moving parts, a flow, a design or a choice.
+
 POINTING AT THE MAP
 - While you explain, light up what you are talking about:
     {{CMD}} show index.html --focus runs,store --note "Every message becomes a run here first."

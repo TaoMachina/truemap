@@ -118,3 +118,10 @@ test('a step reported done that names a file with no changes is a conflict; a ch
   assert.match(st.conflict, /server\/hub.ts has no changes/);
   assert.match(st.rewritten, /not built.*done/);
 });
+
+test('truemap draft makes numbered draft pages that read as a record', () => {
+  const { root } = repo();
+  const run = (...a) => execFileSync(process.execPath, [join(process.cwd(), 'bin', 'truemap.js'), ...a], { cwd: root, encoding: 'utf8', env: { ...process.env, TRUEMAP_NO_OPEN: '1' } });
+  assert.match(run('draft', 'how routing works'), /drafts\/001-how-routing-works\.html/);
+  assert.match(run('draft', 'why a queue'), /drafts\/002-why-a-queue\.html/);
+});

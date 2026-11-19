@@ -52,7 +52,10 @@ export function listPages(root) {
   };
   walk(base);
   out.sort((a, b) => (a === 'index.html' ? -1 : b === 'index.html' ? 1 : a.localeCompare(b)));
-  return out.map((page) => ({ page, title: readTitle(join(base, page)) || page.replace(/\.html?$/i, '') }));
+  return out.map((page) => {
+    let at = 0; try { const st = statSync(join(base, page)); at = Math.round(st.birthtimeMs || st.mtimeMs); } catch { /* gone */ }
+    return { page, title: readTitle(join(base, page)) || page.replace(/\.html?$/i, ''), at };
+  });
 }
 
 function readTitle(file) {

@@ -379,6 +379,8 @@ html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outli
 .tm-diagram .tm-node[data-plan="remove"] .tm-dg-name { text-decoration: line-through; }
 .tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 12px/17px var(--dg-font); padding: 0 8px; border-radius: 9px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
 .tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "Plan: new"; }
+/* a draft sketching an idea: a proposed box, not a plan under review */
+.tm-diagram .tm-node[data-plan="new"]:not([data-ghost]):not([data-tm-delta])::after { content: "Proposed"; }
 .tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Plan: edit"; }
 .tm-diagram .tm-node[data-plan="change"][data-plan-revised]:not([data-tm-delta])::after { content: "Plan: edit, revised"; background: var(--dg-mark); }
 .tm-diagram .tm-node[data-plan="new"][data-plan-revised]:not([data-tm-delta])::after { content: "Plan: new, revised"; background: var(--dg-mark); }

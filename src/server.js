@@ -509,7 +509,13 @@ const server = createServer(async (req, res) => {
       const page = String(b.page ?? '');
       noteAgent(b.agent);
       if (typeof b.annotate === 'boolean' && clients.size === 0) annotateWish = b.annotate;
-      broadcast({ type: 'navigate', page, pages: safePages(), ...(typeof b.annotate === 'boolean' ? { annotate: b.annotate } : {}) });
+      const pagesNow = safePages();
+      broadcast({ type: 'navigate', page, pages: pagesNow, ...(typeof b.annotate === 'boolean' ? { annotate: b.annotate } : {}) });
+      if (/^drafts\//.test(page) && !history.some((h) => h.draft === page)) {
+        const t = pagesNow.find((x) => x.page === page)?.title || page;
+        const n = parseInt(page.slice(7), 10);
+        remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, draft: page, text: `Draft${Number.isFinite(n) ? ` ${n}` : ''}: [${t}](${page})` });
+      }
       scheduleChecks();
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
