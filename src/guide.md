@@ -131,7 +131,9 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
   on their own new file. `changes` only says which planned boxes have changes in their files; compare each planned
   item with its diff yourself. Close the plan with your account of every step, shown to the user beside the facts:
     {{CMD}} plan --done --step "1=done" --step "2=partly:no UI field yet" --step "3=not_built:hub.ts does not start it"
-  (done, partly, not_built, dropped; a reason after a colon for all but done). Run `{{CMD}} plan --done`. It
+  (done, partly, not_built, dropped; a reason after a colon for all but done). Every report is kept; a step you
+  report done that names a file with no changes is shown to the user as a conflict. Then
+  `{{CMD}} reply "<what you built and what you did not>" --listen`. Run `{{CMD}} plan --done`. It
   warns about planned boxes with no changes: tell the user which parts are not built, and why.
 - Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 

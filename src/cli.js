@@ -260,7 +260,7 @@ async function doListen(root, opts) {
       block('next_step', [
         'The user APPROVED your plan. Build it now; changes are measured from this moment.',
         `While you build, post short status lines with \`${CMD} progress "…"\`; no reply is needed to start.`,
-        `When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\` (it warns about planned boxes you did not change), then \`${CMD} changes\`, tell the user in the terminal what you built, and \`${CMD} listen\`${bg}.`,
+        `When done: put new boxes on the page for real (with data-src); run \`${CMD} changes\` and compare every step with its diff; close with \`${CMD} plan --done --step "1=done" …\` (one --step per step, honest: the user sees your report beside the facts, and every report is kept); then \`${CMD} reply "<what you built and what you did not>" --listen\`${bg}.`,
       ].join('\n'));
       return;
     }
@@ -361,11 +361,14 @@ async function cmdChanges(root, args, opts) {
     for (const st of r.plan.steps || []) {
       const quiet = [...st.files.filter((x) => !x.changed).map((x) => x.path), ...st.boxes.filter((x) => !x.changed).map((x) => x.name)];
       out(`  - step ${st.n}${st.report ? ` (you reported: ${st.report.status})` : ''}: ${q(st.text)}${quiet.length ? `   # names ${quiet.map(q).join(', ')} with no changes` : ''}`);
+      if (st.conflict) out(`    conflict: ${q(st.conflict)}   # the user sees this at the top of the Changes view`);
+      if (st.rewritten) out(`    report_history: ${q(st.rewritten)}`);
     }
   }
   out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
-  if (r.plan) steps.push(`Compare each step with the diff yourself. Your verdict goes on the page: \`${CMD} plan --done --step "1=done" --step "2=not_built:why"\` (every step), and say it in the terminal too. The counts above only say where files changed.`);
+  if (r.plan && r.plan.status !== 'done') steps.push(`Compare each step with the diff yourself, then close the plan with your account of every step: \`${CMD} plan --done --step "1=done" --step "2=not_built:why"\`. The counts above only say where files changed.`);
+  if (r.plan?.steps?.some((x) => x.conflict)) steps.push('Some steps you reported done name files with no changes: fix the work or correct your report (the user sees both, and the report history).');
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
@@ -441,7 +444,7 @@ async function cmdCheck(root, args, opts) {
   if (opts.ok) {
     const page = resolvePage(root, opts.ok);
     if (!markOk(root, page, opts.box)) throw new Error(`page not found: ${FOLDER}/${page}`);
-    out(`status: marked ${q(page)} as reviewed`);
+    out(opts.box?.length ? `status: marked ${opts.box.map(q).join(', ')} on ${q(page)} as matching the code   # other boxes keep their marks` : `status: marked every box on ${q(page)} as matching the code`);
     const state = await liveState(root);
     if (state) await call(state, 'POST', '/api/check', {}).catch(() => {});
     return;

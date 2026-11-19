@@ -513,11 +513,13 @@
       const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
       html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes have changes${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} outside the plan` : ''}. Open a box to check its diff against what was planned.</p>`;
       const STEP = { done: 'Agent: done', partly: 'Agent: partly done', not_built: 'Agent: not built', dropped: 'Agent: dropped' };
+      const conflicts = (r.plan.steps || []).filter((st) => st.conflict || st.rewritten);
+      if (conflicts.length) html += `<div class="ch-conflicts"><b>Check these before you trust the report</b>${conflicts.map((st) => `<p>Step ${st.n}: ${esc([st.conflict, st.rewritten].filter(Boolean).join(' '))}</p>`).join('')}</div>`;
       if (r.plan.steps?.length) {
         html += `<ol class="ch-steps">${r.plan.steps.map((st) => {
           const quiet = [...st.files.filter((x) => !x.changed).map((x) => x.path), ...st.boxes.filter((x) => !x.changed).map((x) => x.name)];
           const rp = st.report ? `<span class="st-rep st-${esc(st.report.status)}">${STEP[st.report.status] || esc(st.report.status)}${st.report.note ? `: ${esc(st.report.note)}` : ''}</span>` : `<span class="st-rep">${r.plan.status === 'done' ? 'Agent: not reported' : 'Not reported yet'}</span>`;
-          return `<li><span class="st-text">${esc(st.text.replace(/\[([^\]]+)\]\(#[\w-]+\)/g, '$1'))}</span>${rp}${quiet.length ? `<span class="st-fact">Names ${esc(quiet.join(', '))}, which ${quiet.length > 1 ? 'have' : 'has'} no changes</span>` : ''}</li>`;
+          return `<li class="${st.conflict ? 'st-conflict' : ''}"><span class="st-text">${inline(esc(st.text.replace(/\[([^\]]+)\]\(#[\w-]+\)/g, '$1')))}</span>${rp}${quiet.length ? `<span class="st-fact">Names ${esc(quiet.join(', '))}, which ${quiet.length > 1 ? 'have' : 'has'} no changes</span>` : ''}</li>`;
         }).join('')}</ol>`;
       }
       if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> planned, no changes in its files${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
@@ -675,7 +677,7 @@
     if (projMenu.hidden) return;
     projMenu.innerHTML = projList.map((x) => {
       const why = x.plan?.status === 'review' ? `<em>Plan to review</em> ${esc(x.plan.title)}` : x.asking ? '<em>Waiting for your decision</em>' : x.unread ? '<em>New reply</em>' : esc(PSTATE[x.agent] || '');
-      return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="truemap-${esc(x.name)}" rel="noopener"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
+      return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="truemap-${esc(x.name)}"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
     }).join('') + `<div class="proj-foot">Projects with truemap running. Run <code>${esc(state.cmd)}</code> in another repo to add it.</div>`;
   }
   async function loadProjects() {

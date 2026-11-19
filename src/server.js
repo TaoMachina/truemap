@@ -526,7 +526,8 @@ const server = createServer(async (req, res) => {
           let rep2;
           try { rep2 = parseReport(plan, Array.isArray(b.steps) ? b.steps : []); } catch (e) { return sendJson(res, 400, { error: String(e.message || e) }); }
           if (rep2.missing.length) return sendJson(res, 400, { error: 'report every step', missing: rep2.missing, steps: plan.steps });
-          plan = { ...plan, report: rep2.report };
+          // every report is kept; a later one never replaces the first without a trace
+          plan = { ...plan, report: rep2.report, reports: [...(plan.reports || []), { at: new Date().toISOString(), report: rep2.report }] };
           if (snapshots.plan?.slug === plan.slug) { await takeSnapshot('planEnd', { slug: plan.slug }); const r = await changesFor('plan', true); check = r.plan || null; }
           setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
         }

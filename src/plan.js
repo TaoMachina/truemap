@@ -83,8 +83,13 @@ function revisionDiff(prev, plan, nameOf = (b) => b) {
   const what = (p) => new Map(p.touch.map((t) => [t.box, t.what]));
   for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${nameOf(box)}: was "${what(prev).get(box)}", now "${w}"`);
   const before = new Set(prev.steps); const after = new Set(plan.steps);
-  plan.steps.forEach((st, i) => { if (!before.has(st)) out.push(`+ step ${i + 1}: ${st}`); });
-  prev.steps.forEach((st) => { if (!after.has(st)) out.push(`− removed step: ${st}`); });
+  const added = plan.steps.map((st, i) => ({ st, i })).filter((x) => !before.has(x.st));
+  const removed = prev.steps.map((st, i) => ({ st, i })).filter((x) => !after.has(x.st));
+  for (const a of added) {
+    const r = removed.findIndex((x) => x.i === a.i);
+    if (r >= 0) { out.push(`~ step ${a.i + 1}: was "${removed[r].st}", now "${a.st}"`); removed.splice(r, 1); } else out.push(`+ step ${a.i + 1}: ${a.st}`);
+  }
+  for (const x of removed) out.push(`− removed step: ${x.st}`);
   return out;
 }
 
@@ -120,7 +125,13 @@ export function stepCheck(root, plan, result) {
       .map((p) => ({ path: p, changed: [...changedFiles].some((c) => c === p || c.endsWith(`/${p}`)) }));
     const boxes = [...text.matchAll(/\[([^\]]+)\]\(#([\w-]+)\)/g)].map((m) => { const src = srcOfBox(root, plan.page, m[2]); return { id: m[2], name: m[1], changed: !!src && changedBoxes.has(src) }; });
     const rep = plan.report?.[i] || null;
-    return { n: i + 1, text, files, boxes, report: rep };
+    // the agent says done, but a file or box the step names did not change: the user must see this first
+    const quiet = [...files.filter((x) => !x.changed).map((x) => x.path), ...boxes.filter((x) => !x.changed).map((x) => x.name)];
+    const conflict = rep?.status === 'done' && quiet.length ? `The agent reports this step done, but ${quiet.join(', ')} ${quiet.length > 1 ? 'have' : 'has'} no changes.` : null;
+    // the report changed after it was first given
+    const first = plan.reports?.[0]?.report?.[i];
+    const rewritten = first && rep && first.status !== rep.status ? `Reported "${first.status.replace('_', ' ')}" first, changed to "${rep.status.replace('_', ' ')}" later.` : null;
+    return { n: i + 1, text, files, boxes, report: rep, conflict, rewritten };
   });
 }
 

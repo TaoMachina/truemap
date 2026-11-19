@@ -108,3 +108,13 @@ test('steps are checked against the files and boxes they name; closing a plan ne
   assert.throws(() => parseReport(plan, ['2=not_built']), /say why/);
   assert.equal(parseReport(plan, ['1=done', '2=not_built:later']).report[1].status, 'not_built');
 });
+
+test('a step reported done that names a file with no changes is a conflict; a changed report keeps its history', async () => {
+  const { stepCheck, cleanPlan: clean } = await import('../src/plan.js');
+  const { root } = repo();
+  const plan = { ...clean({ title: 'T', page: 'index.html', touch: [{ box: 'runs' }], steps: ['Start it in createHub (server/hub.ts)'] }),
+    report: [{ status: 'done', note: '' }], reports: [{ report: [{ status: 'not_built', note: 'later' }] }, { report: [{ status: 'done', note: '' }] }] };
+  const [st] = stepCheck(root, plan, { files_list: [], boxes: [] });
+  assert.match(st.conflict, /server\/hub.ts has no changes/);
+  assert.match(st.rewritten, /not built.*done/);
+});
