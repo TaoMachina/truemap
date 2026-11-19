@@ -125,7 +125,7 @@ export function attribute(root, files) {
     }
   }
   const sum = (list, k) => list.reduce((n, f) => n + (f[k] || 0), 0);
-  const boxList = [...boxes.values()].map((b) => ({ src: b.src, name: names.get(b.src) || '', pages: [...b.pages], files: b.files, add: sum(b.files, 'add'), del: sum(b.files, 'del') }))
+  const boxList = [...boxes.values()].map((b) => ({ src: b.src, name: names.get(b.src) || '', pages: [...b.pages], files: b.files, isNew: b.files.length > 0 && b.files.every((x) => x.status === 'A'), add: sum(b.files, 'add'), del: sum(b.files, 'del') }))
     .sort((a, b) => (b.add + b.del) - (a.add + a.del));
   const folders = new Map();
   const dirOf = (p) => p.replace(/\/?[^/]*$/, '');

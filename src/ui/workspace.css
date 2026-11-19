@@ -426,3 +426,8 @@ code { font-family: var(--code); font-size: 0.9em; }
 .cc-loose .text-btn { margin-top: 6px; }
 .cc-hint { margin: 8px 0 0 !important; font-size: 12px; color: var(--faint); }
 .panel-head { justify-content: flex-end; }
+.nav-btns { display: inline-flex; gap: 0; margin-right: 4px; }
+.icon-btn.nav { width: 26px; height: 26px; }
+.icon-btn.nav svg { width: 15px; height: 15px; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn.nav:disabled { opacity: .35; cursor: default; background: none; }
+.cc-new { margin-left: 6px; font-size: 11px; font-weight: 500; padding: 0 6px; border-radius: 6px; background: color-mix(in oklab, var(--fine) 16%, transparent); color: var(--fine); }

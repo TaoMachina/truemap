@@ -725,14 +725,15 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     } else if (d.type === 'changes') {
       // Review mode: changed boxes carry their +/- lines; the rest of the map goes quiet.
       document.documentElement.toggleAttribute('data-tm-changes', !!d.on);
-      for (const el of document.querySelectorAll('[data-tm-change], [data-tm-unbuilt]')) { el.removeAttribute('data-tm-change'); el.removeAttribute('data-tm-delta'); el.removeAttribute('data-tm-unbuilt'); }
+      for (const el of document.querySelectorAll('[data-tm-change], [data-tm-unbuilt]')) { el.removeAttribute('data-tm-change'); el.removeAttribute('data-tm-delta'); el.removeAttribute('data-tm-unbuilt'); el.removeAttribute('data-tm-new'); }
       for (const u of d.unbuilt || []) { const el = findItems([u.src || u.box, u.box])[0]; if (el) el.setAttribute('data-tm-unbuilt', ''); }
       const names = [];
       for (const it of d.items || []) {
         for (const el of document.querySelectorAll('[data-src]')) {
           if (el.getAttribute('data-src') !== it.src) continue;
           el.setAttribute('data-tm-change', '');
-          el.setAttribute('data-tm-delta', it.add == null ? 'binary' : [it.add ? '+' + it.add : '', it.del ? '−' + it.del : ''].filter(Boolean).join(' ') || '±0');
+          el.setAttribute('data-tm-delta', (it.isNew ? 'New ' : '') + (it.add == null ? 'binary' : [it.add ? '+' + it.add : '', it.del ? '−' + it.del : ''].filter(Boolean).join(' ') || '±0'));
+          el.toggleAttribute('data-tm-new', !!it.isNew);
           names.push({ src: it.src, name: clean(el.getAttribute('data-name'), 60) || labelOf(el) });
         }
       }

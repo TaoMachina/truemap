@@ -79,7 +79,7 @@ async function postChanges(base = 'turn') {
     text: `Changed ${r.files} file${r.files > 1 ? 's' : ''}`,
     changes: {
       base: r.base.kind, label: r.base.label, files: r.files, add: r.add, del: r.del,
-      boxes: r.boxes.slice(0, 16).map((b) => ({ src: b.src, name: b.name, add: b.add, del: b.del, pages: b.pages, files: b.files.map((x) => x.path) })),
+      boxes: r.boxes.slice(0, 16).map((b) => ({ src: b.src, name: b.name, isNew: !!b.isNew, add: b.add, del: b.del, pages: b.pages, files: b.files.map((x) => x.path) })),
       unmapped: r.unmapped.flatMap((g) => g.files).slice(0, 30).map((x) => ({ path: x.path, add: x.add, del: x.del })),
       notDone: p ? p.planned.filter((x) => !x.changed).map((x) => x.name || x.box) : [],
     },

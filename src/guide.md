@@ -139,6 +139,9 @@ SHOW WHAT YOU CHANGED (after you edited code)
   carry their lines on the map and open their diff. Run `{{CMD}} changes` to see the same summary yourself
   (--base head|main for other comparisons); it also posts the card.
 - If a change adds something that matters (a new module, route or store), add a box for it to the map.
+- Keep the map true after your own changes: for each box you changed, fix its text if it no longer fits, then
+  `{{CMD}} check --ok index.html --box <id>`. "Map may be out of date" should only appear for code the map
+  hasn't caught up with, not after every turn of yours.
 
 DRAFTS (the everyday way to explain)
 - When the user asks how something works, says they don't understand, or you have an idea or a design to show,

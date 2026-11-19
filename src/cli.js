@@ -375,6 +375,7 @@ async function cmdChanges(root, args, opts) {
   if (r.plan && r.plan.status !== 'done') steps.push(`When the plan is built, run \`${CMD} plan --done\`. If some steps are not built, say so in your reply (or add --step "3=not_built:why" so it shows beside the facts).`);
   if (r.plan?.steps?.some((x) => x.conflict)) steps.push('Some steps you reported done name files with no changes: fix the work or correct your report (the user sees both, and the report history).');
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They see it as a card in the conversation and on the map; a box opens its diff.');
+  if (r.boxes.length) steps.push(`Keep the map true: for each box you changed, fix its data-name, tag and detail if they no longer fit, then confirm it with \`${CMD} check --ok index.html --box <id>\` (otherwise the user sees "Map may be out of date").`);
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
   block('next_step', steps.join('\n'));

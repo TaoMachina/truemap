@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="truemap-verified" content="2026-11-19T18:47:25.880Z">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page SDK</title>
+<link rel="stylesheet" href="assets/truemap.css">
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <nav class="tm-crumb"><a href="index.html">truemap architecture</a> / Page SDK</nav>
+    <h1 class="tm-title">Page SDK</h1>
+    <p class="tm-lede">A script the server adds to every page it serves. It runs inside the page's iframe and turns a static HTML map into one you can click, comment on and be pointed at, talking to the workspace only through postMessage.</p>
+  </header>
+
+  <figure class="tm-diagram">
+    <section class="tm-group" id="server" data-label="Local server">
+      <div class="tm-node" id="content" data-name="Content origin" data-tag="second port" data-src="src/server.js#servePage" data-to="page:injects_SDK_into">
+        <div class="tm-detail">
+          <p>Serves the page and adds &lt;script src="/__truemap/sdk.js"&gt; before &lt;/body&gt;. The script is wires.js, diagram.js and sdk.js joined.</p>
+          <ul><li>The file on disk never contains the SDK; only the served copy does.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="outside" data-label="Outside the page">
+      <div class="tm-node is-key" id="workspace" data-name="Workspace" data-tag="parent window" data-src="src/ui/workspace.js#toFrame" data-to="bridge:sends">
+        <div class="tm-detail">
+          <p>The truemap tab around the iframe. It forwards what the agent and the server say into the page: focus, plan, marks, notes, selection.</p>
+          <ul><li>Only accepts messages from its own iframe on the content origin.</li></ul>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="you" data-name="You" data-tag="mouse, keyboard" data-to="card:clicks comments:select_text">
+        <div class="tm-detail"><p>Click a box to light its lines, double-click to comment, select text to comment on it, Escape to go back to the plain map.</p></div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="sdk" data-label="Page SDK">
+      <div class="tm-node is-key" id="bridge" data-name="Message bridge" data-tag="postMessage" data-src="src/ui/sdk.js#parentWin" data-to="workspace:reports_to focus:focus diagram:plan_ghosts">
+        <div class="tm-detail">
+          <p>The only way in and out of the page: every message carries __truemap and goes to, or is accepted from, the workspace origin only.</p>
+          <ul>
+            <li>In: annotate, focus, focus-note, marks, notes, plan, scroll, select.</li>
+            <li>Out: peek, focus-state, note-remove, answer, page-send, nav and a few more.</li>
+            <li>window.truemap.send lets a page script talk to the agent; it arrives tagged from: page.</li>
+          </ul>
+          <p class="tm-why">The page sits on another origin, so it cannot call the API; postMessage to one known parent is all it gets.</p>
+        </div>
+      </div>
+      <div class="tm-node is-key" id="focus" data-name="Focus" data-tag="show, reply" data-src="src/ui/sdk.js#applyFocus" data-to="page:lights_up">
+        <div class="tm-detail">
+          <p>When the agent runs show or a reply links a box, the named boxes stay lit and everything else fades to about a third.</p>
+          <ul>
+            <li>Items are box ids or data-src values.</li>
+            <li>Escape or a click on empty space clears it.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tm-node is-key" id="card" data-name="Box select" data-tag="click" data-src="src/ui/sdk.js#openBox" data-to="bridge:peeks_via">
+        <div class="tm-detail">
+          <p>A click selects a box: its own lines stay lit and nothing pops up; a second click lets go. If the inspector is open, it follows the selected box. A double click opens the card to write a comment.</p>
+          <ul><li>Reads the box's data-name, data-tag, data-to, .tm-detail and .tm-why for the inspector.</li></ul>
+        </div>
+      </div>
+      <div class="tm-node" id="comments" data-name="Comments" data-tag="pins" data-src="src/ui/sdk.js#placePins" data-to="bridge:notes_via">
+        <div class="tm-detail">
+          <p>Each comment becomes a numbered pin on the box or text it is about; the workspace collects them and sends them in one message.</p>
+          <ul><li>A text selection shows a small Comment button.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="dom" data-label="The page">
+      <div class="tm-node" id="diagram" data-name="Diagram layout" data-tag="tm-diagram" data-src="src/ui/diagram.js#setGhosts" data-to="page:draws">
+        <div class="tm-detail">
+          <p>Lays out groups, boxes and connections, and draws a plan's new boxes dashed in their group.</p>
+        </div>
+      </div>
+      <div class="tm-node is-key" id="page" data-name="Map page" data-tag="HTML" data-src=".truemap/index.html">
+        <div class="tm-detail">
+          <p>The plain HTML the agent wrote. The SDK only adds attributes and an overlay; it never changes the file.</p>
+        </div>
+      </div>
+    </section>
+
+    <ol class="tm-flows">
+      <li data-path="workspace bridge focus page" data-note="The agent runs show or reply with box links; the workspace passes focus into the page and the SDK lights those boxes and fades the rest.">The agent points at boxes</li>
+      <li data-path="you card bridge workspace" data-note="You click a box; the SDK selects it and lights its lines, and tells the workspace so an open inspector follows it with the code.">You click a box</li>
+      <li data-path="workspace bridge diagram page" data-note="A plan in review reaches the page; the layout draws the new boxes dashed and marks the touched ones.">A plan shows on the map</li>
+    </ol>
+  </figure>
+</main></body>
+</html>

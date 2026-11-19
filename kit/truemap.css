@@ -409,3 +409,5 @@ html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) 
 .tm-dg-step { position: absolute; z-index: 4; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--dg-ink); color: var(--dg-bg); font: 600 10.5px/18px var(--dg-font); text-align: center; }
 /* the agent points here: a highlighter, not a colour code */
 .tm-diagram .tm-node[data-tm-focus] { background: var(--dg-mark); border-color: var(--dg-ink); }
+/* a box whose code was created this turn */
+.tm-diagram .tm-node[data-tm-new][data-tm-delta]::after { background: var(--tm-fine); color: #fff; }

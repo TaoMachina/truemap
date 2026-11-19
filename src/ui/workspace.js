@@ -6,7 +6,7 @@
   const S = {
     placeholder: 'Ask about this page', placeholderNotes: 'Add a message (optional)',
     drawPrompt: 'Read this project and draw its blueprint as .truemap/index.html, then open it for me.',
-    ok: 'Matches the code', changed: (n) => `${n} changed in code`, broken: (n) => `${n} no longer match`,
+    ok: 'Matches the code', changed: (n) => `Map may be out of date (${n})`, broken: (n) => `Map out of date (${n})`,
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
     state: { listening: 'Listening', working: 'Working', idle: 'Stopped listening', stale: 'No reply yet', offline: 'Not listening', closed: 'Closed' },
@@ -221,7 +221,7 @@
     state.page = page;
     history.replaceState(null, '', `${location.pathname}${location.search}#page=${encodeURIComponent(page)}`);
     api('/api/viewing', { page });
-    renderHeader(); renderNotice(); renderNotes();
+    renderHeader(); renderNotice(); renderNotes(); renderNav();
   }
   function showEmpty() {
     state.page = null; frame.hidden = true; frame.removeAttribute('src'); $('empty').hidden = false; renderHeader(); renderNotice();
@@ -273,14 +273,14 @@
   // What changed in a turn: one card in the conversation, badges on the map, the diff from the box.
   function changesCard(c) {
     const d = (a, x) => `<span class="delta">${[a ? `<span class="a">+${a}</span>` : '', x ? `<span class="d">−${x}</span>` : ''].filter(Boolean).join(' ') || '±0'}</span>`;
-    const rows = c.boxes.map((b) => `<button type="button" class="cc-row" data-src="${esc(b.src)}" data-page="${esc(b.pages?.includes(state.page) ? state.page : (b.pages?.[0] || state.page))}"><b>${esc(b.name || b.src.split('#')[1] || b.src)}</b>${d(b.add, b.del)}</button>`).join('');
+    const rows = c.boxes.map((b) => `<button type="button" class="cc-row" data-src="${esc(b.src)}" data-page="${esc(b.pages?.includes(state.page) ? state.page : (b.pages?.[0] || state.page))}"><b>${esc(b.name || b.src.split('#')[1] || b.src)}${b.isNew ? '<span class="cc-new">New</span>' : ''}</b>${d(b.add, b.del)}</button>`).join('');
     const loose = c.unmapped?.length ? `<details class="cc-loose"><summary>${c.unmapped.length} file${c.unmapped.length > 1 ? 's' : ''} not on the map</summary>${c.unmapped.map((x) => `<div><code>${esc(x.path)}</code>${d(x.add, x.del)}</div>`).join('')}<button type="button" class="text-btn" data-act="map-these">Ask the agent to map these</button></details>` : '';
     const notDone = c.notDone?.length ? `<p class="cc-warn">Planned, no changes: ${esc(c.notDone.join(', '))}</p>` : '';
     return `<div class="cc"><div class="cc-head"><b>Changed ${c.files} file${c.files > 1 ? 's' : ''}</b>${d(c.add, c.del)}</div>${rows ? `<div class="cc-rows">${rows}</div>` : ''}${notDone}${loose}<p class="cc-hint">Click a box to see its diff.</p></div>`;
   }
   let latestChanges = null;
   function showChangeBadges() {
-    toFrame({ type: 'changes', on: false, items: latestChanges ? latestChanges.boxes.filter((b) => !b.pages || b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del })) : [] });
+    toFrame({ type: 'changes', on: false, items: latestChanges ? latestChanges.boxes.filter((b) => !b.pages || b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del, isNew: !!b.isNew })) : [] });
   }
   function appendEntry(e, scroll = true, live = false) {
     msgsEl.querySelector('.intro')?.remove();
@@ -838,7 +838,7 @@
     const broken = stale.filter((a) => a.state === 'broken').length;
     pointAt(stale.map((a) => a.src), broken ? 'These boxes no longer match the code.' : 'The code under these boxes changed after this page was written.', 'truemap');
     setPanel(true); setTab('convo');
-    if (!input.value.trim()) { input.value = `Update this page: ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} ${broken ? 'no longer match the code' : 'changed in the code'}.`; autosize(); }
+    if (!input.value.trim()) { input.value = `The code under ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} changed. Check whether the map still says the right thing about ${stale.length > 1 ? 'them' : 'it'}: fix what is wrong, confirm the rest.`; autosize(); }
     input.focus();
   };
 
@@ -992,6 +992,9 @@
     }
   }
   $('crumbHome').onclick = () => { if (state.page !== 'index.html') go('index.html'); };
+  $('navBack').onclick = () => navigate('back');
+  $('navFwd').onclick = () => navigate('forward');
+  function renderNav() { $('navBack').disabled = !nav.back.length; $('navFwd').disabled = !nav.fwd.length; }
   document.addEventListener('keydown', (e) => {
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); navigate(e.key === 'ArrowLeft' ? 'back' : 'forward'); }
   });

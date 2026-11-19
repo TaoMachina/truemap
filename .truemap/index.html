@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<meta name="truemap-verified" content="2026-11-19T18:47:24.937Z">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>truemap architecture</title>
 <link rel="stylesheet" href="assets/truemap.css">
@@ -65,7 +66,7 @@
     <section class="tm-group" id="browser" data-label="Browser">
       <div class="tm-node is-key" id="workspace" data-name="Workspace" data-tag="UI shell" data-src="src/ui/workspace.js#connect" data-also="src/ui/workspace.html src/ui/workspace.css" data-to="api:posts_to sdk:messages">
         <div class="tm-detail">
-          <p>Top bar, plan bar, the page in a sandboxed iframe, and a panel with Conversation and Changes; the inspector replaces the panel while a box is open.</p>
+          <p>Top bar, plan bar, the page in a sandboxed iframe, and the conversation panel, which gets a card of what changed after each turn; the inspector replaces the panel while a box is open.</p>
           <ul>
             <li>Gets live updates over one EventSource on /api/events.</li>
             <li>Accepts postMessage only from its own iframe and the content origin.</li>
@@ -146,6 +147,8 @@
       <li data-path="agent cli api changes git" data-note="changes asks the server, which snapshots the tree in git, diffs it against the base and attributes each file to boxes.">Changes by box</li>
     </ol>
   </figure>
+
+  <div class="tm-links"><a class="tm-link" href="sdk.html"><strong>Page SDK</strong>What runs inside each page</a></div>
 
   <section class="tm-section">
     <h2>Where state lives</h2>
