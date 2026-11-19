@@ -359,12 +359,14 @@ html[data-tm-focusing] .tm-dg-label:not(.is-focus) { color: var(--dg-line-strong
 .tm-dg-head.is-focus { fill: var(--dg-ink); }
 .tm-dg-label.is-focus { color: var(--dg-ink); }
 /* reviewing changes: changed boxes carry their lines, the rest go quiet */
-html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) { border-color: var(--dg-line); }
-html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) .tm-dg-name, html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) .tm-dg-tag { color: var(--dg-line-strong); }
+html[data-tm-changes] .tm-diagram:not([data-flow]) .tm-node:not([data-tm-change]):not([data-tm-unbuilt]) { border-color: var(--dg-line); }
+html[data-tm-changes] .tm-diagram:not([data-flow]) .tm-node:not([data-tm-change]):not([data-tm-unbuilt]) .tm-dg-name, html[data-tm-changes] .tm-diagram:not([data-flow]) .tm-node:not([data-tm-change]):not([data-tm-unbuilt]) .tm-dg-tag { color: var(--dg-line-strong); }
+html[data-tm-changes] .tm-diagram .tm-node[data-tm-unbuilt] { border: 1.5px dashed var(--tm-changed); }
+html[data-tm-changes] .tm-diagram .tm-node[data-tm-unbuilt]:not([data-tm-delta])::after { display: block; content: "Planned, not built"; position: absolute; top: -9px; right: -8px; font: 500 10.5px/14px var(--dg-font); padding: 0 6px; border-radius: 8px; background: var(--dg-bg); color: var(--tm-changed); border: 1px solid var(--tm-changed); white-space: nowrap; pointer-events: none; }
 html[data-tm-changes] .tm-diagram .tm-node[data-tm-change] { border-color: var(--dg-ink); }
-html[data-tm-changes] .tm-dg-edge:not(.is-hot) { stroke: var(--dg-line); stroke-width: 1.25; }
-html[data-tm-changes] .tm-dg-head:not(.is-hot) { fill: var(--dg-line); }
-html[data-tm-changes] .tm-dg-label:not(.is-hot) { color: var(--dg-line-strong); }
+html[data-tm-changes] .tm-dg-edge:not(.is-hot):not(.is-flow) { stroke: var(--dg-line); stroke-width: 1.25; }
+html[data-tm-changes] .tm-dg-head:not(.is-hot):not(.is-flow) { fill: var(--dg-line); }
+html[data-tm-changes] .tm-dg-label:not(.is-hot):not(.is-flow) { color: var(--dg-line-strong); }
 .tm-diagram .tm-node[data-tm-delta]::after { display: block; content: attr(data-tm-delta); position: absolute; top: -9px; right: -8px; font: 10.5px/16px var(--dg-code); padding: 0 6px; border-radius: 8px; background: var(--dg-ink); color: var(--dg-bg); white-space: nowrap; pointer-events: none; }
 html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outline: 2px solid var(--tm-ink); outline-offset: 2px; }
 /* a plan on the map: new boxes dashed, touched boxes outlined, a small word on each */

@@ -405,7 +405,7 @@
       <div class="insp-name"><h2>${esc(box.label)}</h2>${box.tag ? `<code>${esc(box.tag)}</code>` : ''}</div>
       ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>${box.planNote ? `<p class="insp-why">${esc(box.planNote)}</p>` : ''}` : ''}
       ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
-      ${changeSection(box)}
+      ${unbuiltNote(box)}${changeSection(box)}
       ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
       ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
       <form class="insp-comment"><textarea rows="1" aria-label="Comment"></textarea><button type="submit" disabled>Add</button></form>
@@ -492,7 +492,10 @@
   }
   function sendChangeMarks() {
     const on = showingChanges() && ch.data && !ch.data.error;
-    toFrame({ type: 'changes', on: !!on, items: on ? ch.data.boxes.filter((b) => b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del })) : [] });
+    toFrame({
+      type: 'changes', on: !!on, items: on ? ch.data.boxes.filter((b) => b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del })) : [],
+      unbuilt: on && ch.data.plan ? ch.data.plan.planned.filter((p) => !p.changed).map((p) => ({ box: p.box, src: p.src, what: p.what })) : [],
+    });
   }
   const delta = (a, d) => `<span class="delta">${a == null ? 'binary' : `<span class="a">+${a}</span> <span class="d">−${d}</span>`}</span>`;
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -524,7 +527,8 @@
       const n = r.unmapped.reduce((k, g) => k + g.files.length, 0);
       html += `<div class="ch-h">Not on the map: ${plural(n, 'file')}</div>`;
       for (const g of r.unmapped) {
-        html += `<details class="ch-folder"><summary><b>${esc(g.folder)}</b><span>${plural(g.files.length, 'file')}</span></summary>${g.files.map((f) => `<button type="button" class="ch-file" data-path="${esc(f.path)}"><span>${esc(f.path)}</span>${delta(f.add, f.del)}</button>`).join('')}</details>`;
+        const nameOfSrc = (src) => ch.names.get(src) || src.split('#')[1] || src.split('/').pop();
+        html += `<details class="ch-folder"${n <= 6 ? ' open' : ''}><summary><b>${esc(g.folder)}</b><span>${plural(g.files.length, 'file')}</span></summary>${g.files.map((f) => `<button type="button" class="ch-file" data-path="${esc(f.path)}"><span>${esc(f.path)}${f.near ? `<em>next to ${esc(f.near.map(nameOfSrc).join(', '))}</em>` : ''}</span>${delta(f.add, f.del)}</button>`).join('')}</details>`;
       }
       html += '<div class="ch-act"><button type="button" data-act="map">Ask the agent to map these</button></div>';
     }
@@ -570,6 +574,11 @@
       send(`These changed files are not on any page yet. Add boxes for the ones that matter (or say why they don't need one): ${files.slice(0, 40).join(', ')}${files.length > 40 ? ', …' : ''}`, { context: [], noNotes: true });
     }
   });
+  function unbuiltNote(box) {
+    if (!showingChanges() || !ch.data?.plan) return '';
+    const p = ch.data.plan.planned.find((x) => !x.changed && ((x.src && x.src === box.src) || x.box === box.id));
+    return p ? `<div class="insp-state">Planned, not built yet${p.what ? `: ${esc(p.what)}` : ''}</div>` : '';
+  }
   // The inspector shows what changed in a box while you review changes.
   function changeSection(box) {
     if (!showingChanges() || !ch.data?.boxes) return '';
@@ -601,14 +610,15 @@
   }
   const planBar = $('planbar');
   let planRequest = false; // the next message asks for plan changes
-  function sendPlan() { toFrame({ type: 'plan', plan: state.plan && state.plan.page === state.page ? state.plan : null }); }
+  function sendPlan() { state.planUnsupported = false; toFrame({ type: 'plan', plan: state.plan && state.plan.page === state.page ? state.plan : null }); }
   function renderPlan() {
     const p = state.plan;
     if (!p || p.status === 'done' || state.planHidden === `${p.slug}:${p.status}`) { planBar.hidden = true; planBar.innerHTML = ''; return; }
     planBar.hidden = false;
     const counts = [p.add.length && `${p.add.length} new`, p.touch.length && `${p.touch.length} changing`, p.remove.length && `${p.remove.length} removed`].filter(Boolean).join(', ');
     const here = p.page === state.page;
-    let html = `<div class="pb-text"><b>Plan</b><span class="pb-title">${esc(p.title)}</span><span class="pb-meta">${esc(counts)}${p.revision > 1 && p.status === 'review' ? ', revised' : ''}</span></div>`;
+    const old = here && state.planUnsupported;
+    let html = `<div class="pb-text"><b>Plan</b><span class="pb-title">${esc(p.title)}</span><span class="pb-meta">${old ? 'not drawn: this page uses the old map format' : `${esc(counts)}${p.revision > 1 && p.status === 'review' ? ', revised' : ''}`}</span></div>`;
     if (p.status === 'review') {
       html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve</button></div>`;
     } else if (p.status === 'revise') {
@@ -800,6 +810,8 @@
       renderNotes(); syncFrameNotes();
       if (d.send) send(input.value).then(() => { input.value = ''; autosize(); });
       else if (!panelOpen() && !narrow()) setPanel(true, false);
+    } else if (d.type === 'plan-unsupported') {
+      state.planUnsupported = true; renderPlan();
     } else if (d.type === 'focus-state') {
       const n = Number(d.count) || 0;
       $('litPill').hidden = !n || !!d.transient;
@@ -887,6 +899,7 @@
         if (d.clear) toFrame({ type: 'clear-focus' });
         else pointAt(d.focus || [], d.note || '', AGENTS[d.agent] || agentName(), d.page);
       } else if (d.type === 'plan') {
+        if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); }
         state.plan = d.plan || null; renderPlan(); sendPlan();
       } else if (d.type === 'changes-base') {
         loadChanges();

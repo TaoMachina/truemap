@@ -246,7 +246,7 @@ async function doListen(root, opts) {
     r = await call(state, 'POST', '/api/agent/listen', { timeoutMs, agent: detectAgent() });
   } catch {
     out('status: interrupted');
-    block('next_step', `The connection dropped (the server restarted or stopped). Run \`${CMD}\` to reopen if needed, then \`${CMD} listen\` again.`);
+    block('next_step', 'The truemap server stopped (the user closed it, or `truemap stop` ran). Continue in the terminal. Do not reopen the page unless the user asks.');
     return;
   }
   const b = r.body || {};
@@ -255,12 +255,26 @@ async function doListen(root, opts) {
     formatMessages(b.messages);
     const decided = b.messages.filter((m) => m.kind === 'answer' && m.from === 'user');
     if (decided.length) block('decision_note', 'The user made a decision on the page. Act on it, and record it on the relevant page (what was chosen and why) so it stays with the project.');
+    const bg = detectAgent() === 'claude-code' ? ' with run_in_background' : '';
+    if (b.messages.some((m) => m.kind === 'approval')) {
+      block('next_step', [
+        'The user APPROVED your plan. Build it now; changes are measured from this moment.',
+        `While you build, post short status lines with \`${CMD} progress "…"\`; no reply is needed to start.`,
+        `When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\` (it warns about planned boxes you did not change), then \`${CMD} changes\`, tell the user in the terminal what you built, and \`${CMD} listen\`${bg}.`,
+      ].join('\n'));
+      return;
+    }
+    if (b.messages.some((m) => m.kind === 'plan_changes')) {
+      block('next_step', [
+        'The user asked for changes to your plan. Do not build yet.',
+        `1) Answer the comments in one short \`${CMD} reply "…"\` (without --listen).`,
+        `2) Write the revised plan (same title) and run \`${CMD} plan --file <plan.json>\`; it shows in the conversation by itself, with what changed.`,
+        `3) Then \`${CMD} listen\`${bg} for the approval. Only one listen runs at a time; a new one replaces the old.`,
+      ].join('\n'));
+      return;
+    }
     block('next_step', [
-      b.messages.some((m) => m.kind === 'approval')
-        ? `The user APPROVED your plan. Build it now; changes are measured from this moment. When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\`, then \`${CMD} changes\` so the user can review the result on the map.`
-        : b.messages.some((m) => m.kind === 'plan_changes')
-        ? `The user asked for changes to your plan. Do not build yet. 1) Answer the comments in one short \`${CMD} reply "…"\` (without --listen). 2) Write the revised plan (same title) and run \`${CMD} plan --file <plan.json>\`; it shows in the conversation by itself, with what changed. 3) Then \`${CMD} listen\` for the approval. Ignore the generic reply step below.`
-        : b.messages.every((m) => m.kind === 'answer')
+      b.messages.every((m) => m.kind === 'answer')
         ? 'The user answered your question. Act on the choice now, and record the decision (what and why) on the relevant page.'
         : 'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
       'If the answer changes the page (or the code it describes), update the page; the browser reloads by itself.',
@@ -336,7 +350,7 @@ async function cmdChanges(root, args, opts) {
   }
   if (r.unmapped.length) {
     out('not_on_the_map:');
-    for (const g of r.unmapped) out(`  - ${q(g.folder)}  ${g.files.map((f) => q(f.path)).join(', ')}`);
+    for (const g of r.unmapped) out(`  - ${q(g.folder)}  ${g.files.map((f) => q(f.path) + (f.near ? ` (next to ${f.near.map(q).join(', ')}: if it belongs to that box, add it to its data-also)` : '')).join(', ')}`);
   }
   if (r.plan) {
     const missing = r.plan.planned.filter((p) => !p.changed);
@@ -381,6 +395,10 @@ async function cmdPlan(root, args, opts) {
   const url = `http://127.0.0.1:${state.port}/?t=${state.token}#page=${encodeURIComponent(r.body.page)}`;
   if (!r.body.browsers && !process.env.TRUEMAP_NO_OPEN && !opts.noOpen) openBrowser(url);
   out('status: plan_shown');
+  try {
+    const html = readFileSync(join(folderPath(root), r.body.page), 'utf8');
+    if (!/class=["'][^"']*\btm-diagram\b/.test(html)) out(`warning: ${r.body.page} has no <figure class="tm-diagram"> map (an older .tm-map page), so the plan cannot be drawn on it. Convert the page's map to the current format first (\`${CMD} guide\`, THE MAP), or set "page" to a page that has one.`);
+  } catch { /* the server already checked the page */ }
   out(`plan: ${q(r.body.slug)}  # ${FOLDER}/plans/${r.body.slug}.json, revision ${r.body.revision}`);
   out(`page: ${q(r.body.page)}`);
   out(`url: ${url}`);

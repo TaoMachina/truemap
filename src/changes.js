@@ -94,6 +94,11 @@ export function attribute(root, files) {
       const { path } = parseAnchor(src);
       if (path) anchors.push({ page, src, path });
     }
+    // data-also="server/db.ts server/hub.ts": more files a box owns (its migration, its wiring)
+    for (const m of html.matchAll(/<[^>]*\sdata-src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+      const also = m[0].match(/\sdata-also\s*=\s*["']([^"']*)["']/i)?.[1];
+      for (const p of (also || '').split(/[\s,]+/).filter(Boolean)) anchors.push({ page, src: m[1], path: p.replace(/^\.?\//, '') });
+    }
   }
   const boxes = new Map(); // src -> { src, pages:Set, files:[] }
   const unmapped = [];
@@ -111,7 +116,11 @@ export function attribute(root, files) {
   const boxList = [...boxes.values()].map((b) => ({ src: b.src, pages: [...b.pages], files: b.files, add: sum(b.files, 'add'), del: sum(b.files, 'del') }))
     .sort((a, b) => (b.add + b.del) - (a.add + a.del));
   const folders = new Map();
+  const dirOf = (p) => p.replace(/\/?[^/]*$/, '');
   for (const f of unmapped) {
+    // a file in the same folder as a box's file is probably part of it: say so
+    const near = [...new Set(anchors.filter((a) => dirOf(a.path) === dirOf(f.path) && a.path.includes('.')).map((a) => a.src))];
+    if (near.length && near.length <= 2) f.near = near; // in a flat folder every box is a neighbour: no hint
     const parts = f.path.split('/');
     const key = parts.length > 2 ? `${parts.slice(0, 2).join('/')}/` : parts.length === 2 ? `${parts[0]}/` : '(top level)';
     if (!folders.has(key)) folders.set(key, []);

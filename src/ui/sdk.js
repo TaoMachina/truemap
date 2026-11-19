@@ -151,6 +151,7 @@
     if (selected === el) return;
     selected?.removeAttribute('data-tm-selected');
     selected = el || null; selected?.setAttribute('data-tm-selected', '');
+    if (!el && document.activeElement?.matches?.('.tm-node, .tm-step')) document.activeElement.blur();
   }
   function peek(el) {
     select(el);
@@ -526,7 +527,7 @@
   // Escape anywhere in the page closes the inspector and the workspace's menus.
   document.addEventListener('mouseup', (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); post({ type: 'nav', dir: e.button === 3 ? 'back' : 'forward' }); } }, true);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { select(null); post({ type: 'press' }); }
+    if (e.key === 'Escape') { select(null); post({ type: 'press' }); for (const fig of document.querySelectorAll('figure.tm-diagram[data-flow]')) window.truemapDiagram?.setFlow(fig, null); }
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); post({ type: 'nav', dir: e.key === 'ArrowLeft' ? 'back' : 'forward' }); return; }
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
@@ -602,6 +603,7 @@
       document.documentElement.toggleAttribute('data-tm-plan', !!p);
       const fig = document.querySelector('figure.tm-diagram');
       if (fig && window.truemapDiagram?.setGhosts) window.truemapDiagram.setGhosts(fig, p ? p.add : []);
+      else if (p) post({ type: 'plan-unsupported' }); // an old-format map: the plan can't be drawn on it
       const markPlan = (box, kind, note) => {
         const el = findItems([box])[0];
         if (!el || el.getAttribute('data-plan') === 'new') return;
@@ -613,7 +615,8 @@
     } else if (d.type === 'changes') {
       // Review mode: changed boxes carry their +/- lines; the rest of the map goes quiet.
       document.documentElement.toggleAttribute('data-tm-changes', !!d.on);
-      for (const el of document.querySelectorAll('[data-tm-change]')) { el.removeAttribute('data-tm-change'); el.removeAttribute('data-tm-delta'); }
+      for (const el of document.querySelectorAll('[data-tm-change], [data-tm-unbuilt]')) { el.removeAttribute('data-tm-change'); el.removeAttribute('data-tm-delta'); el.removeAttribute('data-tm-unbuilt'); }
+      for (const u of d.unbuilt || []) { const el = findItems([u.src || u.box, u.box])[0]; if (el) el.setAttribute('data-tm-unbuilt', ''); }
       const names = [];
       for (const it of d.items || []) {
         for (const el of document.querySelectorAll('[data-src]')) {

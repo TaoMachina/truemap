@@ -73,24 +73,24 @@ export function currentPlan(root) {
 }
 
 /** The plan as a chat message: summary and steps, with box links the user can hover. */
-function revisionDiff(prev, plan) {
+function revisionDiff(prev, plan, nameOf = (b) => b) {
   if (!prev) return [];
-  const names = (p) => new Map([...p.touch.map((t) => [`touch:${t.box}`, t.box]), ...p.add.map((a) => [`add:${a.id}`, a.name]), ...p.remove.map((r) => [`remove:${r.box}`, r.box])]);
+  const names = (p) => new Map([...p.touch.map((t) => [`touch:${t.box}`, nameOf(t.box)]), ...p.add.map((a) => [`add:${a.id}`, a.name]), ...p.remove.map((r) => [`remove:${r.box}`, nameOf(r.box)])]);
   const a = names(prev); const b = names(plan);
   const out = [];
   for (const [k, v] of b) if (!a.has(k)) out.push(`+ ${k.split(':')[0] === 'add' ? 'new box' : k.split(':')[0]} ${v}`);
   for (const [k, v] of a) if (!b.has(k)) out.push(`− no longer ${k.split(':')[0] === 'add' ? 'adds' : k.split(':')[0] === 'touch' ? 'touches' : 'removes'} ${v}`);
   const what = (p) => new Map(p.touch.map((t) => [t.box, t.what]));
-  for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${box}: ${w}`);
+  for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${nameOf(box)}: ${w}`);
   const changedSteps = plan.steps.filter((st, i) => prev.steps[i] !== st).length + Math.max(0, prev.steps.length - plan.steps.length);
   if (changedSteps) out.push(`~ ${changedSteps} step${changedSteps > 1 ? 's' : ''} changed`);
   return out;
 }
 
-export function planMessage(plan, prev = null) {
+export function planMessage(plan, prev = null, nameOf) {
   const lines = [`**${plan.revision > 1 ? 'Revised plan' : 'Plan'}: ${plan.title}**`];
   if (plan.summary) lines.push(plan.summary);
-  const diff = revisionDiff(prev, plan);
+  const diff = revisionDiff(prev, plan, nameOf);
   if (prev) lines.push('', diff.length ? `Changed since the last revision:\n${diff.map((d) => `- ${d}`).join('\n')}` : 'Nothing changed in the boxes or steps since the last revision.');
   if (plan.steps.length) { lines.push(''); plan.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`)); }
   return lines.join('\n');

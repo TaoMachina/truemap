@@ -454,7 +454,13 @@
       const s = document.createElement('span'); s.className = 'tm-dg-step'; s.textContent = String(n);
       void lab;
       // the number sits on its own line, just before the arrowhead, so it can't be read as another line's
-      const L = p.getTotalLength(); const at = p.getPointAtLength(Math.max(0, L - 20));
+      const L = p.getTotalLength();
+      const labs = [...m.stage.querySelectorAll('.tm-dg-label')].filter((l) => getComputedStyle(l).visibility !== 'hidden').map((l) => { const x = parseFloat(l.style.left); const y = parseFloat(l.style.top); return { l: x - l.offsetWidth / 2 - 3, r: x + l.offsetWidth / 2 + 3, t: y - l.offsetHeight / 2 - 3, b: y + l.offsetHeight / 2 + 3 }; });
+      let at = p.getPointAtLength(Math.max(0, L - 20));
+      for (let d = 20; d < L - 10; d += 6) {
+        const q = p.getPointAtLength(L - d);
+        if (!labs.some((o) => q.x + 9 > o.l && q.x - 9 < o.r && q.y + 9 > o.t && q.y - 9 < o.b)) { at = q; break; }
+      }
       s.style.left = `${at.x}px`; s.style.top = `${at.y}px`;
       m.stage.appendChild(s);
     }

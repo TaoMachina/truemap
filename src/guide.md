@@ -27,7 +27,8 @@ ANCHORS (this is what keeps pages true)
 - Only anchor code you have actually read. Never invent paths.
 - `{{CMD}} check` reports broken (path or name gone) and changed (code changed after the page was written).
   Fix the page, or if it is still accurate run `{{CMD}} check --ok <page>`.
-- Changes are attributed to boxes by file: a box owns the file its data-src names. Anchor the file that holds
+- Changes are attributed to boxes by file: a box owns the file its data-src names, plus any files listed in
+  data-also="server/db.ts server/hub.ts" (its migration, its wiring), so a reviewer sees them under that box. Anchor the file that holds
   the module's main code, not a shared index file, or every change lands on every box. For a web app, anchor
   the file that holds its state or routes (e.g. web/src/lib/store.ts), not the root component.
 
@@ -104,7 +105,8 @@ retry after a timeout can charge twice.</div>  <dl class="tm-kv"><dt>Attempts</d
 <div class="tm-links"><a class="tm-link" href="payments.html"><strong>Payments</strong>How money moves</a></div>
 
 PLAN FIRST (before a change that touches 3+ boxes or adds one)
-- Write the plan as JSON and show it on the map; do not start building until the user approves:
+- Write the plan as JSON (any path, e.g. .truemap/plans/draft.json; truemap keeps its own copy) and show it on
+  the map; do not start building until the user approves:
     {{CMD}} plan --file plan.json
   {
     "title": "Per-agent rate limits",
@@ -122,7 +124,10 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
   Approve or Request changes. `listen` returns kind: approval, or kind: plan_changes with their comments
   (then revise and run `plan --file` again with the same title). If the user says "go" in the terminal instead,
   run `{{CMD}} plan --approve`.
-- When it is built: put the new boxes on the page for real (with data-src), run `{{CMD}} plan --done`.
+- Plans draw on a page with a <figure class="tm-diagram"> map; convert an older .tm-map page first.
+- When it is built: put the new boxes on the page for real (with data-src), run `{{CMD}} plan --done`. It
+  warns about planned boxes with no changes: tell the user which parts are not built, and why.
+- Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 
 SHOW WHAT YOU CHANGED (after you edited code)
 - Run `{{CMD}} changes`. It prints what changed by box, plus files no box covers, and opens the Changes view:
