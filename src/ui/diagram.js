@@ -117,8 +117,8 @@
     // Top to bottom, groups are swimlanes with their label in a left gutter; left to right, columns with
     // the label above the boxes.
     const gutter = Math.max(72, ...m.groups.map((gr) => (gr.el.firstChild?.offsetWidth || 0) + 30));
-    const GAP = lr ? Math.max(60, Math.min(170, labelW + 48)) : 44;
-    const HEAD = 0; const BANDPAD = lr ? 12 : 12; const GAPB = lr ? 14 : 12;
+    const GAP = lr ? Math.max(60, Math.min(170, labelW + 48)) : (labelW ? 58 : 40);
+    const HEAD = 0; const BANDPAD = lr ? 12 : 12; const GAPB = lr ? 14 : (labelW ? 18 : 12);
     const MX = lr ? 34 : gutter; const MY = lr ? 6 : 4;
     const gOf = nodes.map((n) => { const k = m.groups.findIndex((gr) => gr.id === n.dataset.group); return k < 0 ? m.groups.length : k; });
     const E = edges.map((e) => ({ e, a: idx.get(e.back ? e.to : e.from), b: idx.get(e.back ? e.from : e.to) }));
@@ -371,6 +371,8 @@
     }
     const boxes = L.pos.map((v) => ({ l: v.x - v.w / 2 - 3, r: v.x + v.w / 2 + 3, t: v.y - v.h / 2 - 3, b: v.y + v.h / 2 + 3 }));
     const taken = [];
+    // the corner badges (+12 -3, Plan: edit) and the pins sit just above a box's top right
+    const badges = L.pos.map((v) => ({ l: v.x + v.w / 2 - 80, r: v.x + v.w / 2 + 12, t: v.y - v.h / 2 - 14, b: v.y - v.h / 2 + 6 }));
     const hits = (a, list) => list.some((o) => a.l < o.r && a.r > o.l && a.t < o.b && a.b > o.t);
     // points along every edge, so a group label can keep off the wires
     const dots = [];
@@ -401,14 +403,21 @@
       const w = t.offsetWidth; const h = t.offsetHeight; const L = path.getTotalLength();
       let best = null;
       const trunk = bundleSize.get(`${e.from}|${e.label}`) > 1;
-      const fr = trunk ? [0.14, 0.2, 0.1, 0.26, 0.32] : [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82];
+      // try every few pixels along the line, nearest the preferred spot first; take the first free one,
+      // otherwise the least crowded; a label that would still cover a box only shows when its line is lit
+      const pref = trunk ? 0.15 : 0.5;
+      const fr = [pref]; for (let d = 0.04; d < 0.96; d += 0.04) { if (pref + d < 0.97) fr.push(pref + d); if (pref - d > 0.03) fr.push(pref - d); }
+      let bestCost = Infinity;
+      const overlap = (a, list) => list.reduce((n, o) => n + Math.max(0, Math.min(a.r, o.r) - Math.max(a.l, o.l)) * Math.max(0, Math.min(a.b, o.b) - Math.max(a.t, o.t)), 0);
       for (const f of fr) {
         const p = path.getPointAtLength(L * f);
         const r = { l: p.x - w / 2, r: p.x + w / 2, t: p.y - h / 2, b: p.y + h / 2 };
-        if (!best) best = r;
-        if (!hits(r, boxes) && !hits(r, taken)) { best = r; break; }
+        const cost = overlap(r, boxes) * 4 + overlap(r, badges) * 4 + overlap(r, taken) * 2;
+        if (cost < bestCost) { bestCost = cost; best = r; }
+        if (!cost) break;
       }
-      if (!dup) taken.push(best);
+      if (bestCost > 0) t.classList.add('is-crowded');
+      if (!dup && !t.classList.contains('is-crowded')) taken.push(best);
       t.style.left = `${(best.l + best.r) / 2}px`; t.style.top = `${(best.t + best.b) / 2}px`;
     }
     // main-path edges on top
@@ -443,12 +452,10 @@
       const [from, to] = k.split('>');
       const lab = [...m.stage.querySelectorAll('.tm-dg-label')].find((l) => l.dataset.from === from && l.dataset.to === to);
       const s = document.createElement('span'); s.className = 'tm-dg-step'; s.textContent = String(n);
-      if (lab) { // the number leads its label
-        s.style.left = `${parseFloat(lab.style.left) - lab.offsetWidth / 2 - 11}px`; s.style.top = lab.style.top;
-      } else {
-        const mid = p.getPointAtLength(p.getTotalLength() / 2);
-        s.style.left = `${mid.x}px`; s.style.top = `${mid.y}px`;
-      }
+      void lab;
+      // the number sits on its own line, just before the arrowhead, so it can't be read as another line's
+      const L = p.getTotalLength(); const at = p.getPointAtLength(Math.max(0, L - 20));
+      s.style.left = `${at.x}px`; s.style.top = `${at.y}px`;
       m.stage.appendChild(s);
     }
     const note = m.tabs && fig.querySelector(':scope > .tm-dg-note');

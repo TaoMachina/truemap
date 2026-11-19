@@ -79,3 +79,17 @@ test('changes: measured from a snapshot, without touching the staging area', asy
   assert.equal(head.base.kind, 'head');
   assert.equal(head.files, 2);
 });
+
+test('planCheck: planned and changed, planned but untouched, changed outside the plan', async () => {
+  const { planCheck, planMessage, cleanPlan: clean } = await import('../src/plan.js');
+  const { root } = repo();
+  const plan = clean({ title: 'T', page: 'index.html', touch: [{ box: 'runs', what: 'a' }, { box: 'all', what: 'b' }], add: [{ id: 'lim', name: 'Limits' }] });
+  const r = planCheck(root, plan, { boxes: [{ src: 'server/routing.ts#Runs' }, { src: 'x.ts' }] });
+  assert.deepEqual(r.planned.map((p) => [p.box, p.changed]), [['runs', true], ['all', false], ['lim', false]]);
+  assert.deepEqual(r.unplanned, ['x.ts']);
+  const prev = clean({ title: 'T', touch: [{ box: 'runs', what: 'a' }], steps: ['one'] });
+  const msg = planMessage({ ...plan, revision: 2 }, prev);
+  assert.match(msg, /Revised plan: T/);
+  assert.match(msg, /\+ touch all/);
+  assert.match(msg, /\+ new box Limits/);
+});

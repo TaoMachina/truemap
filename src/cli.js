@@ -259,7 +259,7 @@ async function doListen(root, opts) {
       b.messages.some((m) => m.kind === 'approval')
         ? `The user APPROVED your plan. Build it now; changes are measured from this moment. When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\`, then \`${CMD} changes\` so the user can review the result on the map.`
         : b.messages.some((m) => m.kind === 'plan_changes')
-        ? `The user asked for changes to your plan. Answer every comment, then write the revised plan (same title) and run \`${CMD} plan --file <plan.json>\` again. Do not build yet.`
+        ? `The user asked for changes to your plan. Do not build yet. 1) Answer the comments in one short \`${CMD} reply "…"\` (without --listen). 2) Write the revised plan (same title) and run \`${CMD} plan --file <plan.json>\`; it shows in the conversation by itself, with what changed. 3) Then \`${CMD} listen\` for the approval. Ignore the generic reply step below.`
         : b.messages.every((m) => m.kind === 'answer')
         ? 'The user answered your question. Act on the choice now, and record the decision (what and why) on the relevant page.'
         : 'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
@@ -294,6 +294,13 @@ async function cmdReply(root, args, opts) {
   const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working, willListen: !!opts.listen, agent: detectAgent(), focus: splitList(opts.focus), ...(opts.ask ? { ask: opts.ask } : {}) });
   if (r.status !== 200) throw new Error(`reply was rejected: ${r.body?.error || r.status}`);
   out(`${opts.ask ? 'asked' : 'reply'}: ${r.body?.browsers ? `shown in ${r.body.browsers} tab(s)` : 'saved (no tab open right now; the user sees it next time)'}`);
+  if (opts.listen && !r.body?.browsers) {
+    out('status: no_tab');
+    block('next_step', opts.ask
+      ? `Nobody has the page open, so the question waits there. Ask the same question in the terminal, or open the page (\`${CMD} <page>\`) and run \`${CMD} listen\`: the answer arrives through listen.`
+      : `Nobody has the page open; your reply waits there. Continue in the terminal, or open the page (\`${CMD} <page>\`) and run \`${CMD} listen\`.`);
+    return;
+  }
   if (opts.listen) await doListen(root, opts);
 }
 
@@ -331,8 +338,15 @@ async function cmdChanges(root, args, opts) {
     out('not_on_the_map:');
     for (const g of r.unmapped) out(`  - ${q(g.folder)}  ${g.files.map((f) => q(f.path)).join(', ')}`);
   }
+  if (r.plan) {
+    const missing = r.plan.planned.filter((p) => !p.changed);
+    out(`plan: ${q(r.plan.title)}  # ${r.plan.planned.length - missing.length} of ${r.plan.planned.length} planned boxes changed`);
+    for (const p of missing) out(`  - planned but not changed: ${q(p.name || p.box)}${p.src ? '' : '   # no data-src on the page yet'}  # ${q(p.what || '')}`);
+    for (const u of r.plan.unplanned) out(`  - changed but not in the plan: ${q(u)}`);
+  }
   out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
+  if (r.plan?.planned.some((p) => !p.changed)) steps.push('Some planned boxes have no changes: say plainly which parts of the plan are not built yet (or why they were not needed).');
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
@@ -347,6 +361,11 @@ async function cmdPlan(root, args, opts) {
     if (r.status !== 200) throw new Error(r.body?.error || `plan update failed (${r.status})`);
     out(`status: ${r.body.status}`);
     out(`plan: ${q(r.body.plan)}`);
+    const missing = (r.body.check?.planned || []).filter((p) => !p.changed);
+    if (missing.length) {
+      out('warning: some planned boxes have no changes   # tell the user which parts of the plan are not built');
+      for (const p of missing) out(`  - ${q(p.name || p.box)}  # ${q(p.what || '')}`);
+    }
     block('next_step', opts.approve
       ? `The plan is approved; changes are measured from now. Build it. When you are done, put the new boxes on the page for real (with data-src), run \`${CMD} plan --done\`, then \`${CMD} changes\` so the user can review what you did.`
       : `The plan is closed. Run \`${CMD} changes\` to show the user what changed.`);

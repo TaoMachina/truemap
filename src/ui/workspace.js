@@ -306,7 +306,7 @@
     if (key === hoverLit || (!key && (hoverLit === '__pinned' || !hoverLit))) return;
     msgsEl.querySelector('li.lit')?.classList.remove('lit');
     hoverLit = key;
-    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: 'nearest', transient: true }); }
+    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: false, transient: true }); }
     else toFrame({ type: 'clear-focus' });
   });
   msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); } });
@@ -503,13 +503,21 @@
     const opts = r.bases.map((k) => `<option value="${k}"${k === r.base.kind ? ' selected' : ''}>${esc(k === r.base.kind ? r.base.label : BASES[k])}</option>`).join('');
     let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select></div>`;
     html += `<p class="ch-sum">${r.files ? `${plural(r.files, 'file')} changed ${delta(r.add, r.del)}` : 'Nothing changed.'}${r.base.at ? ` Measured from ${esc(timeOf(r.base.at))}.` : ''}</p>`;
+    if (r.plan) {
+      const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
+      html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes changed${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} changed outside the plan` : ''}.</p>`;
+      if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> planned, no changes yet${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
+      html += '</div>';
+    }
+    const planned = new Set((r.plan?.planned || []).map((p) => p.src).filter(Boolean));
     if (r.boxes.length) {
       html += '<div class="ch-h">On the map</div>';
       for (const b of r.boxes) {
         const here = b.pages.includes(state.page);
         const name = ch.names.get(b.src) || b.src.split('#')[1] || b.src.split('/').pop();
         const other = here ? '' : `, on ${titleOf(state.pages.find((p) => p.page === b.pages[0]) || { page: b.pages[0] })}`;
-        html += `<button type="button" class="ch-row" data-src="${esc(b.src)}" data-page="${esc(here ? state.page : b.pages[0])}"><b>${esc(name)}</b>${delta(b.add, b.del)}<small>${esc(b.files.map((f) => f.path).join(', ') + other)}</small></button>`;
+        const offPlan = r.plan && !planned.has(b.src) ? '<span class="off-plan">not in the plan</span>' : '';
+        html += `<button type="button" class="ch-row" data-src="${esc(b.src)}" data-page="${esc(here ? state.page : b.pages[0])}"><b>${esc(name)}${offPlan}</b>${delta(b.add, b.del)}<small>${esc(b.files.map((f) => f.path).join(', ') + other)}</small></button>`;
       }
     }
     if (r.unmapped.length) {
@@ -641,7 +649,7 @@
     if (projMenu.hidden) return;
     projMenu.innerHTML = projList.map((x) => {
       const why = x.plan?.status === 'review' ? `<em>Plan to review</em> ${esc(x.plan.title)}` : x.asking ? '<em>Waiting for your decision</em>' : x.unread ? '<em>New reply</em>' : esc(PSTATE[x.agent] || '');
-      return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="_blank" rel="noopener"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
+      return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="truemap-${esc(x.name)}" rel="noopener"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
     }).join('') + `<div class="proj-foot">Projects with truemap running. Run <code>${esc(state.cmd)}</code> in another repo to add it.</div>`;
   }
   async function loadProjects() {

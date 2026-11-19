@@ -361,10 +361,16 @@ code { font-family: var(--code); font-size: 0.9em; }
 .insp-change .shared { font: 11.5px var(--font); color: var(--faint); margin-left: 6px; }
 
 /* boxes are lit: a visible way back */
-.lit-pill { position: absolute; z-index: 12; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 999px; box-shadow: 0 6px 20px -10px rgba(20, 20, 19, .35); font-size: 12px; color: var(--muted); }
-.planbar:not([hidden]) ~ .lit-pill { top: 60px; }
+.lit-pill { position: absolute; z-index: 12; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 999px; box-shadow: 0 6px 20px -10px rgba(20, 20, 19, .35); font-size: 12px; color: var(--muted); }
 .lit-pill button { border: 0; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
 /* code and diffs get room while they are open */
 .app.wide-panel { --panel-w: min(640px, 48vw); }
 .msg .show-map { font-size: 12px; }
 .msg .show-map a { color: var(--muted); }
+.ch-plan { margin: 0 0 6px; padding: 2px 0 8px; border-bottom: 1px solid var(--line); }
+.ch-plan .ch-h { margin-top: 4px; color: var(--ink); }
+.ch-missing { list-style: none; margin: 0 4px 6px; padding: 0; display: grid; gap: 6px; }
+.ch-missing li { padding: 7px 10px; border-radius: 8px; background: color-mix(in oklab, var(--changed) 10%, transparent); color: var(--text); font-size: 13px; }
+.ch-missing b { font-weight: 500; color: var(--ink); }
+.ch-missing small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.off-plan { margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--changed); }

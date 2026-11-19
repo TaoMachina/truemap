@@ -7,7 +7,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync,
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
-import { cleanPlan, currentPlan, planMessage, readPlan, savePlan } from './plan.js';
+import { cleanPlan, currentPlan, planCheck, planMessage, readPlan, savePlan } from './plan.js';
 import { checkAll, listPages } from './check.js';
 import { exportPage, kitCss } from './export.js';
 import { snippet } from './snippet.js';
@@ -81,10 +81,15 @@ async function approvePlan(by) {
   }
   return true;
 }
-function changesFor(base) {
+function changesFor(base, fresh = false) {
   const hit = changeCache.get(base);
-  if (hit && Date.now() - hit.at < 3000) return hit.promise;
-  const promise = changes(root, base, snapshots).catch((e) => ({ error: String(e?.message || e) }));
+  if (!fresh && hit && Date.now() - hit.at < 3000) return hit.promise;
+  const promise = changes(root, base, snapshots).then((r) => {
+    // measured from the plan's approval: say how the work compares with the plan
+    const p = plan && snapshots.plan?.slug === plan.slug ? plan : snapshots.plan?.slug ? readPlan(root, snapshots.plan.slug) : null;
+    if (!r.error && r.base?.kind === 'plan' && p) r.plan = planCheck(root, p, r);
+    return r;
+  }).catch((e) => ({ error: String(e?.message || e) }));
   changeCache.set(base, { at: Date.now(), promise });
   return promise;
 }
@@ -190,6 +195,7 @@ function startWatching() {
     watchTimer = setTimeout(() => {
       const files = [...changedPages];
       changedPages.clear();
+      changeCache.clear();
       broadcast({ type: 'pages', pages: safePages() });
       broadcast({ type: 'changed', files });
       scheduleChecks();
@@ -503,7 +509,7 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       noteAgent(b.agent);
       const base = ['turn', 'plan', 'head', 'main'].includes(b.base) ? b.base : 'auto';
-      const r = await changesFor(base);
+      const r = await changesFor(base, true);
       if (b.open !== false) broadcast({ type: 'view', view: 'changes', base });
       return sendJson(res, 200, { ...r, browsers: clients.size });
     }
@@ -514,8 +520,12 @@ const server = createServer(async (req, res) => {
       if (b.status) {
         if (!plan) return sendJson(res, 404, { error: 'no plan in play' });
         if (b.status === 'approved') await approvePlan('agent');
-        else if (b.status === 'done') setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
-        return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status });
+        let check = null;
+        if (b.status === 'done') {
+          if (snapshots.plan?.slug === plan.slug) { const r = await changesFor('plan', true); check = r.plan || null; }
+          setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
+        }
+        return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status, check });
       }
       let p2;
       try { p2 = cleanPlan(b.plan); } catch (e) { return sendJson(res, 400, { error: String(e.message || e) }); }
@@ -523,7 +533,7 @@ const server = createServer(async (req, res) => {
       p2.revision = prev && prev.status !== 'done' ? (prev.revision || 1) + 1 : 1;
       p2.status = 'review'; p2.at = new Date().toISOString();
       setPlan(p2);
-      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2), plan: p2.slug });
+      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2, p2.revision > 1 ? prev : null), plan: p2.slug });
       broadcast({ type: 'navigate', page: p2.page, pages: safePages() });
       return sendJson(res, 200, { ok: true, slug: p2.slug, revision: p2.revision, page: p2.page, browsers: clients.size });
     }

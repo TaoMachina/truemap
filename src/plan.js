@@ -73,9 +73,47 @@ export function currentPlan(root) {
 }
 
 /** The plan as a chat message: summary and steps, with box links the user can hover. */
-export function planMessage(plan) {
+function revisionDiff(prev, plan) {
+  if (!prev) return [];
+  const names = (p) => new Map([...p.touch.map((t) => [`touch:${t.box}`, t.box]), ...p.add.map((a) => [`add:${a.id}`, a.name]), ...p.remove.map((r) => [`remove:${r.box}`, r.box])]);
+  const a = names(prev); const b = names(plan);
+  const out = [];
+  for (const [k, v] of b) if (!a.has(k)) out.push(`+ ${k.split(':')[0] === 'add' ? 'new box' : k.split(':')[0]} ${v}`);
+  for (const [k, v] of a) if (!b.has(k)) out.push(`− no longer ${k.split(':')[0] === 'add' ? 'adds' : k.split(':')[0] === 'touch' ? 'touches' : 'removes'} ${v}`);
+  const what = (p) => new Map(p.touch.map((t) => [t.box, t.what]));
+  for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${box}: ${w}`);
+  const changedSteps = plan.steps.filter((st, i) => prev.steps[i] !== st).length + Math.max(0, prev.steps.length - plan.steps.length);
+  if (changedSteps) out.push(`~ ${changedSteps} step${changedSteps > 1 ? 's' : ''} changed`);
+  return out;
+}
+
+export function planMessage(plan, prev = null) {
   const lines = [`**${plan.revision > 1 ? 'Revised plan' : 'Plan'}: ${plan.title}**`];
   if (plan.summary) lines.push(plan.summary);
+  const diff = revisionDiff(prev, plan);
+  if (prev) lines.push('', diff.length ? `Changed since the last revision:\n${diff.map((d) => `- ${d}`).join('\n')}` : 'Nothing changed in the boxes or steps since the last revision.');
   if (plan.steps.length) { lines.push(''); plan.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`)); }
   return lines.join('\n');
+}
+
+/** The box a plan names, as its data-src on the plan's page (a plan may name a box by id or by data-src). */
+export function srcOfBox(root, page, box, want = 'data-src') {
+  if (want === 'data-src' && /[/#.]/.test(box)) return box;
+  let html = '';
+  try { html = readFileSync(join(root, FOLDER, page), 'utf8'); } catch { return null; }
+  const esc = box.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tag = html.match(new RegExp(`<[^>]*\\sid=["']${esc}["'][^>]*>`, 'i'))?.[0];
+  return tag?.match(new RegExp(`\\s${want}=["']([^"']+)["']`, 'i'))?.[1] || null;
+}
+
+/** Plan against what actually changed: planned and changed, planned but untouched, changed but not planned. */
+export function planCheck(root, plan, result) {
+  if (!plan || !result?.boxes) return null;
+  const changed = new Set(result.boxes.map((b) => b.src));
+  const planned = [
+    ...plan.touch.map((t) => ({ box: t.box, what: t.what, kind: 'change' })),
+    ...plan.add.map((a) => ({ box: a.id, what: a.why, kind: 'new', name: a.name })),
+  ].map((p) => { const src = srcOfBox(root, plan.page, p.box); return { ...p, name: p.name || srcOfBox(root, plan.page, p.box, 'data-name') || p.box, src, changed: !!src && changed.has(src) }; });
+  const plannedSrc = new Set(planned.map((p) => p.src).filter(Boolean));
+  return { title: plan.title, planned, unplanned: result.boxes.filter((b) => !plannedSrc.has(b.src)).map((b) => b.src) };
 }
