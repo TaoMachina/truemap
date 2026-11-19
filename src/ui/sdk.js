@@ -86,7 +86,8 @@
       for (const el of focusSet) el.setAttribute('data-tm-focus', '');
       focusSet[0].scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     } else if (focusNote) window.scrollTo({ top: 0 });
-    markWires(); setTimeout(paintRings, 350); paintRings();
+    // the page scrolls smoothly to the group: place the note again once it has settled
+    markWires(); paintRings(); setTimeout(paintRings, 350); setTimeout(paintRings, 900);
   }
   function clearFocus(repaint = true) {
     document.documentElement.removeAttribute('data-tm-focusing');
