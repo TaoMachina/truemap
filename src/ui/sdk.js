@@ -470,7 +470,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     el.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'add') finish(planComment);
-      else if (act === 'details') peek(target);
+      else if (act === 'details') { closeCard(); peek(target); }
       else if (act === 'comment') { el.classList.remove('viewing'); el.setAttribute('aria-label', 'Comment'); ta.focus({ preventScroll: true }); }
       else if (act === 'cancel') closeCard();
       else if (act === 'remove') { removeNote(noteId, true); closeCard(); }

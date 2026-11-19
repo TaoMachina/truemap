@@ -174,8 +174,12 @@ DRAFTS (the everyday way to explain)
   itself with a few notes beside it can be the whole draft.
 - Words are captions and the one line of "why". A draft that is mostly paragraphs should be a picture or a chat
   answer instead.
-- Any HTML, inline <svg>, <style> and <script> are fine. Colours through the kit's tokens (var(--tm-ink),
-  var(--tm-graphite), var(--tm-accent), var(--tm-wash), var(--tm-mark), …); nothing loaded from the network.
+- Any HTML, inline <svg>, <style> and <script> are fine; nothing loaded from the network. Colours only through
+  these tokens (there are no others):
+    --tm-paper (page)  --tm-sheet (cards, boxes)  --tm-wash (quiet fills)  --tm-rule, --tm-rule-strong (lines)
+    --tm-ink (titles, emphasis)  --tm-text (body)  --tm-graphite (secondary)  --tm-pencil (hints)
+    --tm-accent, --tm-accent-text (the primary action)  --tm-mark (highlighter)
+    --tm-changed, --tm-broken, --tm-fine (+ -wash) (status only)  --tm-font, --tm-code (fonts)
 - Link boxes on the map from a draft as <a href="../index.html#runs">Runs</a>: the map opens with that box lit.
 - Drafts are kept; don't delete them. A draft worth keeping for good can move to .truemap/ as a page.
 - Short factual questions (which file, which flag, yes or no) still get a short chat answer.

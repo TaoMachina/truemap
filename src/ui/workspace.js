@@ -298,7 +298,7 @@
   function renderAll() {
     msgsEl.innerHTML = ''; lastRole = null;
     if (!state.history.length) {
-      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is; <b>double-click</b> it to write a comment right there. Comments go out together, each with the code it points to.</p></div>`;
+      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to light up what it connects to; <b>double-click</b> it to see what it is and comment right there. Comments go out together, each with the code it points to.</p></div>`;
     }
     for (const e of state.history) appendEntry(e, false);
     renderWorking();
@@ -527,6 +527,11 @@
       else if (act === 'links') pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', '');
     };
   }
+  // Escape lets go of a highlight (the chip's, a clicked link's), wherever the cursor is.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || inspecting() || !menu.hidden || !$('moreMenu').hidden || (!pinnedFocus && $('litPill').hidden)) return;
+    unpin(); toFrame({ type: 'clear-focus' }); $('litPill').hidden = true;
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !inspecting() || !menu.hidden || !$('moreMenu').hidden) return;
     if (e.target.closest?.('.insp-comment') && e.target.value) return;
@@ -882,8 +887,8 @@
     const broken = stale.filter((a) => a.state === 'broken').length;
     pointAt(stale.map((a) => a.src), broken ? 'These boxes no longer match the code.' : 'The code under these boxes changed after this page was written.', 'truemap');
     setPanel(true); setTab('convo');
-    if (!input.value.trim()) { input.value = `The code under ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} changed. Check whether the map still says the right thing about ${stale.length > 1 ? 'them' : 'it'}: fix what is wrong, confirm the rest.`; autosize(); }
-    input.focus();
+    if (!input.value.trim()) { input.value = `The code under ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} changed. check whether the map still says the right thing about ${stale.length > 1 ? 'them' : 'it'}: fix what is wrong, confirm the rest.`; autosize(); }
+    input.focus(); requestAnimationFrame(scrollChat);
   };
 
   // A decision only counts as the user's if the user actually moved focus into the page.

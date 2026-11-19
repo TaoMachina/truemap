@@ -124,6 +124,12 @@ function resolvePage(root, arg) {
   else if (existsSync(join(dir, arg))) candidate = arg;
   else if (existsSync(abs)) throw new Error(`${arg} is outside ${FOLDER}/. Save pages inside ${FOLDER}/ so they stay with the project.`);
   else candidate = arg.replace(new RegExp(`^${FOLDER}[\\\\/]`), '');
+  const byNum = candidate.match(/^drafts[\\/](\d{1,3})$/);
+  if (byNum) {
+    const want = byNum[1].padStart(3, '0');
+    const hit = (existsSync(join(dir, 'drafts')) ? readdirSync(join(dir, 'drafts')) : []).find((x) => x.startsWith(want + '-') && x.endsWith('.html'));
+    if (hit) candidate = `drafts/${hit}`;
+  }
   const rel = pageInFolder(root, candidate);
   if (!rel) throw new Error(`${arg} is outside ${FOLDER}/.`);
   return rel;
@@ -506,6 +512,8 @@ async function cmdCheck(root, args, opts) {
   }
   const pages = args.length ? args.map((a) => resolvePage(root, a)) : undefined;
   const { gitRepo, results } = checkAll(root, pages);
+  const live = await liveState(root);
+  if (live) await call(live, 'POST', '/api/check', {}).catch(() => {});
   out(`status: checked ${results.length} page(s)${gitRepo ? '' : ' (no git: only missing paths/names are checked)'}`);
   let changed = 0; let broken = 0; let wires = 0;
   for (const r of results) {

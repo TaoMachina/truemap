@@ -33,6 +33,14 @@ test('a theme overrides the tokens, and faint colours are caught in the mode the
   assert.ok(kit.indexOf('--tm-paper') < kit.indexOf('.tm-diagram') && kit.lastIndexOf('#2457c5') > kit.indexOf('.tm-diagram'));
 });
 
+test('contrast reads hsl() and colour names, checks the highlighter, and says what it cannot read', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tm-theme-'));
+  mkdirSync(join(dir, '.truemap', 'assets'), { recursive: true });
+  writeFileSync(join(dir, '.truemap', 'assets', 'theme.css'), ':root { --tm-text: hsl(0 0% 80%); --tm-graphite: lightgray; --tm-mark: #141413; --tm-pencil: color-mix(in oklab, red, blue); }\n');
+  const notes = contrastNotes(tokensCss(dir)).filter((n) => n.startsWith('light:'));
+  for (const what of ['body text', 'secondary text', 'text on the highlighter', "hints: can't read"]) assert.ok(notes.some((n) => n.includes(what)), `${what}\n${notes.join('\n')}`);
+});
+
 test('dark mode answers to the system and to the user\'s choice', () => {
   const out = themeable(':root { --a: 1; }\n@media (prefers-color-scheme: dark) { :root { --a: 2; } }');
   assert.match(out, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{ --a: 2; \}\s*\}/);
