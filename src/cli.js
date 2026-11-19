@@ -147,7 +147,7 @@ function printCheck(result, indent = '') {
   for (const l of result.layout || []) out(`${indent}  - layout: ${l}`);
 }
 
-const SETUP_NOTE = `Visual explanations live in \`${FOLDER}/\` (index.html is the project blueprint). Before explaining architecture, a flow, or options: if a page covers it, update it and run \`${CMD} <page>\`. Create a new page only when the answer has 3+ interacting parts or needs a decision from the user. Always also give a 1-3 line answer in the terminal.`;
+const SETUP_NOTE = `This project has a map in \`${FOLDER}/\` (index.html), checked against the code with truemap. Before a change that touches 3+ boxes on the map or adds one, show the plan first: \`${CMD} plan --file plan.json\`, and wait for approval. After editing code, run \`${CMD} changes\` so the user can review what changed, by box. Before explaining architecture or a flow, update the page that covers it and run \`${CMD} <page>\`. Run \`${CMD} guide\` for the details. Always also give a 1-3 line answer in the terminal.`;
 
 // ---------- commands ----------
 async function cmdOpen(root, args, opts = {}) {
@@ -185,7 +185,7 @@ async function cmdOpen(root, args, opts = {}) {
     block('setup_note', `Add this note to CLAUDE.md and AGENTS.md (create the section if missing) so future sessions use ${FOLDER}/:\n\n${SETUP_NOTE}`);
   }
   const steps = [];
-  if (!page) steps.push(`No pages yet. Run \`${CMD} outline\` for a fast map of the repo and \`${CMD} guide\` for the page kit, write ${FOLDER}/index.html (the blueprint, 5-12 boxes), then run \`${CMD} index.html\`. Show a first blueprint within a few minutes; go deeper only when the user asks.`);
+  if (!page) steps.push(`No pages yet. Run \`${CMD} outline\` for a fast map of the repo and \`${CMD} guide\` for the format, write ${FOLDER}/index.html (one map, 7-12 boxes in groups), then run \`${CMD} index.html\`. Show a first map within a few minutes; go deeper only when the user asks.`);
   else {
     const r = checkAll(root, [page]).results[0];
     if (r.counts.broken) steps.push('Fix the broken anchors first: update the page (or its data-src) to match the code.');
@@ -401,7 +401,7 @@ async function cmdCheck(root, args, opts) {
   if (changed) steps.push(`Changed anchors: review the code. Update the page if needed, otherwise run \`${CMD} check --ok <page>\`.`);
   if (wires) steps.push('Some map wires point at ids that are not on the page, so they are not drawn. Fix the data-to values (ids separated by spaces).');
   const layout = results.reduce((n, r) => n + (r.layout || []).length, 0);
-  if (layout) steps.push('Layout notes: a map over 12 boxes (or a layer over 4) is hard to read. Keep the main parts on the map and move the detail to a module page.');
+  if (layout) steps.push('Map notes: fix each one; they are what keeps a map readable at a glance (see `' + CMD + ' guide`, THE MAP).');
   if (!broken && !changed && !wires && !layout) steps.push('All pages match the code.');
   block('next_step', steps.join('\n'));
 }
@@ -433,7 +433,7 @@ function cmdOutline(root) {
   out('tree:   # folder, files, approx lines, biggest files');
   for (const d of o.dirs) out(`  - ${q(d.path)}  files=${d.files} lines=${d.lines}  ${d.top.join(', ')}`);
   if (o.entries.length) out(`likely_entry_points: ${o.entries.map(q).join(', ')}`);
-  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: layers in the order a request travels (entry points, handlers, core, executors and storage, outside the code), 8-14 boxes, data-to wires with labels, data-src on every box that stands for code. Run \`${CMD} guide\` for the kit if you have not.`);
+  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html with one <figure class="tm-diagram">: 3-5 groups by responsibility in the order a request travels, 7-12 small boxes (data-name, data-tag, data-src), data-to connections with a verb, 1-3 flows. Run \`${CMD} guide\` for the format if you have not.`);
 }
 
 function cmdGuide() {
@@ -445,7 +445,6 @@ function help() {
 
 usage:
   ${CMD} [page]                 open a page from ${FOLDER}/ (default: index.html) in the user's browser
-  ${CMD} <page> --annotate      open it with comment mode on (when you want the user's review)
   ${CMD} listen [--timeout s]   wait for the user's next message from the page chat
   ${CMD} reply "<text>" [--listen] [--file path|-]
                                 show your answer in the page chat (--listen: then wait for the next message)

@@ -240,6 +240,37 @@ export function checkLayout(html) {
       if (n > 4) notes.push(`map ${i + 1}, layer ${j + 1} has ${n} boxes; keep it to 4`);
     });
   });
+  return notes.concat(lintDiagrams(html));
+}
+
+/** The rules of a v0.5 map (figure.tm-diagram), checked so a page that breaks them is told why. */
+export function lintDiagrams(html) {
+  const notes = [];
+  const attr = (tag, name) => { const m = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i')); return m ? decodeEntities(m[1] ?? m[2] ?? '') : null; };
+  const figs = html.split(/<figure\b[^>]*class=["'][^"']*\btm-diagram\b[^"']*["'][^>]*>/i).slice(1).map((b) => b.split(/<\/figure>/i)[0]);
+  figs.forEach((body, i) => {
+    const where = figs.length > 1 ? `map ${i + 1}: ` : 'map: ';
+    const nodes = [...body.matchAll(/<(?:div|a)\b[^>]*class=["'][^"']*\btm-node\b[^"']*["'][^>]*>/gi)].map((m) => m[0]);
+    const ids = new Set(nodes.map((t) => attr(t, 'id')).filter(Boolean));
+    if (nodes.length > 16) notes.push(`${where}${nodes.length} boxes; 16 is the most a map can carry. Merge minor neighbours or give a part its own page.`);
+    const groups = (body.match(/<section\b[^>]*class=["'][^"']*\btm-group\b/gi) || []).length;
+    if (!groups && nodes.length > 4) notes.push(`${where}no groups. Put the boxes in <section class="tm-group" data-label="…"> by responsibility.`);
+    const outside = body.replace(/<section\b[^>]*class=["'][^"']*\btm-group\b[\s\S]*?<\/section>/gi, '');
+    const loose = (outside.match(/class=["'][^"']*\btm-node\b/gi) || []).length;
+    if (groups && loose) notes.push(`${where}${loose} box(es) outside any group; every box belongs to one group.`);
+    for (const t of nodes) {
+      const id = attr(t, 'id'); const name = attr(t, 'data-name'); const tag = attr(t, 'data-tag'); const label = name || id || '(a box)';
+      if (!id) notes.push(`${where}a box without an id ("${label}"); connections and flows need ids.`);
+      if (!name) notes.push(`${where}box "${id}" has no data-name.`);
+      else if (name.split(/\s+/).length > 4 || name.length > 28) notes.push(`${where}box name "${name}" is long; use 1-3 words from the code and put the rest in .tm-detail.`);
+      if (tag && (tag.split(/\s+/).length > 4 || tag.length > 32)) notes.push(`${where}tag "${tag}" on "${label}" is long; one short word or path fragment.`);
+      if (!attr(t, 'data-src') && !/\bis-ext\b/.test(attr(t, 'class') || '')) notes.push(`${where}box "${label}" has no data-src; anchor it to its code, or mark it is-ext if it is outside the code.`);
+    }
+    for (const m of body.matchAll(/<li\b[^>]*\sdata-path\s*=\s*["']([^"']*)["']/gi)) {
+      for (const id of m[1].split(/[\s,]+/).filter(Boolean)) if (!ids.has(id)) notes.push(`${where}flow step "${id}" is not a box id on this map.`);
+    }
+  });
+  if (figs.length && /<style\b|\sstyle\s*=\s*["'][^"']*(?:color|background|font|border)/i.test(html)) notes.push('page sets its own colours or fonts; the look is fixed so every map reads the same. Remove <style> and style="…".');
   return notes;
 }
 

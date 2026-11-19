@@ -13,9 +13,14 @@
 <div class="app" id="app" data-conn="live">
 
   <header class="bar">
-    <div class="brand" title="truemap">
-      <svg class="mark" viewBox="0 0 20 20" aria-hidden="true"><path class="mark-line" d="M10 2.2 15.6 17.6 10 14.4 4.4 17.6z"/><path class="mark-fill" d="M10 2.2V14.4L4.4 17.6z"/></svg>
-      <span class="wordmark">truemap</span>
+    <div class="projects">
+      <button class="brand" id="projBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Projects">
+        <svg class="mark" viewBox="0 0 20 20" aria-hidden="true"><path class="mark-line" d="M10 2.2 15.6 17.6 10 14.4 4.4 17.6z"/><path class="mark-fill" d="M10 2.2V14.4L4.4 17.6z"/></svg>
+        <span class="wordmark" id="projName">truemap</span>
+        <span class="proj-n" id="projCount" hidden></span>
+        <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
+      </button>
+      <div class="menu proj-menu" id="projMenu" role="menu" hidden></div>
     </div>
     <span class="slash" aria-hidden="true">/</span>
     <button class="crumb-home" id="crumbHome" type="button" hidden></button>

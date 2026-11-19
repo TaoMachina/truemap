@@ -32,7 +32,7 @@ export function cleanPlan(raw) {
   const plan = {
     title,
     slug: slugOf(raw.slug || title),
-    page: str(raw.page || 'index.html', 200).replace(/\\/g, '/').replace(/^\.?\/*(\.truemap\/)?/, ''),
+    page: str(raw.page || 'index.html', 200).replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/^\/+/, '').replace(/^\.truemap\//, ''),
     summary: str(raw.summary, 600),
     touch: list(raw.touch).slice(0, 30).map((t) => ({ box: str(t?.box, 300).trim(), what: str(t?.what, 400) })).filter((t) => t.box),
     add: list(raw.add).slice(0, 12).map((a) => ({

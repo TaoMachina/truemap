@@ -183,7 +183,7 @@
     const showHome = !!home && !!state.page && state.page !== 'index.html';
     $('crumbHome').hidden = !showHome; $('crumbSep').hidden = !showHome;
     if (showHome) { $('crumbHome').textContent = titleOf(home); $('crumbHome').title = `Back to ${titleOf(home)}`; }
-    document.title = p ? `${titleOf(p)} – truemap` : 'truemap';
+    renderProjects();
     const r = resultFor(state.page); const st = stateOf(r);
     const chip = $('checkChip');
     if (!r || r.missing || !r.anchors?.length || state.conn === 'closed') { chip.hidden = true; return; }
@@ -610,6 +610,38 @@
     }
   });
 
+  // ---------- projects: every truemap project running on this machine ----------
+  const projMenu = $('projMenu');
+  let projList = [];
+  const PSTATE = { listening: 'Agent listening', working: 'Agent working', idle: 'Agent stopped listening', offline: 'No agent' };
+  const needsYou = (p) => !p.self && (p.unread || p.plan?.status === 'review');
+  function renderProjects() {
+    const self = projList.find((p) => p.self);
+    if (self) $('projName').textContent = self.name;
+    const n = projList.filter(needsYou).length;
+    $('projCount').hidden = !n; $('projCount').textContent = n ? String(n) : '';
+    $('projBtn').title = n ? `${n} other project${n > 1 ? 's' : ''} need${n > 1 ? '' : 's'} you` : 'Projects';
+    const p = state.pages.find((x) => x.page === state.page);
+    document.title = `${n ? `(${n}) ` : ''}${p ? `${titleOf(p)} – ` : ''}${self ? self.name : 'truemap'}`;
+    if (projMenu.hidden) return;
+    projMenu.innerHTML = projList.map((x) => {
+      const why = x.plan?.status === 'review' ? `<em>Plan to review</em> ${esc(x.plan.title)}` : x.unread ? '<em>New reply</em>' : esc(PSTATE[x.agent] || '');
+      return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="_blank" rel="noopener"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
+    }).join('') + `<div class="proj-foot">Projects with truemap running. Run <code>${esc(state.cmd)}</code> in another repo to add it.</div>`;
+  }
+  async function loadProjects() {
+    try { projList = (await fetch(`/api/projects?t=${encodeURIComponent(TOKEN)}`).then((r) => r.json())).projects || []; } catch { return; }
+    renderProjects();
+  }
+  $('projBtn').onclick = (e) => {
+    e.stopPropagation();
+    if (!projMenu.hidden) { projMenu.hidden = true; $('projBtn').setAttribute('aria-expanded', 'false'); return; }
+    projMenu.hidden = false; $('projBtn').setAttribute('aria-expanded', 'true'); renderProjects(); loadProjects();
+  };
+  projMenu.addEventListener('click', (e) => { const a = e.target.closest('.proj-item'); if (a?.dataset.self) e.preventDefault(); projMenu.hidden = true; $('projBtn').setAttribute('aria-expanded', 'false'); });
+  document.addEventListener('click', (e) => { if (!projMenu.hidden && !e.target.closest('.projects')) { projMenu.hidden = true; $('projBtn').setAttribute('aria-expanded', 'false'); } });
+  setInterval(() => { if (state.conn === 'live') loadProjects(); }, 15_000);
+
   // ---------- agent state ----------
   let tick = null;
   function renderWorking() {
@@ -782,6 +814,7 @@
         if (d.cmd) state.cmd = d.cmd;
         state.root = String(d.root || '');
         $('ver').textContent = `truemap ${d.version}`;
+        loadProjects();
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';
         state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
         state.plan = d.plan || null;

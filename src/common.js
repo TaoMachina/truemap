@@ -73,6 +73,7 @@ export function rootKey(root) {
   return createHash('sha1').update(CASE_INSENSITIVE_FS ? r.toLowerCase() : r).digest('hex').slice(0, 16);
 }
 
+export function serversDir() { return stateSubdir('servers'); }
 export function serverStatePath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.json`); }
 export function serverLockPath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.lock`); }
 export function historyPath(root) { return join(stateSubdir('history'), `${rootKey(root)}.jsonl`); }

@@ -1,11 +1,11 @@
 // The local truemap server: one per repo, started on demand by the CLI, invisible to the user.
 // Serves the workspace UI, the .truemap pages (with the SDK injected), a chat queue between
 // the browser and the agent's CLI (listen/reply), and live updates over Server-Sent Events.
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
-import { extname, join, resolve, sep } from 'node:path';
-import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, snapshotsPath, writePrivate } from './common.js';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
+import { basename, extname, join, resolve, sep } from 'node:path';
+import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
 import { cleanPlan, currentPlan, planMessage, readPlan, savePlan } from './plan.js';
 import { checkAll, listPages } from './check.js';
@@ -40,6 +40,8 @@ let agentSince = 0;                 // when the current state began
 let endRequested = false;           // the user pressed End conversation while the agent wasn't listening
 let annotateWish;                   // set by `truemap <page> --annotate` before a tab is open
 let lastAgentActivity = 0;
+let lastSeenAt = Date.now();        // when a person last had this project open
+let lastReplyAt = 0;                // when the agent last wrote in the chat
 let currentPage = null;
 let closeTimer = null;
 let idleTimer = null;
@@ -203,6 +205,33 @@ function safePages() {
 
 const cleanFocus = (f) => (Array.isArray(f) ? f : []).map((x) => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 20);
 
+// ---------- every truemap project running on this machine (one server each) ----------
+function peek(state) {
+  return new Promise((ok) => {
+    const r = httpRequest({ host: '127.0.0.1', port: state.port, path: '/api/agent/status', method: 'GET', headers: { 'X-Truemap-Token': state.token } }, (res) => {
+      const chunks = []; res.on('data', (c) => chunks.push(c));
+      res.on('end', () => { try { ok(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { ok(null); } });
+    });
+    r.setTimeout(800, () => r.destroy()); r.on('error', () => ok(null)); r.end();
+  });
+}
+async function projects() {
+  let files = [];
+  try { files = readdirSync(serversDir()).filter((x) => x.endsWith('.json')); } catch { return []; }
+  const list = await Promise.all(files.map(async (name) => {
+    let st; try { st = JSON.parse(readFileSync(join(serversDir(), name), 'utf8')); } catch { return null; }
+    if (!st?.port || !st.token) return null;
+    const self = st.pid === process.pid;
+    const s = self ? { root, name: basename(root), agent: agentState, agentName, plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null, unread: false, clients: clients.size } : await peek(st);
+    if (!s?.root) return null;
+    return { self, name: s.name || basename(s.root), root: s.root, agent: s.agent, agentName: s.agentName || '', plan: s.plan || null, unread: !!s.unread, url: `http://127.0.0.1:${st.port}/?t=${encodeURIComponent(st.token)}` };
+  }));
+  // one entry per project, even when two state files (old path spellings) point at the same server
+  const seen = new Set();
+  return list.filter(Boolean).sort((a, b) => (b.self - a.self) || a.name.localeCompare(b.name))
+    .filter((x) => { const k = String(x.root).toLowerCase().replace(/[\\/]+$/, ''); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
 // ---------- http helpers ----------
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -338,7 +367,7 @@ const server = createServer(async (req, res) => {
       clients.add(res);
       clearTimeout(closeTimer);
       const ping = setInterval(() => res.write(': ping\n\n'), 20_000);
-      req.on('close', () => { clearInterval(ping); clients.delete(res); scheduleCloseCheck(); touchIdle(); });
+      req.on('close', () => { clearInterval(ping); clients.delete(res); lastSeenAt = Date.now(); scheduleCloseCheck(); touchIdle(); });
       return;
     }
     if (p === '/api/send' && req.method === 'POST') {
@@ -401,6 +430,7 @@ const server = createServer(async (req, res) => {
       if (b.action === 'approve') return sendJson(res, 200, { ok: await approvePlan('user') });
       return sendJson(res, 400, { error: 'unknown action' });
     }
+    if (p === '/api/projects' && req.method === 'GET') return sendJson(res, 200, { projects: await projects() });
     if (p === '/api/end' && req.method === 'POST') {
       // The user is done talking on the page: free the agent to go back to the terminal.
       if (listener) finishListen({ status: 'ended' }); else if (agentState === 'working' || agentState === 'listening') endRequested = true;
@@ -410,7 +440,11 @@ const server = createServer(async (req, res) => {
 
     // ----- agent (CLI) side -----
     if (p === '/api/agent/status' && req.method === 'GET') {
-      return sendJson(res, 200, { version: VERSION, pid: process.pid, root, clients: clients.size, agent: agentState, queued: queue.length, current: currentPage });
+      return sendJson(res, 200, {
+        version: VERSION, pid: process.pid, root, name: basename(root), clients: clients.size, agent: agentState, agentName, queued: queue.length, current: currentPage,
+        plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null,
+        unread: !clients.size && lastReplyAt > lastSeenAt,
+      });
     }
     if (p === '/api/agent/listen' && req.method === 'POST') {
       const b = await readBody(req);
@@ -441,6 +475,7 @@ const server = createServer(async (req, res) => {
         ? { question: String(b.ask.question ?? '').slice(0, 500), options: b.ask.options.slice(0, 6).map((o) => ({ label: String(o.label ?? '').slice(0, 200), why: String(o.why ?? '').slice(0, 400) })) }
         : null;
       remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, text, ...(focus.length ? { focus } : {}), ...(ask ? { ask } : {}) });
+      lastReplyAt = Date.now(); if (clients.size) lastSeenAt = lastReplyAt;
       if (!listener) setAgentState(b.keepWorking || b.willListen ? 'working' : 'idle');
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
