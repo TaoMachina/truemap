@@ -104,10 +104,15 @@ hr { border: 0; border-top: 1px solid var(--tm-rule); margin: 40px 0; }
 /* ---------- the map (blueprint) ---------- */
 /* Rows are layers; boxes are real code. truemap draws the wires from data-to="id id". */
 /* A map never wraps or stacks: when it is wider than the page it scrolls sideways, wires and all. */
-.tm-map, .tm-blueprint { position: relative; margin: 28px 0 8px; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px; scrollbar-width: thin; }
+/* The map may run wider than the text column, up to the right edge of the window. */
+.tm-map, .tm-blueprint {
+  position: relative; margin: 20px 0 0; overflow-x: auto; overflow-y: hidden; padding: 10px 8px 14px 2px; scrollbar-width: thin;
+  width: calc(100vw - max(48px, (100vw - 960px) / 2 + 48px) - 16px); min-width: 100%;
+}
+.tm-map.tm-scrolls { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
 .tm-layer { position: relative; display: grid; grid-template-columns: var(--tm-label-w, 112px) max-content; gap: 20px; align-items: start; width: max-content; min-width: 100%; }
 .tm-layer + .tm-layer { margin-top: 44px; }
-.tm-layer-label { position: sticky; left: 0; z-index: 2; align-self: stretch; font-size: 13px; color: var(--tm-pencil); padding-top: 12px; line-height: 1.35; background: var(--tm-paper); }
+.tm-layer-label { font-size: 13px; color: var(--tm-pencil); padding-top: 12px; line-height: 1.35; }
 .tm-layer-nodes { display: flex; flex-wrap: nowrap; gap: 18px 26px; }
 .tm-layer-nodes > .tm-node { flex: 0 0 var(--tm-node-w, 216px); max-width: none; }
 .tm-map > .tm-layer-nodes { margin-left: 132px; }
@@ -264,7 +269,7 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
   .tm-title { font-size: 28px; }
   .tm-lede { font-size: 17px; }
   .tm-section { margin-top: 48px; }
-  .tm-map { --tm-label-w: 72px; --tm-node-w: 184px; }
+  .tm-map { --tm-label-w: 72px; --tm-node-w: 184px; width: calc(100vw - 26px); }
   .tm-layer { gap: 12px; }
   .tm-legend { margin-left: 0; }
   .tm-node { flex: 1 1 100%; max-width: none; }

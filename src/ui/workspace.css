@@ -128,7 +128,7 @@ code { font-family: var(--code); font-size: 0.9em; }
 .agent-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--rule-strong); flex: none; }
 .agent-state[data-state="listening"] i { background: var(--fine); }
 .agent-state[data-state="working"] i { background: var(--route); animation: pulse 1.4s ease-in-out infinite; }
-.agent-state[data-state="idle"] i { background: var(--changed); }
+.agent-state[data-state="idle"] i, .agent-state[data-state="stale"] i { background: var(--changed); }
 .agent-state[data-state="closed"] i { background: var(--broken); }
 @keyframes pulse { 50% { opacity: .35; } }
 .elapsed { font: 12px var(--code); color: var(--pencil); }
@@ -167,6 +167,7 @@ code { font-family: var(--code); font-size: 0.9em; }
 
 .notice { margin: 0 12px 10px; padding: 11px 13px; border-radius: 8px; background: var(--wash); font-size: 13px; color: var(--graphite); line-height: 1.5; }
 .notice b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; font-size: 13.5px; }
+.notice .after { margin: 8px 0 0; }
 .notice .cmd { display: flex; align-items: center; gap: 6px; margin-top: 8px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 5px 5px 9px; }
 .notice .cmd code { flex: 1; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .notice .copy { border: 0; background: none; color: var(--route); font-size: 12px; font-weight: 500; padding: 3px 6px; border-radius: 4px; cursor: pointer; }

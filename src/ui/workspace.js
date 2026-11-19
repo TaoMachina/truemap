@@ -10,7 +10,7 @@
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
     state: {
-      listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} stopped listening`,
+      listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} stopped listening`, stale: (a) => `No reply from ${a} yet`,
       offline: () => 'No agent listening', closed: () => 'Workspace closed',
     },
   };
@@ -157,7 +157,7 @@
     document.title = p ? `${titleOf(p)} – truemap` : 'truemap';
     const r = resultFor(state.page); const st = stateOf(r);
     const chip = $('checkChip');
-    if (!r || r.missing || !r.anchors?.length) { chip.hidden = true; return; }
+    if (!r || r.missing || !r.anchors?.length || state.conn === 'closed') { chip.hidden = true; return; }
     chip.hidden = false;
     const { changed, broken } = r.counts;
     chip.dataset.state = st || 'ok';
@@ -189,7 +189,7 @@
 
   // ---------- notes (comments collected in annotate mode) ----------
   const notesForPage = () => state.notes.filter((n) => n.page === state.page);
-  function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector }) => ({ id, kind, label, src, text, selector })) }); }
+  function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector, rect }) => ({ id, kind, label, src, text, selector, rect })) }); }
   // Unsent comments survive a reload of this tab.
   try { state.notes = JSON.parse(sessionStorage.getItem('truemap.notes') || '[]'); } catch { state.notes = []; }
   function saveNotes() { try { sessionStorage.setItem('truemap.notes', JSON.stringify(state.notes)); } catch { /* ignore */ } }
@@ -277,22 +277,23 @@
   let tick = null;
   function renderWorking() {
     msgsEl.querySelector('.working')?.remove();
-    if (state.agent.state !== 'working' || state.conn !== 'live') return;
+    if (state.agent.state !== 'working' || state.conn !== 'live' || isStale()) return;
     const w = document.createElement('div'); w.className = 'working';
     w.innerHTML = `<i></i><span>${esc(state.progress || `${agentName()} is working on it`)}</span>`;
     msgsEl.appendChild(w);
   }
   function renderAgent() {
     const s = state.conn === 'closed' ? 'closed' : state.agent.state;
-    $('agent').dataset.state = s;
-    $('agentLabel').textContent = S.state[s] ? S.state[s](agentName()) : s;
+    const shown = s === 'working' && isStale() ? 'stale' : s;
+    $('agent').dataset.state = shown;
+    $('agentLabel').textContent = S.state[shown] ? S.state[shown](agentName()) : shown;
     clearInterval(tick);
     const el = $('elapsed');
     if (s === 'working' && state.agent.since) {
       let stale = isStale();
       const upd = () => {
         el.textContent = fmtElapsed(Date.now() - state.agent.since);
-        if (isStale() !== stale) { stale = !stale; renderNotice(); }
+        if (isStale() !== stale) { stale = !stale; renderAgent(); }
       };
       upd(); el.hidden = false; tick = setInterval(upd, 1000);
     } else el.hidden = true;
@@ -308,11 +309,11 @@
     if (s === 'closed') {
       html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen this page, ask your agent to run:${cmdBox(state.cmd + page)}`;
     } else if (s === 'offline') {
-      html = `<b>No agent is listening</b>Messages you send wait here. In your agent’s terminal session, ask it to run:${listen}`;
+      html = `<b>Your messages will wait here</b>To get answers, ask your agent in its terminal session to run:${listen}`;
     } else if (s === 'idle') {
-      html = `<b>${esc(agentName())} stopped listening</b>Messages you send wait here. To continue, ask it in the terminal to run:${listen}`;
+      html = `<b>Your messages will wait here</b>To continue, ask ${esc(agentName())} in the terminal to run:${listen}`;
     } else if (s === 'working' && isStale()) {
-      html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped or be waiting for you in the terminal. Check there, or ask it to run:${listen}`;
+      html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped, or be waiting for you in the terminal. Check there, or ask it to run:${listen}<p class="after">If it no longer knows your last comments, send them again.</p>`;
     }
     n.innerHTML = html; n.hidden = !html;
     n.querySelector('.copy')?.addEventListener('click', (e) => {
@@ -383,7 +384,7 @@
       state.scroll[d.page] = d.y;
     } else if (d.type === 'note' || d.type === 'note-update') {
       const n = d.note || {};
-      const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || '') };
+      const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || ''), rect: n.rect && typeof n.rect === 'object' ? { left: +n.rect.left || 0, top: +n.rect.top || 0, right: +n.rect.right || 0, bottom: +n.rect.bottom || 0 } : null };
       const i = state.notes.findIndex((x) => x.id === note.id);
       if (i >= 0) state.notes[i] = note; else state.notes.push(note);
       renderNotes(); syncFrameNotes();
@@ -413,6 +414,7 @@
     if (state.conn === c) return;
     state.conn = c; app.dataset.conn = c;
     $('annotate').disabled = c === 'closed';
+    renderHeader();
     renderAgent();
   }
   function connect() {

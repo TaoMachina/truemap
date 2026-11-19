@@ -54,29 +54,41 @@
       svg.setAttribute('width', w); svg.setAttribute('height', h);
       svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
       const rel = (r) => ({ l: r.left - ox, r: r.right - ox, t: r.top - oy, b: r.bottom - oy, cx: (r.left + r.right) / 2 - ox, cy: (r.top + r.bottom) / 2 - oy });
-      const fanOut = new Map();
+      // Collect edges first so wires sharing a box get their own exit, entry and track (no merged lines).
+      const edges = [];
       for (const src of sources) {
-        const targets = src.getAttribute('data-to').split(/\s+/).filter(Boolean);
-        targets.forEach((spec) => {
+        for (const spec of src.getAttribute('data-to').split(/\s+/).filter(Boolean)) {
           const [id, ...labelParts] = spec.split(':');
           const dst = document.getElementById(id);
-          if (!dst || dst === src || !map.contains(dst)) return;
-          const a = rel(src.getBoundingClientRect()); const b = rel(dst.getBoundingClientRect());
+          if (!dst || dst === src || !map.contains(dst)) continue;
+          edges.push({ src, dst, label: labelParts.join(':').replace(/_/g, ' '), a: rel(src.getBoundingClientRect()), b: rel(dst.getBoundingClientRect()) });
+        }
+      }
+      const down = (e) => e.b.t >= e.a.b - 2;
+      const slot = (list, e) => { const i = list.indexOf(e); return i - (list.length - 1) / 2; };
+      const outOf = new Map(); const into = new Map();
+      for (const e of edges.filter(down)) {
+        (outOf.get(e.src) || outOf.set(e.src, []).get(e.src)).push(e);
+        (into.get(e.dst) || into.set(e.dst, []).get(e.dst)).push(e);
+      }
+      for (const l of [...outOf.values(), ...into.values()]) l.sort((p, q) => p.b.cx - q.b.cx || p.a.cx - q.a.cx);
+      for (const e of edges) {
+          const { src, dst, a, b } = e;
           const key = src.classList.contains('is-key') && dst.classList.contains('is-key');
           const ext = dst.classList.contains('is-ext') || src.classList.contains('is-ext');
           let d; let head; let mid;
           const r = 7;
-          if (b.t >= a.b - 2) { // below: leave from the bottom, enter at the top
-            const n = (fanOut.get(src) || 0); fanOut.set(src, n + 1);
-            const sx = a.cx; const sy = a.b; const tx = b.cx; const ty = b.t - 6;
-            const my = sy + Math.max(12, Math.min(22, (ty - sy) / 2));
+          if (down(e)) { // below: leave from the bottom, enter at the top
+            const so = slot(outOf.get(src), e); const ti = slot(into.get(dst), e);
+            const sx = a.cx + so * 14; const sy = a.b; const tx = b.cx + ti * 14; const ty = b.t - 6;
+            const my = sy + Math.max(12, Math.min(22, (ty - sy) / 2)) + ti * 7;
             if (Math.abs(tx - sx) < 2) d = `M${sx},${sy} V${ty}`;
             else {
-              const dir = tx > sx ? 1 : -1;
-              d = `M${sx},${sy} V${my - r} Q${sx},${my} ${sx + dir * r},${my} H${tx - dir * r} Q${tx},${my} ${tx},${my + r} V${ty}`;
+              const dir = tx > sx ? 1 : -1; const rr = Math.min(r, Math.abs(tx - sx) / 2);
+              d = `M${sx},${sy} V${my - rr} Q${sx},${my} ${sx + dir * rr},${my} H${tx - dir * rr} Q${tx},${my} ${tx},${my + rr} V${ty}`;
             }
             head = `M${tx - 4.5},${ty - 1} L${tx + 4.5},${ty - 1} L${tx},${ty + 6} Z`;
-            mid = { x: tx, y: (my + ty) / 2 };
+            mid = Math.abs(tx - sx) < 2 ? { x: tx + 2, y: (sy + ty) / 2 } : { x: Math.min(sx, tx) + Math.abs(tx - sx) / 2 - 20, y: my - 9 };
           } else if (b.b <= a.t + 2) { // above
             const sx = a.cx; const sy = a.t; const tx = b.cx; const ty = b.b + 6;
             const my = sy - Math.max(12, Math.min(22, (sy - ty) / 2));
@@ -98,18 +110,23 @@
           arrow.setAttribute('d', head); arrow.setAttribute('class', `tm-wire-head${key ? ' is-key' : ''}`);
           svg.appendChild(path);
           svg.appendChild(arrow);
-          const label = labelParts.join(':').replace(/_/g, ' ');
-          if (label) {
+          if (e.label) {
             const t = document.createElementNS(SVGNS, 'text');
             t.setAttribute('class', 'tm-wire-label'); t.setAttribute('x', mid.x + 8); t.setAttribute('y', mid.y + 4);
-            t.textContent = label; svg.appendChild(t);
+            t.textContent = e.label; svg.appendChild(t);
           }
-        });
       }
-      // key wires on top
+      // key wires on top, labels above every wire
       [...svg.querySelectorAll('.tm-wire.is-key, .tm-wire-head.is-key')].forEach((el) => svg.appendChild(el));
+      [...svg.querySelectorAll('.tm-wire-label')].forEach((el) => svg.appendChild(el));
       map.insertBefore(svg, map.firstChild);
+      markScroll(map);
     }
+  }
+  // A map wider than the window fades at the edge it can scroll towards.
+  function markScroll(map) {
+    map.classList.toggle('tm-scrolls', map.scrollWidth - map.clientWidth - map.scrollLeft > 4);
+    if (!map.__tmScroll) { map.__tmScroll = true; map.addEventListener('scroll', () => markScroll(map), { passive: true }); }
   }
   let wireTimer = null;
   const scheduleWires = () => { clearTimeout(wireTimer); wireTimer = setTimeout(() => { drawWires(); placePins(); }, 40); };
@@ -257,7 +274,7 @@
         selector: target ? cssPath(target) : '', rect: target ? null : r,
       };
       notes.set(id, { ...note, el: target, range });
-      post({ type: existing ? 'note-update' : 'note', page: pagePath(), note: { ...note, rect: undefined }, send: !!sendNow });
+      post({ type: existing ? 'note-update' : 'note', page: pagePath(), note: { ...note, rect: note.rect ? { left: note.rect.left, top: note.rect.top, right: note.rect.right, bottom: note.rect.bottom } : null }, send: !!sendNow });
       closeCard(); placePins();
       getSelection()?.removeAllRanges();
     };
@@ -268,7 +285,7 @@
       else if (act === 'remove') { removeNote(noteId, true); closeCard(); }
     });
     ta.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeCard(); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCard(); }
       else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); finish(e.ctrlKey || e.metaKey); }
     });
     setTimeout(() => ta.focus({ preventScroll: true }), 0);
@@ -364,7 +381,7 @@
   document.addEventListener('keydown', (e) => {
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
-    if (e.key === 'Escape' && annotating) { post({ type: 'annotate-off' }); return; }
+    if (e.key === 'Escape' && annotating && !typing && !e.defaultPrevented && !e.composedPath().includes(host)) { post({ type: 'annotate-off' }); return; }
     if (!typing && !e.composedPath().includes(host) && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a') {
       post({ type: 'toggle-annotate' });
     }
@@ -416,7 +433,7 @@
         const old = notes.get(n.id);
         let el = old?.el || null;
         if (!el && n.selector) { try { el = document.querySelector(n.selector); } catch { el = null; } }
-        keep.set(n.id, { ...n, el, rect: old?.rect || null, range: old?.range || null, num: i + 1 });
+        keep.set(n.id, { ...n, el, rect: old?.rect || n.rect || null, range: old?.range || null, num: i + 1 });
       });
       notes.clear(); for (const [k, v] of keep) notes.set(k, v);
       placePins();
