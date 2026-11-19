@@ -223,7 +223,22 @@ export function checkPage(ctx, page) {
   });
   const counts = { ok: 0, changed: 0, broken: 0 };
   for (const a of anchors) counts[a.state]++;
-  return { page, anchors, counts };
+  return { page, anchors, counts, wires: checkWires(html) };
+}
+
+/** Map wires whose data-to names an id that is not on the page (they would silently not be drawn). */
+export function checkWires(html) {
+  const ID = /\sid\s*=\s*["']([^"']+)["']/i;
+  const ids = new Set([...html.matchAll(new RegExp(ID.source, 'gi'))].map((m) => m[1]));
+  const problems = [];
+  for (const m of html.matchAll(/<[^>]*\sdata-to\s*=\s*["']([^"']*)["'][^>]*>/gi)) {
+    const from = (m[0].match(ID) || [])[1] || '(a box without an id)';
+    for (const spec of m[1].split(/[\s,]+/).filter(Boolean)) {
+      const to = spec.split(':')[0];
+      if (!ids.has(to)) problems.push({ from, to, reason: `no element with id="${to}"` });
+    }
+  }
+  return problems;
 }
 
 export function checkAll(root, pages) {

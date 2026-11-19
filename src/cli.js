@@ -9,6 +9,8 @@ import {
 } from './common.js';
 import { checkAll, listPages, markOk, pageInFolder } from './check.js';
 import { outline } from './outline.js';
+import { exportPage } from './export.js';
+import { writeFileSync } from 'node:fs';
 
 const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap-cli';
 
@@ -141,6 +143,7 @@ function printCheck(result, indent = '') {
   const bad = result.anchors.filter((a) => a.state !== 'ok');
   out(`${indent}check: ${result.counts.ok} ok, ${result.counts.changed} changed, ${result.counts.broken} broken`);
   for (const a of bad) out(`${indent}  - ${a.state}: ${q(a.src)}  # ${a.reason}`);
+  for (const w of result.wires || []) out(`${indent}  - wire not drawn: ${q(w.from)} -> ${q(w.to)}  # ${w.reason}`);
 }
 
 const SETUP_NOTE = `Visual explanations live in \`${FOLDER}/\` (index.html is the project blueprint). Before explaining architecture, a flow, or options: if a page covers it, update it and run \`${CMD} <page>\`. Create a new page only when the answer has 3+ interacting parts or needs a decision from the user. Always also give a 1-3 line answer in the terminal.`;
@@ -187,7 +190,9 @@ async function cmdOpen(root, args, opts = {}) {
     if (r.counts.broken) steps.push('Fix the broken anchors first: update the page (or its data-src) to match the code.');
     if (r.counts.changed) steps.push(`Review the changed anchors. If the page needs edits, update it; if it is still accurate, run \`${CMD} check --ok ${page}\`.`);
   }
-  steps.push(agentLoopHint());
+  steps.push(detectAgent() === 'codex'
+    ? `If the user wants to talk about the page: ${agentLoopHint()} If they only wanted to see it, you are done.`
+    : agentLoopHint());
   steps.push('Also give the user a 1-3 line answer in the terminal.');
   block('next_step', steps.join('\n'));
 }
@@ -256,6 +261,8 @@ async function doListen(root, opts) {
     ].join('\n'));
   } else if (b.status === 'browser_closed') {
     block('next_step', 'The user closed the truemap tab. Stop listening and continue in the terminal. Do not reopen the browser unless the user asks or something important needs their eyes.');
+  } else if (b.status === 'ended') {
+    block('next_step', 'The user ended the conversation on the page. Stop listening and continue in the terminal. Do not reopen or listen again unless the user asks.');
   } else if (b.status === 'replaced') {
     block('next_step', 'Another listen took over. Stop this one.');
   } else if (b.status === 'timeout') {
@@ -300,17 +307,18 @@ async function cmdCheck(root, args, opts) {
   const pages = args.length ? args.map((a) => resolvePage(root, a)) : undefined;
   const { gitRepo, results } = checkAll(root, pages);
   out(`status: checked ${results.length} page(s)${gitRepo ? '' : ' (no git: only missing paths/names are checked)'}`);
-  let changed = 0; let broken = 0;
+  let changed = 0; let broken = 0; let wires = 0;
   for (const r of results) {
     out(`- page: ${q(r.page)}`);
     if (r.missing) { out('  missing: true'); continue; }
     printCheck(r, '  ');
-    changed += r.counts.changed; broken += r.counts.broken;
+    changed += r.counts.changed; broken += r.counts.broken; wires += (r.wires || []).length;
   }
   const steps = [];
   if (broken) steps.push('Broken anchors: the code moved or was removed. Update those pages (content and data-src).');
   if (changed) steps.push(`Changed anchors: review the code. Update the page if needed, otherwise run \`${CMD} check --ok <page>\`.`);
-  if (!broken && !changed) steps.push('All pages match the code.');
+  if (wires) steps.push('Some map wires point at ids that are not on the page, so they are not drawn. Fix the data-to values (ids separated by spaces).');
+  if (!broken && !changed && !wires) steps.push('All pages match the code.');
   block('next_step', steps.join('\n'));
 }
 
@@ -319,6 +327,17 @@ async function cmdStop(root) {
   if (!state) return out('status: not_running');
   await call(state, 'POST', '/api/agent/shutdown', {}).catch(() => {});
   out('status: stopped');
+}
+
+function cmdExport(root, args, opts) {
+  const page = resolvePage(root, args[0] || 'index.html');
+  const html = exportPage(root, page);
+  const outPath = resolve(opts.out || `${page.split('/').pop().replace(/\.html?$/i, '')}-truemap.html`);
+  writeFileSync(outPath, html);
+  out(`status: exported`);
+  out(`file: ${q(outPath)}`);
+  out(`size_kb: ${Math.round(Buffer.byteLength(html) / 1024)}`);
+  block('next_step', 'One self-contained file: kit, fonts and wires are inside. Links to other pages only work next to the .truemap folder.');
 }
 
 function cmdOutline(root) {
@@ -350,6 +369,7 @@ usage:
   ${CMD} check --ok <page>      mark a page as reviewed after its code changed
   ${CMD} outline                a compact map of the repo (folders, sizes, entry points) for a fast first blueprint
   ${CMD} guide                  how to write pages: folder rules, data-src, page kit, decisions
+  ${CMD} export <page> [--out f] write the page as one self-contained HTML file to share
   ${CMD} progress "<text>"      show a short status line in the chat while you work
   ${CMD} stop                   stop the background server
 
@@ -371,6 +391,7 @@ function parseArgs(argv) {
     else if (a === '--timeout') opts.timeout = argv[++i];
     else if (a === '--file') opts.file = argv[++i];
     else if (a === '--ok') opts.ok = argv[++i];
+    else if (a === '--out') opts.out = argv[++i];
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--version' || a === '-v') opts.version = true;
     else args.push(a);
@@ -381,7 +402,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();

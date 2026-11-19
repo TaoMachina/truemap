@@ -207,3 +207,18 @@ code { font-family: var(--code); font-size: 0.9em; }
   * { animation: none !important; transition: none !important; }
 }
 .app[data-conn="closed"] .empty .primary { display: none; }
+
+/* ---------- more menu ---------- */
+.more { position: relative; }
+.icon-btn .dot { fill: currentColor; stroke: none; }
+.more-menu { left: auto; right: 0; width: 300px; padding: 6px; }
+.more-file { padding: 6px 8px 10px; }
+.more-label { display: block; font-size: 12px; color: var(--pencil); margin-bottom: 4px; }
+.more-path { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.more-path code { flex: 1; min-width: 0; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.more-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; border: 0; background: none; text-align: left; padding: 8px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+.more-item:hover:not(:disabled), .more-item:focus-visible { background: var(--wash); outline: none; }
+.more-item svg { width: 18px; height: 18px; flex: none; margin-top: 1px; fill: none; stroke: var(--graphite); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.more-item span { display: grid; gap: 1px; font-weight: 500; }
+.more-item small { font-size: 12px; font-weight: 400; color: var(--pencil); }
+.more-item:disabled { opacity: .45; cursor: default; }

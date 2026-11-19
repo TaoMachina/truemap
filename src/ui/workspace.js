@@ -151,6 +151,41 @@
   });
   $('recheck').onclick = () => { api('/api/check'); closeMenu(); };
 
+  // ---------- more menu: the page file, export, end the conversation ----------
+  const more = $('moreMenu');
+  const filePath = () => {
+    if (!state.page) return '';
+    const sepChar = String(state.root).includes('\\') ? '\\' : '/';
+    return [state.root, '.truemap', ...state.page.split('/')].join(sepChar);
+  };
+  function renderMore() {
+    $('moreFile').textContent = state.page ? `.truemap/${state.page}` : 'No page open';
+    $('moreFile').title = filePath();
+    $('copyPath').disabled = !state.page;
+    $('exportPage').disabled = !state.page || state.conn !== 'live';
+    const talking = state.conn === 'live' && (state.agent.state === 'listening' || state.agent.state === 'working');
+    $('endConv').disabled = !talking;
+    $('endHint').textContent = talking ? `Lets ${agentName()} go back to the terminal` : 'No conversation is running';
+  }
+  const closeMore = () => { more.hidden = true; $('moreBtn').setAttribute('aria-expanded', 'false'); };
+  $('moreBtn').onclick = (e) => {
+    e.stopPropagation();
+    if (!more.hidden) return closeMore();
+    closeMenu(); renderMore(); more.hidden = false; $('moreBtn').setAttribute('aria-expanded', 'true');
+  };
+  document.addEventListener('click', (e) => { if (!more.hidden && !e.target.closest('.more')) closeMore(); });
+  window.addEventListener('blur', () => { if (!more.hidden) closeMore(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !more.hidden) { closeMore(); $('moreBtn').focus(); } });
+  $('copyPath').onclick = () => {
+    navigator.clipboard?.writeText(filePath()).then(() => { $('copyPath').textContent = 'Copied'; setTimeout(() => { $('copyPath').textContent = 'Copy path'; }, 1400); }).catch(() => {});
+  };
+  $('exportPage').onclick = () => {
+    const a = document.createElement('a');
+    a.href = `/api/export?page=${encodeURIComponent(state.page)}&t=${encodeURIComponent(TOKEN)}`;
+    a.download = ''; document.body.appendChild(a); a.click(); a.remove(); closeMore();
+  };
+  $('endConv').onclick = () => { api('/api/end'); closeMore(); };
+
   function renderHeader() {
     const p = state.pages.find((x) => x.page === state.page);
     $('pageTitle').textContent = p ? titleOf(p) : (state.pages.length ? 'Pages' : 'No pages yet');
@@ -434,6 +469,7 @@
         state.pages = d.pages || []; state.check = d.check || { results: [] }; state.history = d.history || [];
         state.pending = new Set(d.pending || []);
         if (d.cmd) state.cmd = d.cmd;
+        state.root = String(d.root || '');
         if (typeof d.annotate === 'boolean') { state.annotate = d.annotate; state.annotateTouched = true; $('annotate').setAttribute('aria-checked', String(d.annotate)); }
         $('ver').textContent = `truemap ${d.version}`;
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';

@@ -8,7 +8,7 @@ WHEN TO USE
 
 THE FIRST BLUEPRINT (be fast)
 - Run `{{CMD}} outline`. Read the manifests and entry points it lists, not every file.
-- Write .truemap/index.html with 5-12 boxes in 3-4 layers, open it, then go deeper only where the user asks.
+- Write .truemap/index.html with 5-12 boxes in 3-5 layers, open it, then go deeper only where the user asks.
   A rough true map in two minutes beats a perfect one in twenty.
 
 FOLDER RULES
@@ -27,6 +27,7 @@ ANCHORS (this is what keeps pages true)
     <a class="tm-node" href="payments.html" data-src="src/pay/charge.ts#chargeCard">...</a>
   path = file or folder relative to the repo root (exact case). #name = a function/class/route/config key that
   literally appears in that file (whole word, case-sensitive). #name is optional; folders take no #name.
+  #name may be any literal text in the file, e.g. a route: data-src="server/api.ts#/api/orders".
 - Anchored boxes get a small triangle mark automatically: "this box is pinned to code".
 - Only anchor code you have actually read. Never invent paths.
 - `{{CMD}} check` reports broken (path or name gone) and changed (code changed after the page was written).
@@ -46,8 +47,11 @@ Pages are working documents for engineers, read next to the code. They are not l
 - Colors come only from the kit tokens. Status colors mean status, never decoration.
 - Monospace only for real code: paths, symbols, commands.
 - Boxes: 2-4 word titles taken from the code, one path line, at most one short sentence. At most 4 boxes per
-  layer; wire only neighbouring layers or side-by-side boxes. More than ~12 boxes:
-  split it – overview here, detail on the module's own page.
+  layer, 15 per map. More: split it – overview here, detail on the module's own page.
+- Readability comes from few crossings: order boxes in each layer so wires run straight down, put a box under
+  the box that calls it, and prefer wires between neighbouring layers.
+- Label every wire with what travels on it (data-to="runs:postUserMessage"), unless the label would only repeat
+  the target's name. The legend explains every line style and mark you used.
 
 WRITING RULES
 - Write like a senior engineer explaining to a colleague: plain verbs, concrete names from the code, active voice.
@@ -76,8 +80,10 @@ PAGE SKELETON
 </html>
 
 KIT COMPONENTS
-Map (layered structure with wires – the heart of index.html). Give boxes an id; data-to lists the ids they
-call or feed, optionally with a short wire label after a colon (underscores become spaces). truemap draws the wires.
+Map (layered structure with wires – the heart of index.html). You declare structure; truemap does the geometry.
+Give boxes an id; data-to lists the ids they call or feed, separated by spaces, each with an optional wire label
+after a colon (underscores become spaces): data-to="store:writes runs:postUserMessage". `check` reports ids
+that don't exist. Never position boxes or draw wires yourself on a map.
   <div class="tm-map">
     <div class="tm-layer"><div class="tm-layer-label">HTTP routes</div><div class="tm-layer-nodes">
       <div class="tm-node is-key" id="r-orders" data-to="orders" data-src="src/routes/api.ts#/api/orders">
@@ -95,8 +101,11 @@ call or feed, optionally with a short wire label after a colon (underscores beco
     </div></div>
   </div>
   <div class="tm-legend"><span><i></i>Order path</span><span><i class="is-wire"></i>Calls</span><span><i class="is-mark"></i>Pinned to code</span></div>
-  Layers top to bottom = the direction requests or data travel. A wire between two .is-key boxes is drawn blue.
-  Node modifiers: is-key (the main path), is-ext (external system, dashed), is-new (just added), is-risk.
+  Layers top to bottom = the direction requests or data travel. Wires may also point up (a reply, an event
+  stream) or sideways. A wire between two .is-key boxes is drawn blue.
+  Node modifiers: is-key (the main path), is-ext (outside this codebase: services, hosted APIs, databases and
+  files you talk to, dashed), is-new (just added), is-risk.
+  Legend: <i></i> main path, <i class="is-wire"></i> wire, <i class="is-ext"></i> outside the code, <i class="is-mark"></i> pinned to code.
 Flow (a real sequence; add is-vertical for top-to-bottom):
   <div class="tm-flow"><div class="tm-step" data-src="src/cart.ts#checkout"><b>Checkout</b><span class="tm-node-sub">checkout()</span></div><div class="tm-step">…</div></div>
 Page index (on the blueprint):

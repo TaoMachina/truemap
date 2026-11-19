@@ -7,6 +7,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, rmSync, statSync, wa
 import { extname, join, resolve, sep } from 'node:path';
 import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, writePrivate } from './common.js';
 import { checkAll, listPages } from './check.js';
+import { exportPage, kitCss } from './export.js';
 
 const root = resolve(process.argv[2] || process.cwd());
 const folder = join(root, FOLDER);
@@ -33,6 +34,7 @@ let listener = null;                // { res, timer } – the single active `lis
 let agentState = 'offline';         // offline (never seen) | listening | working | idle (back in the terminal)
 let agentName = '';                 // claude-code | codex | ''
 let agentSince = 0;                 // when the current state began
+let endRequested = false;           // the user pressed End conversation while the agent wasn't listening
 let annotateWish;                   // set by `truemap <page> --annotate` before a tab is open
 let lastAgentActivity = 0;
 let currentPage = null;
@@ -245,12 +247,7 @@ function serveStatic(res, dir, name, cache = 'no-store') {
 // The page kit comes from truemap itself, so every repo gets kit updates. A repo may still keep its own
 // assets/truemap.css (older setups, or a hand-tuned copy): that copy wins. assets/theme.css is appended.
 function serveKit(res) {
-  const own = folderIsSafe() ? safeFile(folder, 'assets/truemap.css') : null;
-  let css = readFileSync(own || join(KIT_DIR, 'truemap.css'), 'utf8');
-  const theme = folderIsSafe() ? safeFile(folder, 'assets/theme.css') : null;
-  if (theme) css += `
-/* .truemap/assets/theme.css */
-${readFileSync(theme, 'utf8')}`;
+  const css = kitCss(root);
   res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(css);
 }
@@ -325,6 +322,7 @@ const server = createServer(async (req, res) => {
         ...(answer ? { answer } : {}),
       };
       queue.push(msg);
+      endRequested = false; // a new message means the conversation goes on
       remember({ role: 'user', ...msg });
       deliverQueue();
       return sendJson(res, 200, { ok: true, id: msg.id, delivered: !queue.includes(msg) });
@@ -336,6 +334,20 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
     if (p === '/api/check' && req.method === 'POST') return sendJson(res, 200, runChecks());
+    if (p === '/api/export' && req.method === 'GET') {
+      const page = url.searchParams.get('page') || '';
+      let html;
+      try { html = exportPage(root, page); } catch (e) { return sendText(res, 404, String(e.message || e)); }
+      const name = page.split('/').pop().replace(/\.html?$/i, '') || 'page';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name.replace(/[^\w.-]/g, '_')}-truemap.html"` });
+      return res.end(html);
+    }
+    if (p === '/api/end' && req.method === 'POST') {
+      // The user is done talking on the page: free the agent to go back to the terminal.
+      if (listener) finishListen({ status: 'ended' }); else if (agentState === 'working' || agentState === 'listening') endRequested = true;
+      setAgentState('idle');
+      return sendJson(res, 200, { ok: true });
+    }
 
     // ----- agent (CLI) side -----
     if (p === '/api/agent/status' && req.method === 'GET') {
@@ -354,6 +366,7 @@ const server = createServer(async (req, res) => {
         if (listener && listener.res === res) { clearTimeout(listener.timer); listener = null; setAgentState('idle'); }
       });
       if (queue.length) return deliverQueue();
+      if (endRequested) { endRequested = false; finishListen({ status: 'ended' }); setAgentState('idle'); return; }
       setAgentState('listening');
       if (clients.size === 0) scheduleCloseCheck();
       return;
@@ -400,7 +413,7 @@ const content = createServer((req, res) => {
   const p = new URL(req.url, `http://127.0.0.1:${contentPort}`).pathname;
   try {
     if (p === '/__truemap/sdk.js') {
-      const js = readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
+      const js = readFileSync(join(UI_DIR, 'wires.js'), 'utf8') + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);
     }
