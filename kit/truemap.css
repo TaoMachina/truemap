@@ -103,11 +103,13 @@ hr { border: 0; border-top: 1px solid var(--tm-rule); margin: 40px 0; }
 
 /* ---------- the map (blueprint) ---------- */
 /* Rows are layers; boxes are real code. truemap draws the wires from data-to="id id". */
-.tm-map, .tm-blueprint { position: relative; margin: 28px 0 8px; }
-.tm-layer { position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; align-items: start; }
+/* A map never wraps or stacks: when it is wider than the page it scrolls sideways, wires and all. */
+.tm-map, .tm-blueprint { position: relative; margin: 28px 0 8px; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px; scrollbar-width: thin; }
+.tm-layer { position: relative; display: grid; grid-template-columns: var(--tm-label-w, 112px) max-content; gap: 20px; align-items: start; width: max-content; min-width: 100%; }
 .tm-layer + .tm-layer { margin-top: 44px; }
-.tm-layer-label { font-size: 13px; color: var(--tm-pencil); padding-top: 12px; line-height: 1.35; }
-.tm-layer-nodes { display: flex; flex-wrap: wrap; gap: 14px 18px; min-width: 0; }
+.tm-layer-label { position: sticky; left: 0; z-index: 2; align-self: stretch; font-size: 13px; color: var(--tm-pencil); padding-top: 12px; line-height: 1.35; background: var(--tm-paper); }
+.tm-layer-nodes { display: flex; flex-wrap: nowrap; gap: 18px 26px; }
+.tm-layer-nodes > .tm-node { flex: 0 0 var(--tm-node-w, 216px); max-width: none; }
 .tm-map > .tm-layer-nodes { margin-left: 132px; }
 
 .tm-node, .tm-step {
@@ -138,7 +140,7 @@ a.tm-node:hover, a.tm-step:hover { border-color: var(--tm-graphite); }
 .tm-node.is-risk, .tm-step.is-risk { border-color: var(--tm-changed); }
 
 /* Wires (drawn by truemap into svg.tm-wires) */
-.tm-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+.tm-wires { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; overflow: visible; z-index: 0; }
 .tm-wire { fill: none; stroke: var(--tm-rule-strong); stroke-width: 1.5; }
 .tm-wire.is-key { stroke: var(--tm-route); stroke-width: 2; }
 .tm-wire.is-ext { stroke-dasharray: 4 4; }
@@ -262,10 +264,9 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
   .tm-title { font-size: 28px; }
   .tm-lede { font-size: 17px; }
   .tm-section { margin-top: 48px; }
-  .tm-layer { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .tm-layer-label { padding-top: 0; }
-  .tm-map > .tm-layer-nodes, .tm-legend { margin-left: 0; }
-  .tm-wires, .tm-legend { display: none; }
+  .tm-map { --tm-label-w: 72px; --tm-node-w: 184px; }
+  .tm-layer { gap: 12px; }
+  .tm-legend { margin-left: 0; }
   .tm-node { flex: 1 1 100%; max-width: none; }
   .tm-grid-2, .tm-grid-3 { grid-template-columns: minmax(0, 1fr); }
   .tm-flow:not(.is-vertical) { flex-direction: column; gap: 26px; overflow: visible; }

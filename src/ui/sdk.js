@@ -15,7 +15,7 @@
   const T = {
     sent: 'Sent', changed: 'The code changed after this was written', broken: 'The code this points to is gone',
     placeholder: 'Comment or question', add: 'Add comment', save: 'Save', remove: 'Remove', cancel: 'Cancel',
-    hint: 'Ctrl+Enter sends now',
+    hint: /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘Enter sends now' : 'Ctrl+Enter sends now',
     suggest: [['Explain this', 'Explain how this works.'], ['What depends on it', 'What depends on this, and what does it depend on?'], ['Why this way', 'Why is it built this way? What are the trade-offs?']],
     comment: 'Comment',
   };
@@ -45,11 +45,15 @@
       map.querySelector(':scope > svg.tm-wires')?.remove();
       const sources = [...map.querySelectorAll('[data-to]')];
       if (!sources.length) continue;
+      // Coordinates live in the map's scroll space, so wires scroll with the boxes.
       const box = map.getBoundingClientRect();
+      const ox = box.left + map.clientLeft - map.scrollLeft; const oy = box.top + map.clientTop - map.scrollTop;
+      const w = map.scrollWidth; const h = map.scrollHeight;
       const svg = document.createElementNS(SVGNS, 'svg');
       svg.setAttribute('class', 'tm-wires'); svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
-      const rel = (r) => ({ l: r.left - box.left, r: r.right - box.left, t: r.top - box.top, b: r.bottom - box.top, cx: (r.left + r.right) / 2 - box.left, cy: (r.top + r.bottom) / 2 - box.top });
+      svg.setAttribute('width', w); svg.setAttribute('height', h);
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      const rel = (r) => ({ l: r.left - ox, r: r.right - ox, t: r.top - oy, b: r.bottom - oy, cx: (r.left + r.right) / 2 - ox, cy: (r.top + r.bottom) / 2 - oy });
       const fanOut = new Map();
       for (const src of sources) {
         const targets = src.getAttribute('data-to').split(/\s+/).filter(Boolean);
@@ -312,16 +316,22 @@
     hideSelectBtn(); mount();
     selectBtn = document.createElement('button');
     selectBtn.className = 'select-btn'; selectBtn.type = 'button'; selectBtn.textContent = T.comment;
-    selectBtn.style.left = `${rect.left}px`; selectBtn.style.top = `${rect.bottom + 8}px`;
+    selectBtn.style.left = `${rect.left}px`; selectBtn.style.top = `${Math.max(scrollY + 4, rect.top - 38)}px`;
     selectBtn.onmousedown = (e) => e.preventDefault();
     selectBtn.onclick = () => openCard({ text, rect });
     slot.appendChild(selectBtn);
   }
 
+  // What a click would comment on. Hover shows exactly this, so the outline never lies.
+  // Form controls keep working while annotating (decisions are answered, not annotated).
+  function annotTarget(t) {
+    if (!t || t.closest('input,select,textarea,button,label,summary,.tm-ask')) return null;
+    return t.closest('a.tm-node,a.tm-link') || pickTarget(t);
+  }
   document.addEventListener('mousemove', (e) => {
     if (!annotating || card) return;
     const t = e.target instanceof Element ? e.target : null;
-    setHover(t && !t.closest(INTERACTIVE + ',.tm-ask') ? pickTarget(t) : (t?.closest('a.tm-node,a.tm-link,.tm-node,.tm-link') || null));
+    setHover(annotTarget(t));
   }, { passive: true });
   document.addEventListener('mouseleave', () => setHover(null));
 
@@ -332,9 +342,7 @@
     if (card) { closeCard(); if (!annotating) return; }
     if (!annotating || !t) return;
     if (String(getSelection?.() || '').trim().length > 1) return;
-    // Form controls keep working while annotating (decisions are answered, not annotated).
-    if (t.closest('input,select,textarea,button,label,summary,.tm-ask')) return;
-    const el = t.closest('a.tm-node,a.tm-link') || pickTarget(t);
+    const el = annotTarget(t);
     if (!el) return;
     e.preventDefault(); e.stopPropagation();
     const existing = [...notes.values()].find((n) => n.el === el);
@@ -356,6 +364,7 @@
   document.addEventListener('keydown', (e) => {
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
+    if (e.key === 'Escape' && annotating) { post({ type: 'annotate-off' }); return; }
     if (!typing && !e.composedPath().includes(host) && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a') {
       post({ type: 'toggle-annotate' });
     }

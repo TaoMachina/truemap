@@ -347,7 +347,7 @@ const server = createServer(async (req, res) => {
       lastAgentActivity = Date.now();
       noteAgent(b.agent);
       const timeoutMs = Number(b.timeoutMs) > 0 ? Number(b.timeoutMs) : 0;
-      const timer = timeoutMs ? setTimeout(() => { finishListen({ status: 'timeout' }); setAgentState('offline'); }, timeoutMs) : null;
+      const timer = timeoutMs ? setTimeout(() => { finishListen({ status: 'timeout' }); setAgentState('idle'); }, timeoutMs) : null;
       listener = { res, timer };
       // The request body is already consumed, so watch the response: it closes when the CLI goes away.
       res.on('close', () => {

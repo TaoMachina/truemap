@@ -10,8 +10,8 @@
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
     state: {
-      listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} is not listening`,
-      offline: () => 'No agent connected', closed: () => 'Workspace closed',
+      listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} stopped listening`,
+      offline: () => 'No agent listening', closed: () => 'Workspace closed',
     },
   };
 
@@ -35,7 +35,12 @@
 
   // ---------- text helpers ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const timeOf = (iso) => { try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+  const timeOf = (iso) => {
+    try {
+      const d = new Date(iso); const t = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${t}`;
+    } catch { return ''; }
+  };
   function inline(s) {
     return s
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -76,8 +81,16 @@
     b.setAttribute('aria-pressed', String(open));
     b.title = open ? 'Hide conversation' : 'Show conversation';
     b.setAttribute('aria-label', b.title);
-    if (open) $('unread').hidden = true;
+    if (open) state.unread = false;
+    renderBadge();
     if (remember && !narrow()) store.set('truemap.panel', open ? 'open' : 'closed');
+  }
+  // While the panel is closed its button carries what is waiting there: pending comments, or a new answer.
+  function renderBadge() {
+    const u = $('unread'); const open = panelOpen(); const n = state.notes?.length || 0;
+    u.hidden = open || (!n && !state.unread);
+    u.textContent = !open && n ? String(n) : '';
+    u.classList.toggle('count', !open && n > 0);
   }
   setPanel(narrow() ? false : store.get('truemap.panel') !== 'closed', false);
   $('togglePanel').onclick = () => { const open = !panelOpen(); setPanel(open); if (open) input.focus(); };
@@ -125,6 +138,7 @@
     const typing = e.target.closest?.('input,textarea,select,[contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); menu.hidden ? openMenu() : closeMenu(); }
     else if (e.key === 'Escape' && !menu.hidden) { closeMenu(); $('pageBtn').focus(); }
+    else if (e.key === 'Escape' && !typing && state.annotate) setAnnotate(false, { touched: true });
     else if (!menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       const items = [...menu.querySelectorAll('.page-item')]; if (!items.length) return;
       e.preventDefault();
@@ -166,7 +180,7 @@
     state.page = page;
     history.replaceState(null, '', `${location.pathname}${location.search}#page=${encodeURIComponent(page)}`);
     api('/api/viewing', { page });
-    renderHeader(); renderNotice();
+    renderHeader(); renderNotice(); renderNotes();
   }
   function showEmpty() {
     state.page = null; frame.hidden = true; frame.removeAttribute('src'); $('empty').hidden = false; renderHeader(); renderNotice();
@@ -176,7 +190,11 @@
   // ---------- notes (comments collected in annotate mode) ----------
   const notesForPage = () => state.notes.filter((n) => n.page === state.page);
   function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector }) => ({ id, kind, label, src, text, selector })) }); }
+  // Unsent comments survive a reload of this tab.
+  try { state.notes = JSON.parse(sessionStorage.getItem('truemap.notes') || '[]'); } catch { state.notes = []; }
+  function saveNotes() { try { sessionStorage.setItem('truemap.notes', JSON.stringify(state.notes)); } catch { /* ignore */ } }
   function renderNotes() {
+    saveNotes(); renderBadge();
     const list = $('notes'); list.innerHTML = '';
     list.hidden = state.notes.length === 0;
     state.notes.forEach((n, i) => {
@@ -210,14 +228,14 @@
     renderWorking();
     scrollChat();
   }
-  function appendEntry(e, scroll = true) {
+  function appendEntry(e, scroll = true, live = false) {
     msgsEl.querySelector('.intro')?.remove();
     if (e.role !== lastRole) { msgsEl.appendChild(whoLine(e.role, e.at, e.agent)); lastRole = e.role; }
     const el = document.createElement('div');
     if (e.role === 'agent') {
       el.className = 'msg agent';
       el.innerHTML = md(e.text);
-      if (!panelOpen()) $('unread').hidden = false;
+      if (live && !panelOpen()) { state.unread = true; renderBadge(); }
     } else {
       el.className = 'msg user'; el.dataset.id = e.id;
       let body = '';
@@ -271,7 +289,11 @@
     clearInterval(tick);
     const el = $('elapsed');
     if (s === 'working' && state.agent.since) {
-      const upd = () => { el.textContent = fmtElapsed(Date.now() - state.agent.since); };
+      let stale = isStale();
+      const upd = () => {
+        el.textContent = fmtElapsed(Date.now() - state.agent.since);
+        if (isStale() !== stale) { stale = !stale; renderNotice(); }
+      };
       upd(); el.hidden = false; tick = setInterval(upd, 1000);
     } else el.hidden = true;
     renderWorking(); renderNotice();
@@ -280,13 +302,17 @@
     const n = $('notice');
     const s = state.conn === 'closed' ? 'closed' : state.agent.state;
     const page = state.page && state.page !== 'index.html' ? ` ${state.page}` : '';
+    // One pattern for every state that needs the user: what is true, what to do, the command to give the agent.
+    const listen = cmdBox(`${state.cmd} listen`);
     let html = '';
     if (s === 'closed') {
-      html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen, ask your agent to run:${cmdBox(state.cmd + page)}`;
+      html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen this page, ask your agent to run:${cmdBox(state.cmd + page)}`;
     } else if (s === 'offline') {
-      html = `<b>No agent is connected</b>Messages wait here until one listens. In your terminal, ask your agent to open this page:${cmdBox(state.cmd + page)}`;
+      html = `<b>No agent is listening</b>Messages you send wait here. In your agent’s terminal session, ask it to run:${listen}`;
     } else if (s === 'idle') {
-      html = `<b>${esc(agentName())} went back to the terminal</b>Messages you send now wait here. To pick them up, tell your agent in the terminal to listen to truemap again.`;
+      html = `<b>${esc(agentName())} stopped listening</b>Messages you send wait here. To continue, ask it in the terminal to run:${listen}`;
+    } else if (s === 'working' && isStale()) {
+      html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped or be waiting for you in the terminal. Check there, or ask it to run:${listen}`;
     }
     n.innerHTML = html; n.hidden = !html;
     n.querySelector('.copy')?.addEventListener('click', (e) => {
@@ -294,6 +320,9 @@
       navigator.clipboard?.writeText(text).then(() => { e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy'; }, 1400); }).catch(() => {});
     });
   }
+  const STALE_MS = 3 * 60 * 1000;
+  const isStale = () => state.agent.state === 'working' && state.conn === 'live'
+    && Date.now() - Math.max(state.agent.since || 0, state.lastAgentEvent || 0) > STALE_MS;
   const cmdBox = (cmd) => `<div class="cmd"><code>${esc(cmd)}</code><button class="copy" type="button">Copy</button></div>`;
   function setAgent(a) {
     if (!a) return;
@@ -364,6 +393,8 @@
       state.notes = state.notes.filter((x) => x.id !== d.id); renderNotes(); syncFrameNotes();
     } else if (d.type === 'toggle-annotate') {
       setAnnotate(!state.annotate, { touched: true });
+    } else if (d.type === 'annotate-off') {
+      setAnnotate(false, { touched: true });
     } else if (d.type === 'answer') {
       const fromUser = d.trusted === true && userIsInFrame();
       send('', {
@@ -409,13 +440,14 @@
         const target = [state.page, fromHash, d.current].find((p) => p && state.pages.some((x) => x.page === p)) || state.pages[0]?.page;
         target ? go(target, { force: !frame.getAttribute('src') }) : showEmpty();
       } else if (d.type === 'chat') {
-        state.history.push(d.entry); appendEntry(d.entry);
+        state.history.push(d.entry); appendEntry(d.entry, true, true);
+        if (d.entry.role === 'agent') state.lastAgentEvent = Date.now();
       } else if (d.type === 'agent') {
         setAgent(d.agent);
       } else if (d.type === 'delivered') {
         for (const id of d.ids || []) { state.pending.delete(id); markPending(id, false); }
       } else if (d.type === 'progress') {
-        state.progress = d.text || ''; renderWorking(); scrollChat();
+        state.progress = d.text || ''; state.lastAgentEvent = Date.now(); renderWorking(); renderNotice(); scrollChat();
       } else if (d.type === 'pages') {
         state.pages = d.pages || []; renderHeader(); if (!menu.hidden) renderMenu();
         if (!state.page && state.pages[0]) go(state.pages[0].page);

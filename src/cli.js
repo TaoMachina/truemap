@@ -132,9 +132,9 @@ function agentLoopHint() {
     return `Run \`${CMD} listen\` with run_in_background so the user can chat from the page while your terminal stays free. When it returns, answer, then run \`${CMD} reply "<answer>" --listen\` (again with run_in_background).`;
   }
   if (agent === 'codex') {
-    return `Run \`${CMD} listen\` in the foreground and wait; it returns when the user sends a message from the page. Answer with \`${CMD} reply "<answer>" --listen\` to keep the conversation going.`;
+    return `Run \`${CMD} listen --timeout 540\` in the foreground (it stays under shell time limits). It returns when the user sends a message, or with status: timeout, in which case run it again. Answer with \`${CMD} reply "<answer>" --listen --timeout 540\` to keep the conversation going.`;
   }
-  return `Run \`${CMD} listen\` to wait for the user's message from the page (in Claude Code use run_in_background; in Codex keep it in the foreground). Answer with \`${CMD} reply "<answer>" --listen\`.`;
+  return `Run \`${CMD} listen\` to wait for the user's message from the page (in Claude Code use run_in_background; in Codex run \`listen --timeout 540\` in the foreground and repeat on timeout). Answer with \`${CMD} reply "<answer>" --listen\`.`;
 }
 
 function printCheck(result, indent = '') {

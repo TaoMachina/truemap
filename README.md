@@ -1,10 +1,12 @@
+<img src="docs/images/mark.svg" width="44" height="44" alt="">
+
 # truemap
 
 **A map of your codebase that your agent draws, and that stays true to the code.**
 
 Your coding agent explains the project as HTML pages in your repo: a blueprint of the whole system, a page per module, the options when it needs your call. You read them in the browser, click any box to comment on it, and the agent answers right next to the page. Every box is pinned to real code, so when the code moves on, the map tells you.
 
-![The truemap workspace: a project blueprint with wires, two comments pinned to boxes, and the agent's answer in the conversation panel](docs/images/workspace.png)
+![The truemap workspace: a project blueprint with wires, a comment pinned to a box, and the agent's answer in the conversation panel](docs/images/workspace.png)
 
 ## Why
 
@@ -57,6 +59,7 @@ Everything runs on your machine:
 
 - The server listens on `127.0.0.1` only and needs a per-launch token.
 - Pages render in a sandboxed frame on a separate origin, so page scripts can't reach the agent.
+- Nothing leaves your machine. truemap keeps a local log of which commands ran (`~/.truemap/usage.jsonl`) and the chat history per repo (`~/.truemap/history/`); delete them any time.
 
 ## Requirements
 

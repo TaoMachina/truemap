@@ -109,6 +109,7 @@ code { font-family: var(--code); font-size: 0.9em; }
 .icon-btn .panel-fill { fill: currentColor; stroke: none; opacity: 0; }
 .icon-btn[aria-pressed="true"] .panel-fill { opacity: .28; }
 .unread { position: absolute; top: 6px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--route); box-shadow: 0 0 0 2px var(--chrome); }
+.unread.count { top: 2px; right: 0; width: auto; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--action); color: #fff; font: 600 10px/16px var(--code); text-align: center; }
 
 /* ---------- stage ---------- */
 .stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); }
@@ -196,7 +197,8 @@ code { font-family: var(--code); font-size: 0.9em; }
 /* ---------- small screens: the conversation becomes a bottom sheet ---------- */
 @media (max-width: 860px) {
   .app, .app.panel-closed { grid-template-columns: minmax(0, 1fr); }
-  .path, .slash, .wordmark, .annotate > span:first-child, #checkText { display: none; }
+  .path, .slash, .wordmark, #checkText { display: none; }
+  .bar { gap: 4px; padding: 0 6px 0 12px; }
   .panel { position: fixed; left: 0; right: 0; bottom: 0; height: min(70vh, 560px); z-index: 30; border-left: 0; border-top: 1px solid var(--rule-strong); border-radius: 14px 14px 0 0; box-shadow: 0 -18px 40px -24px rgba(23, 32, 43, .45); }
   .menu { width: min(340px, calc(100vw - 24px)); }
 }

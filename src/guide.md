@@ -45,7 +45,8 @@ Pages are working documents for engineers, read next to the code. They are not l
 - No gradients, shadows, glows, background patterns or animation. Don't add any.
 - Colors come only from the kit tokens. Status colors mean status, never decoration.
 - Monospace only for real code: paths, symbols, commands.
-- Boxes: 2-4 word titles taken from the code, one path line, at most one short sentence. More than ~12 boxes:
+- Boxes: 2-4 word titles taken from the code, one path line, at most one short sentence. At most 4 boxes per
+  layer; wire only neighbouring layers or side-by-side boxes. More than ~12 boxes:
   split it – overview here, detail on the module's own page.
 
 WRITING RULES
@@ -133,7 +134,8 @@ COMMENTS (annotate mode)
 CHAT LOOP
 - Claude Code: run `{{CMD}} listen` with run_in_background; when it returns, answer and run
   `{{CMD}} reply "<answer>" --listen` (run_in_background again).
-- Codex: run `{{CMD}} listen` in the foreground; reply with `{{CMD}} reply "<answer>" --listen`.
+- Codex: run `{{CMD}} listen --timeout 540` in the foreground; on `status: timeout` run it again.
+  Reply with `{{CMD}} reply "<answer>" --listen --timeout 540`.
 - Long replies: `{{CMD}} reply --file answer.md --listen` (Markdown: paragraphs, - lists, **bold**, `code`,
   [page links](payments.html)). Same writing rules as pages: short, plain, concrete.
 - While doing longer work post `{{CMD}} progress "Reading src/pay…"` so the user sees what is happening.
