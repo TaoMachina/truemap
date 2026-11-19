@@ -160,7 +160,7 @@
   function openBox(box) {
     select(box);
     const existing = [...notes.values()].find((n) => n.el === box);
-    openCard({ target: box, noteId: existing?.id || null });
+    openCard({ target: box, noteId: existing?.id || null, view: !existing });
     post({ type: 'peek-if-open', page: pagePath(), box: boxInfo(box) });
   }
   function peek(el) {
@@ -287,9 +287,14 @@
   shadow.innerHTML = `<style>
     :host { all: initial; }
     * { box-sizing: border-box; }
-    .card { position: absolute; width: 360px; background: #fff; color: #141413; border: 1px solid #d2d2cb; border-radius: 10px;
+    .card { position: absolute; z-index: 10; width: 360px; background: #fff; color: #141413; border: 1px solid #d2d2cb; border-radius: 10px;
       box-shadow: 0 12px 32px -12px rgba(20,20,19,.28); font: 14px/1.45 "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; padding: 12px; }
     .what { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0 2px 6px; }
+    .card.viewing { width: 320px; }
+    .card.viewing textarea, .card.viewing .suggest, .card.viewing [data-act="add"], .card.viewing [data-act="cancel"], .card.viewing .hint { display: none; }
+    .card:not(.viewing) [data-act="comment"] { display: none; }
+    .card.viewing .foot { justify-content: flex-start; margin-top: 4px; }
+    .card.viewing .sum { margin-bottom: 6px; }
     .sum { margin: 0 2px 10px; font-size: 13px; line-height: 1.45; color: #4a4a45; }
     .sum .flag { margin-top: 4px; font-size: 12px; color: #a35f00; }
     @media (prefers-color-scheme: dark) { .sum { color: #c4c4bd; } .sum .flag { color: #e0a548; } }
@@ -406,7 +411,7 @@
   }
   function docRect(r) { return { left: r.left + scrollX, top: r.top + scrollY, right: r.right + scrollX, bottom: r.bottom + scrollY, width: r.width, height: r.height }; }
 
-  function openCard({ target = null, text = null, rect, noteId = null, planComment = false }) {
+  function openCard({ target = null, text = null, rect, noteId = null, planComment = false, view = false }) {
     closeCard(); hideSelectBtn(); mount(); setHover(null);
     const existing = noteId ? notes.get(noteId) : null;
     const sel = getSelection();
@@ -414,10 +419,10 @@
     const label = existing?.label || (target ? clean(target.getAttribute('data-name'), 60) || labelOf(target) : clean(text, 60));
     const src = existing?.src ?? (target ? target.closest('[data-src]')?.getAttribute('data-src') || '' : (text && rangeSrc()) || '');
     const el = document.createElement('div');
-    el.className = 'card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Comment');
+    el.className = view ? 'card viewing' : 'card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', view ? 'About this box' : 'Comment');
     el.innerHTML = `<div class="what"><b></b><code></code></div><div class="sum"></div><textarea rows="3"></textarea>
       <div class="suggest"></div>
-      <div class="foot">${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${planComment ? 'Send' : existing ? T.save : T.add}</button></div>`;
+      <div class="foot">${view ? '<button class="btn primary" data-act="comment" type="button">Comment</button>' : ''}${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${planComment ? 'Send' : existing ? T.save : T.add}</button></div>`;
     el.querySelector('b').textContent = text ? `“${label}”` : label;
     el.querySelector('code').textContent = target?.getAttribute('data-tag') || src;
     // what it is, in a line or two; what a plan or a change says about it
@@ -474,6 +479,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'add') finish(planComment);
       else if (act === 'details') peek(target);
+      else if (act === 'comment') { el.classList.remove('viewing'); el.setAttribute('aria-label', 'Comment'); ta.focus({ preventScroll: true }); }
       else if (act === 'cancel') closeCard();
       else if (act === 'remove') { removeNote(noteId, true); closeCard(); }
     });
@@ -481,7 +487,8 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCard(); }
       else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); finish(e.ctrlKey || e.metaKey); }
     });
-    setTimeout(() => ta.focus({ preventScroll: true }), 0);
+    if (!view) setTimeout(() => ta.focus({ preventScroll: true }), 0);
+    else el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); closeCard(); } });
   }
 
   function rangeSrc() {
