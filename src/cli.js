@@ -470,11 +470,12 @@ function cmdDraft(root, args, opts) {
   <header class="tm-header">
     <nav class="tm-crumb">${hasMap ? '<a href="../index.html">Map</a> / ' : ''}Draft ${n}</nav>
     <h1 class="tm-title">${esc(title)}</h1>
-    <p class="tm-lede">One or two sentences: what this draft explains or proposes.</p>
+    <p class="tm-lede">One sentence: what this shows.</p>
   </header>
+  <!-- Show it in the form that makes it obvious: a real example traced step by step, a drawing, a timeline,
+       options side by side, something to try, or the map component. Any HTML, inline SVG, <style>, <script>;
+       colours through var(--tm-…). Words only as captions. -->
   <section class="tm-section">
-    <h2>…</h2>
-    <p>…</p>
   </section>
 </main></body>
 </html>
@@ -482,7 +483,7 @@ function cmdDraft(root, args, opts) {
   out('status: draft_created');
   out(`draft: ${q(file)}   # .truemap/${file}`);
   block('next_step', [
-    `Write the draft: replace the placeholder sections in .truemap/${file}. Free form: any mix of short text, a <figure class="tm-diagram"> (data-plan="new" draws a proposed box dashed), steps, a comparison table, a small interactive bit, or an <iframe> of the running dev server.${hasMap ? ' Link boxes on the map as <a href="../index.html#runs">Runs</a>.' : ' No map is needed for this.'}`,
+    `Write the draft in .truemap/${file}. Show it, don't write it: ask what would make this obvious at a glance and build that, in any form (a real input traced to its output, a drawing, a timeline, options side by side, something to try, the map component). No fixed sections; words only as captions. See \`${CMD} guide\`, DRAFTS.${hasMap ? ' Link boxes on the map as <a href="../index.html#runs">Runs</a>.' : ''}`,
     `Then show it: \`${CMD} ${file}\` (the user's tab switches to it and it is added to their drafts), and answer in one or two lines with \`${CMD} reply "…" --listen\` pointing to it.`,
   ].join('\n'));
 }

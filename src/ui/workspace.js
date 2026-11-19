@@ -151,6 +151,20 @@
   });
   $('recheck').onclick = () => { api('/api/check'); closeMenu(); };
 
+  // ---------- browser translation ----------
+  // Chrome's page translation translates text it sees appear. A menu written in the HTML and shown later only
+  // changes its hidden attribute, so it would stay untranslated: give its text to the translator again.
+  const translating = () => /\btranslated-(ltr|rtl)\b/.test(document.documentElement.className);
+  new MutationObserver((ms) => {
+    if (!translating()) return;
+    for (const m of ms) {
+      if (m.target.hidden) continue;
+      const walk = document.createTreeWalker(m.target, NodeFilter.SHOW_TEXT); const nodes = [];
+      while (walk.nextNode()) if (walk.currentNode.nodeValue.trim() && !walk.currentNode.parentElement.closest('code, [translate="no"]')) nodes.push(walk.currentNode);
+      for (const n of nodes) n.replaceWith(document.createTextNode(n.nodeValue));
+    }
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+
   // ---------- more menu: the page file, export, end the conversation ----------
   const more = $('moreMenu');
   const filePath = () => {

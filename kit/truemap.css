@@ -179,7 +179,7 @@ html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: 0; }
 .tm-badge.is-bad { background: var(--tm-broken-wash); color: var(--tm-broken); }
 
 code, kbd, samp { font-family: var(--tm-code); font-size: 0.88em; }
-:not(pre) > code { background: var(--tm-wash); color: var(--tm-ink); padding: 1px 5px; border-radius: 4px; }
+:not(pre) > code { background: var(--tm-wash); color: var(--tm-ink); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
 pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background: var(--tm-sheet); color: var(--tm-text); border: 1px solid var(--tm-rule); border-radius: var(--tm-radius); padding: 14px 16px; overflow-x: auto; margin: 18px 0; max-width: 100%; }
 .tm-path { font-family: var(--tm-code); font-size: 12.5px; color: var(--tm-graphite); }
 

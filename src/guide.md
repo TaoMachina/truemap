@@ -19,7 +19,8 @@ FOLDER RULES
   (payments.html, auth-flow.html). index.html is the blueprint; link module pages from it and back.
 - Write pages in the user's language.
 - Link the kit and nothing else: <link rel="stylesheet" href="assets/truemap.css"> (from a subfolder
-  ../assets/truemap.css). No frameworks, no CDNs, no web fonts, no build step, no inline colours.
+  ../assets/truemap.css). No frameworks, no CDNs, no web fonts, no build step. Colours only through the kit's
+  tokens (var(--tm-ink), var(--tm-accent), …) so the user's light, dark and theme apply.
   The components are fixed; colours and fonts belong to the user (see THE USER'S LOOK).
 
 ANCHORS (this is what keeps pages true)
@@ -156,18 +157,28 @@ THE USER'S LOOK (colours and fonts)
   user which colour and let them decide.
 
 DRAFTS (the everyday way to explain)
-- When the user asks how something works, says they don't understand, or you have an idea or a design to show,
-  draw a draft instead of a long chat answer:
+- When the user asks you to explain something, make a draft and open it:
     {{CMD}} draft "how a message is routed"      creates .truemap/drafts/NNN-how-a-message-is-routed.html
   Write it, then `{{CMD}} drafts/NNN-….html`: the user's tab switches to it at once and it joins their numbered
   drafts (the record of what you explained). Keep the chat reply to one or two lines pointing to it.
-- A draft is free form, a whole scrolling page if needed: short text, a <figure class="tm-diagram"> (data-plan="new"
-  draws a proposed box dashed), numbered steps, a comparison table, a decision with its trade-offs, a small
-  interactive bit, even an <iframe> of the running dev server. Pick what makes this one thing clear.
+- Show it, don't write it. First ask: what would make this obvious at a glance? Then build exactly that, in any
+  form HTML can take. The form follows the thing, for example:
+    a function          one real input traced to its output, with the actual values at each step
+    a data structure    drawn (inline SVG or plain HTML boxes) with a real example in it
+    something over time a timeline or sequence: one lane per actor, what happens when
+    a choice            the options side by side, what each one costs
+    a bug               what happens next to what should, at the point where they split
+    logic with knobs    something to try: an input or a step button running the same logic
+    architecture        the map component, <figure class="tm-diagram">
+  Nothing is required: no fixed sections, no diagram for its own sake. If a picture would not help, the code
+  itself with a few notes beside it can be the whole draft.
+- Words are captions and the one line of "why". A draft that is mostly paragraphs should be a picture or a chat
+  answer instead.
+- Any HTML, inline <svg>, <style> and <script> are fine. Colours through the kit's tokens (var(--tm-ink),
+  var(--tm-graphite), var(--tm-accent), var(--tm-wash), var(--tm-mark), …); nothing loaded from the network.
 - Link boxes on the map from a draft as <a href="../index.html#runs">Runs</a>: the map opens with that box lit.
 - Drafts are kept; don't delete them. A draft worth keeping for good can move to .truemap/ as a page.
-- A request to explain gets a draft, even for a single point: one function can be a short page with its inputs,
-  what it does step by step, and its edge cases. Short factual questions still get a short chat answer.
+- Short factual questions (which file, which flag, yes or no) still get a short chat answer.
 
 POINTING AT THE MAP
 - While you explain, light up what you are talking about:

@@ -16,7 +16,7 @@ Current instructions live in the CLI – this file stays short so it never goes 
 - `npx -y truemap-cli guide` – how to write maps, plans and anchors
 
 Flow:
-- Explaining something, big or small (how X works, "explain this function", "I don't get this", an idea): `npx -y truemap-cli draft "<name>"`, write the page, open it with `npx -y truemap-cli drafts/<file>`; keep the chat answer to a line or two. No map is needed first, and don't build one unless asked.
+- Explaining something, big or small (how X works, "explain this function", "I don't get this", an idea): `npx -y truemap-cli draft "<name>"`, show it in the form that makes it obvious (a traced example, a drawing, a timeline, a side-by-side, something to try; not necessarily a diagram, never a wall of text), open it with `npx -y truemap-cli drafts/<file>`; keep the chat answer to a line or two. No map is needed first, and don't build one unless asked.
 - The project map: `.truemap/index.html`; update it when the structure changes, run `npx -y truemap-cli <page>`, then follow the `next_step` it prints.
 - Before a larger change: `npx -y truemap-cli plan --file plan.json`, wait for the approval.
 - After editing code: `npx -y truemap-cli changes`.
