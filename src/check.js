@@ -223,7 +223,23 @@ export function checkPage(ctx, page) {
   });
   const counts = { ok: 0, changed: 0, broken: 0 };
   for (const a of anchors) counts[a.state]++;
-  return { page, anchors, counts, wires: checkWires(html) };
+  return { page, anchors, counts, wires: checkWires(html), layout: checkLayout(html) };
+}
+
+/** Maps that are too big to read at a glance (the guide: at most 12 boxes per map, 4 per layer). */
+export function checkLayout(html) {
+  const notes = [];
+  const NODE = /class=["'][^"']*\btm-node(?![-\w])/g;
+  const maps = html.split(/class=["'][^"']*\btm-(?:map|blueprint)(?![-\w])/).slice(1);
+  maps.forEach((body, i) => {
+    const total = (body.match(NODE) || []).length;
+    if (total > 12) notes.push(`map ${i + 1} has ${total} boxes; 12 or fewer reads at a glance, split the rest into a module page`);
+    body.split(/class=["'][^"']*\btm-layer(?![-\w])/).slice(1).forEach((layer, j) => {
+      const n = (layer.match(NODE) || []).length;
+      if (n > 4) notes.push(`map ${i + 1}, layer ${j + 1} has ${n} boxes; keep it to 4`);
+    });
+  });
+  return notes;
 }
 
 /** Map wires whose data-to names an id that is not on the page (they would silently not be drawn). */

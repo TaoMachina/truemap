@@ -113,11 +113,12 @@ hr { border: 0; border-top: 1px solid var(--tm-rule); margin: 40px 0; }
 /* --tm-vw is the usable window width (without the scrollbar), set by truemap. */
 html[style*="--tm-vw"] .tm-map, html[style*="--tm-vw"] .tm-blueprint { width: calc(var(--tm-vw) - max(48px, (var(--tm-vw) - 960px) / 2 + 48px) - 16px); min-width: 100%; }
 .tm-map.tm-scrolls { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
-.tm-layer { position: relative; display: grid; grid-template-columns: var(--tm-label-w, 112px) max-content; gap: 20px; align-items: start; width: max-content; min-width: 100%; }
+.tm-layer { position: relative; display: grid; grid-template-columns: var(--tm-label-w, 112px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .tm-layer + .tm-layer { margin-top: 44px; }
 .tm-layer-label { font-size: 13px; color: var(--tm-pencil); padding-top: 12px; line-height: 1.35; }
 .tm-layer-nodes { display: flex; flex-wrap: nowrap; gap: 18px 26px; }
-.tm-layer-nodes > .tm-node { flex: 0 0 var(--tm-node-w, 216px); max-width: none; }
+/* Boxes shrink to 168px before the map has to scroll. */
+.tm-layer-nodes > .tm-node { flex: 0 1 var(--tm-node-w, 216px); min-width: var(--tm-node-min, 168px); max-width: none; }
 .tm-map > .tm-layer-nodes { margin-left: 132px; }
 
 .tm-node, .tm-step {

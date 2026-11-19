@@ -46,6 +46,7 @@ We own three distribution points:
 | `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
 | `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-]` | Shows the answer in the chat. With `--listen` it keeps listening in the same call |
 | `npx -y truemap-cli check [page…]` / `check --ok <page>` | Checks anchors / marks a page as reviewed |
+| `npx -y truemap-cli export <page> [--out f]` | Writes the page as one self-contained HTML file (kit, fonts, images and wires inlined) |
 | `npx -y truemap-cli guide` | The page-writing guide: folder rules, anchors, kit components, decision forms |
 | `npx -y truemap-cli progress "<text>"` | Shows a short status line in the chat while the agent works |
 | `npx -y truemap-cli stop` | Stops the background server |
@@ -79,6 +80,8 @@ CLI (src/cli.js) ← run by the agent
 | `src/server.js` | Two HTTP listeners: workspace + API (token-protected), and content (pages only, SDK injected) |
 | `src/check.js` | Anchor checker; also lists pages |
 | `src/outline.js` | Repo outline for `truemap outline` |
+| `src/export.js` | One-file export; also builds the served kit CSS |
+| `src/ui/wires.js` | Map wire router: one track per wire in each gap, routes round boxes, gaps grow to fit. Shared by the SDK and exports |
 | `src/ui/workspace.*` | Workspace UI: zero dependencies, no build step |
 | `src/ui/sdk.js` | Injected into served pages only (never written to files). Draws map wires, runs annotate mode and the comment card, decision forms and check marks |
 | `kit/truemap.css`, `kit/fonts/` | The page kit and IBM Plex fonts, served to every page as `assets/truemap.css`, so repos always get the current kit. A repo that keeps its own `assets/truemap.css` (older setups) keeps it |

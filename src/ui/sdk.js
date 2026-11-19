@@ -27,10 +27,8 @@
     [data-tm-mark="broken"] { outline: 2px dashed var(--tm-broken, #b03a2e) !important; outline-offset: 3px; }
     svg [data-tm-mark] { outline: none !important; }
     html[data-tm-annotate] body { cursor: default; }
-    html[data-tm-annotate] [data-tm-hover] { outline: 1.5px solid var(--tm-route, #2453c4) !important; outline-offset: 3px; cursor: pointer; }
+    html[data-tm-annotate] [data-tm-hover] { cursor: pointer; }
     html[data-tm-annotate] a, html[data-tm-annotate] label { cursor: pointer; }
-    [data-tm-noted] { outline: 1.5px solid color-mix(in oklab, var(--tm-route, #2453c4) 55%, transparent); outline-offset: 3px; }
-    [data-tm-active] { outline: 2px solid var(--tm-route, #2453c4) !important; outline-offset: 3px; }
     @keyframes tm-flash { 0%,100% { outline-color: transparent } 35% { outline-color: var(--tm-route, #2453c4) } }
     [data-tm-flash] { outline: 2px solid var(--tm-route, #2453c4) !important; outline-offset: 4px; animation: tm-flash 1.1s ease 2; }
     @media (prefers-reduced-motion: reduce) { [data-tm-flash] { animation: none; } }
@@ -70,15 +68,47 @@
     }
     return parts.join(' > ');
   }
+  let rings = null;
   function setHover(el) {
     if (hovered === el) return;
     hovered?.removeAttribute('data-tm-hover');
     hovered = el; el?.setAttribute('data-tm-hover', '');
+    paintRings();
+  }
+
+  // Highlights are drawn in the top layer, never as CSS outlines, so a scrolling or clipped container
+  // can't cut them off. A ring covers the element and everything inside it (a badge that sticks out too).
+  function extentOf(el) {
+    const r0 = el.getBoundingClientRect();
+    let l = r0.left; let t = r0.top; let r = r0.right; let b = r0.bottom;
+    const kids = el.querySelectorAll('*');
+    for (let i = 0; i < kids.length && i < 400; i++) {
+      const k = kids[i].getBoundingClientRect();
+      if (!k.width || !k.height) continue;
+      l = Math.min(l, k.left); t = Math.min(t, k.top); r = Math.max(r, k.right); b = Math.max(b, k.bottom);
+    }
+    return { left: l + scrollX - 4, top: t + scrollY - 4, width: r - l + 8, height: b - t + 8 };
+  }
+  function paintRings() {
+    if (!rings) return;
+    rings.innerHTML = '';
+    const ring = (el, cls) => {
+      if (!el?.isConnected) return;
+      mount();
+      const x = extentOf(el); const d = document.createElement('div');
+      d.className = `ring ${cls}`;
+      Object.assign(d.style, { left: `${x.left}px`, top: `${x.top}px`, width: `${x.width}px`, height: `${x.height}px` });
+      rings.appendChild(d);
+    };
+    for (const n of notes.values()) if (n.el && n.el !== card?.target) ring(n.el, 'noted');
+    if (card?.target) ring(card.target, 'active');
+    else if (annotating && hovered) ring(hovered, 'hover');
   }
   function setAnnotate(on) {
     annotating = !!on;
     document.documentElement.toggleAttribute('data-tm-annotate', annotating);
     if (!annotating) { setHover(null); }
+    paintRings();
   }
 
   // Shadow layer for the comment card, pins and the selection button: page CSS can't touch it.
@@ -107,6 +137,9 @@
     .btn.primary:hover { background: #1b3f96; }
     .btn.danger { color: #b03a2e; }
     .btn:focus-visible { outline: 2px solid #2453c4; outline-offset: 2px; }
+    .ring { position: absolute; border: 1.5px solid #2453c4; border-radius: 8px; pointer-events: none; }
+    .ring.active { border-width: 2px; }
+    .ring.noted { border-color: rgba(36, 83, 196, .5); }
     .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #2453c4; color: #fff;
       font: 600 11px/20px "IBM Plex Mono", ui-monospace, Consolas, monospace; text-align: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(23,32,43,.25); }
     .select-btn { position: absolute; all: unset; position: absolute; cursor: pointer; background: #17202b; color: #fff; font: 500 12.5px/1 "IBM Plex Sans", system-ui, sans-serif; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px -8px rgba(23,32,43,.5); }
@@ -120,9 +153,10 @@
       .btn.primary { background: #2453c4; color: #fff; }
       .pin { border-color: #121519; }
     }
-  </style><div id="pins"></div><div id="slot"></div>`;
+  </style><div id="rings"></div><div id="pins"></div><div id="slot"></div>`;
   const pinsEl = shadow.getElementById('pins');
   const slot = shadow.getElementById('slot');
+  rings = shadow.getElementById('rings');
   const mount = () => { if (!host.isConnected) document.body.appendChild(host); };
 
   let card = null; // { el, target, textRange, noteId }
@@ -137,7 +171,7 @@
     if (!card) return;
     card.target?.removeAttribute('data-tm-active');
     card.el.remove(); card = null;
-    paintHighlights();
+    paintHighlights(); paintRings();
   }
   function docRect(r) { return { left: r.left + scrollX, top: r.top + scrollY, right: r.right + scrollX, bottom: r.bottom + scrollY, width: r.width, height: r.height }; }
 
@@ -174,7 +208,7 @@
     el.style.left = `${left}px`; el.style.top = `${top}px`;
     target?.setAttribute('data-tm-active', '');
     card = { el, target, text, noteId, label, src, rect: r, range };
-    paintHighlights();
+    paintHighlights(); paintRings();
     const finish = (sendNow) => {
       const value = ta.value.trim();
       if (!value) { ta.focus(); return; }
@@ -219,6 +253,7 @@
     paintHighlights();
     pinsEl.innerHTML = '';
     for (const el of document.querySelectorAll('[data-tm-noted]')) el.removeAttribute('data-tm-noted');
+    paintRings();
     if (!notes.size) return;
     mount();
     let i = 0;
@@ -226,7 +261,7 @@
       i++;
       let r = null;
       if (n.el && !n.el.isConnected && n.selector) { try { n.el = document.querySelector(n.selector); } catch { n.el = null; } }
-      if (n.el?.isConnected) { r = docRect(n.el.getBoundingClientRect()); n.el.setAttribute('data-tm-noted', ''); }
+      if (n.el?.isConnected) { const x = extentOf(n.el); r = { left: x.left + 4, top: x.top + 4 }; n.el.setAttribute('data-tm-noted', ''); }
       else if (n.rect) r = n.rect;
       if (!r) continue;
       const pin = document.createElement('div');
@@ -367,6 +402,8 @@
     scrollTimer = setTimeout(() => post({ type: 'scroll', page: pagePath(), y: window.scrollY }), 120);
   }, { passive: true });
   window.addEventListener('resize', scheduleWires);
+  // Rings follow their element when anything scrolls, including a map scrolling sideways.
+  document.addEventListener('scroll', () => { if (rings && (hovered || card || notes.size)) { placePins(); } }, { capture: true, passive: true });
 
   const ready = () => {
     drawWires();

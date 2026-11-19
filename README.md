@@ -47,7 +47,8 @@ your repo/
 | `npx -y truemap-cli outline` | A compact map of the repo, so the first blueprint takes minutes, not an hour |
 | `npx -y truemap-cli listen` | Waits for your next message or comments from the page |
 | `npx -y truemap-cli reply "…" --listen` | Shows the answer in the conversation panel, then keeps listening |
-| `npx -y truemap-cli check` | Checks every `data-src` anchor against the code |
+| `npx -y truemap-cli check` | Checks every `data-src` anchor against the code, and that every map wire has a target |
+| `npx -y truemap-cli export <page>` | Writes the page as one self-contained HTML file to share (also in the workspace ⋮ menu) |
 | `npx -y truemap-cli guide` | The page-writing guide for agents: the map, anchors, decisions, design rules |
 
 The checker works for any language. It uses git and a plain-text search:

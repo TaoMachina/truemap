@@ -144,6 +144,7 @@ function printCheck(result, indent = '') {
   out(`${indent}check: ${result.counts.ok} ok, ${result.counts.changed} changed, ${result.counts.broken} broken`);
   for (const a of bad) out(`${indent}  - ${a.state}: ${q(a.src)}  # ${a.reason}`);
   for (const w of result.wires || []) out(`${indent}  - wire not drawn: ${q(w.from)} -> ${q(w.to)}  # ${w.reason}`);
+  for (const l of result.layout || []) out(`${indent}  - layout: ${l}`);
 }
 
 const SETUP_NOTE = `Visual explanations live in \`${FOLDER}/\` (index.html is the project blueprint). Before explaining architecture, a flow, or options: if a page covers it, update it and run \`${CMD} <page>\`. Create a new page only when the answer has 3+ interacting parts or needs a decision from the user. Always also give a 1-3 line answer in the terminal.`;
