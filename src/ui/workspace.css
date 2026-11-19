@@ -402,3 +402,4 @@ code { font-family: var(--code); font-size: 0.9em; }
 .send.quiet { background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); }
 .code-box pre span em { display: inline-block; width: 1.4em; font-style: normal; color: var(--faint); user-select: none; }
 .code-box pre span.add em { color: var(--fine); } .code-box pre span.del em { color: var(--broken); }
+.ch-why { margin: -6px 4px 14px; font-size: 12px; color: var(--muted); line-height: 1.45; }

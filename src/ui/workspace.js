@@ -259,7 +259,7 @@
   function renderAll() {
     msgsEl.innerHTML = ''; lastRole = null;
     if (!state.history.length) {
-      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is and comment on it; comments go out together, each with the code it points to.</p></div>`;
+      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is and write a comment right there; <b>Details</b> shows its code. Comments go out together, each with the code it points to.</p></div>`;
     }
     for (const e of state.history) appendEntry(e, false);
     renderWorking();
@@ -515,7 +515,8 @@
     if (!r) { el.innerHTML = '<p class="ch-empty">Reading the working tree…</p>'; return; }
     if (r.error) { el.innerHTML = `<p class="ch-empty">Changes need a git repository with at least one commit (${esc(r.error)}).</p>`; return; }
     const opts = r.bases.map((k) => `<option value="${k}"${k === r.base.kind ? ' selected' : ''}>${esc(k === r.base.kind ? r.base.label : BASES[k])}</option>`).join('');
-    let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select><span class="ch-sum">${r.files ? `${plural(r.files, 'file')} ${delta(r.add, r.del)}` : 'Nothing changed'}</span></div>`;
+    const WHY = { turn: 'What the agent changed since it picked up your last message.', plan: r.base.label.startsWith('What was done') ? 'What was changed between your approval and the end of the plan.' : 'What changed since you approved the plan.', head: 'Everything not committed yet, yours and the agent’s.', main: 'Everything on this branch that main doesn’t have, like a pull request.' };
+    let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select><span class="ch-sum">${r.files ? `${plural(r.files, 'file')} ${delta(r.add, r.del)}` : 'Nothing changed'}</span></div><p class="ch-why">${esc(WHY[r.base.kind] || '')} Click a changed box to see its diff.</p>`;
     if (r.plan) {
       const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
       html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes have changes${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} outside the plan` : ''}. Open a box to check its diff against what was planned.</p>`;
@@ -649,7 +650,7 @@
     if (p.status === 'review' && old) {
       html += `<div class="pb-acts"><span class="pb-wait">Read it in the conversation; the agent converts the map first.</span><button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve as text</button></div>`;
     } else if (p.status === 'review') {
-      html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve</button></div>`;
+      html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request" title="Send your comments; the agent revises the plan">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve" title="The agent starts building it">Approve</button></div>`;
     } else if (p.status === 'revise') {
       html += `<div class="pb-acts"><span class="pb-wait">Waiting for the revised plan</span></div>`;
     } else if (p.status === 'approved') {
@@ -821,6 +822,8 @@
       navigate(d.dir);
     } else if (d.type === 'peek') {
       if (d.box) openInspector(d.box);
+    } else if (d.type === 'peek-if-open') {
+      if (d.box && panelEl.classList.contains('inspecting')) openInspector(d.box);
     } else if (d.type === 'loaded') {
       if (d.page && d.page !== state.page) setCurrent(d.page);
       closeInspector();

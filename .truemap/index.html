@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>truemap architecture</title>
+<link rel="stylesheet" href="assets/truemap.css">
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <h1 class="tm-title">truemap architecture</h1>
+    <p class="tm-lede">A coding agent runs the CLI; the CLI starts one local server per repo, which serves the browser workspace and the .truemap pages on two separate origins and passes messages between the page and the agent.</p>
+  </header>
+
+  <figure class="tm-diagram">
+    <section class="tm-group" id="agent-side" data-label="Agent side">
+      <div class="tm-node is-ext is-key" id="agent" data-name="Coding agent" data-tag="Claude Code, Codex" data-to="cli:runs">
+        <div class="tm-detail">
+          <p>Any agent that can run a shell command. It reads the CLI's YAML-ish output and follows its next_step.</p>
+          <ul>
+            <li>Claude Code runs listen with run_in_background; other agents run listen --timeout 540 in the foreground.</li>
+            <li>truemap never starts an agent and never touches credentials.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tm-node is-key" id="cli" data-name="CLI" data-tag="npx truemap-cli" data-src="src/cli.js#main" data-also="bin/truemap.js src/common.js src/outline.js src/guide.md" data-to="api:calls checker:checks">
+        <div class="tm-detail">
+          <p>One command per agent action: open, listen, reply, show, ask, plan, changes, check, outline, guide, export.</p>
+          <ul>
+            <li>ensureServer spawns src/server.js detached, with a lock file so two cold opens start only one server.</li>
+            <li>A server from another version is shut down and restarted.</li>
+            <li>Talks to the server over HTTP with the token from ~/.truemap/servers/&lt;repo-hash&gt;.json.</li>
+            <li>check, outline, guide and export run locally without the server.</li>
+          </ul>
+          <p class="tm-why">Output ends with next_step so the agent learns the tool by using it.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="server" data-label="Local server">
+      <div class="tm-node is-key" id="api" data-name="Workspace API" data-tag="127.0.0.1" data-src="src/server.js#deliverQueue" data-also="src/snippet.js" data-to="workspace:streams_to plans:saves changes:asks checker:runs">
+        <div class="tm-detail">
+          <p>Serves the workspace shell and /api/*: the chat queue, one listener at a time, SSE events, plans, changes, diffs and code snippets.</p>
+          <ul>
+            <li>Messages sent while the agent is busy queue up; the next listen gets them all in order.</li>
+            <li>A new listen replaces the old one, which returns replaced.</li>
+            <li>Watches .truemap/ and re-checks anchors; re-checks every 30 s while a tab is open.</li>
+            <li>Exits after 30 minutes idle.</li>
+          </ul>
+          <p class="tm-why">Token, Host and Origin checks on every API call block other local pages and DNS rebinding.</p>
+        </div>
+      </div>
+      <div class="tm-node" id="content" data-name="Content origin" data-tag="second port" data-src="src/server.js#servePage" data-also="src/export.js kit" data-to="pages:reads sdk:injects">
+        <div class="tm-detail">
+          <p>A second listener that serves only .truemap/ files, the page kit CSS and the SDK, injected before &lt;/body&gt;.</p>
+          <ul>
+            <li>Paths are normalised; .., NUL and symlinks out of .truemap/ are refused.</li>
+            <li>The kit comes from truemap itself; assets/theme.css is appended.</li>
+            <li>frame-ancestors allows only the workspace origin.</li>
+          </ul>
+          <p class="tm-why">A separate origin means page scripts cannot reach the token-protected API, even with allow-same-origin on the iframe.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="browser" data-label="Browser">
+      <div class="tm-node is-key" id="workspace" data-name="Workspace" data-tag="UI shell" data-src="src/ui/workspace.js#connect" data-also="src/ui/workspace.html src/ui/workspace.css" data-to="api:posts_to sdk:messages">
+        <div class="tm-detail">
+          <p>Top bar, plan bar, the page in a sandboxed iframe, and a panel with Conversation and Changes; the inspector replaces the panel while a box is open.</p>
+          <ul>
+            <li>Gets live updates over one EventSource on /api/events.</li>
+            <li>Accepts postMessage only from its own iframe and the content origin.</li>
+            <li>Agent replies render through a small Markdown subset of escaped text.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tm-node is-key" id="sdk" data-name="Page SDK" data-tag="injected" data-src="src/ui/sdk.js#applyFocus" data-to="diagram:lays_out_with">
+        <div class="tm-detail">
+          <p>Runs inside each served page: box selection, comments and pins, focus from show and reply, plan ghosts, stale and changed marks.</p>
+          <ul>
+            <li>Never written to files: the content origin adds it to each page it serves.</li>
+            <li>window.truemap.send messages are tagged from: page so the agent treats them as untrusted.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tm-node" id="diagram" data-name="Diagram layout" data-tag="tm-diagram" data-src="src/ui/diagram.js#layout" data-also="src/ui/wires.js">
+        <div class="tm-detail">
+          <p>Lays out figure.tm-diagram maps: groups as rows in author order, a small layered layout with crossing reduction, routed connections with their verbs, flows as tabs.</p>
+          <ul>
+            <li>wires.js keeps the older .tm-map pages rendering.</li>
+            <li>Shared by the SDK and by export.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="core" data-label="Core">
+      <div class="tm-node" id="checker" data-name="Checker" data-tag="anchors" data-src="src/check.js#checkAll" data-to="pages:reads_anchors git:asks">
+        <div class="tm-detail">
+          <p>Checks every data-src: the path exists with exact case, the name appears as a whole word, and the code is not newer than the page.</p>
+          <ul>
+            <li>Broken (path or name gone) or changed (code newer than the page or its verified stamp).</li>
+            <li>check --ok writes the stamp, per page or per box.</li>
+            <li>Also lints maps: 16 boxes at most, 5 per group, short names, every box anchored or is-ext.</li>
+          </ul>
+          <p class="tm-why">No AI and no per-language code, so it works on any repo.</p>
+        </div>
+      </div>
+      <div class="tm-node" id="changes" data-name="Changes" data-tag="by box" data-src="src/changes.js#changes" data-to="git:snapshots pages:maps_files_by">
+        <div class="tm-detail">
+          <p>Snapshots the working tree as a git tree, diffs it against a base, and attributes each file to the boxes whose data-src or data-also cover it.</p>
+          <ul>
+            <li>Bases: turn (when the agent picked up the message), plan, head, main.</li>
+            <li>Snapshots go through a throwaway copy of the index; the staging area is never touched.</li>
+            <li>Files no box covers are listed by folder.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tm-node" id="plans" data-name="Plans" data-tag="review" data-src="src/plan.js#savePlan" data-to="pages:writes">
+        <div class="tm-detail">
+          <p>Validates a plan (touch, add, remove, steps), keeps it in .truemap/plans/&lt;slug&gt;.json and turns it into a chat message.</p>
+          <ul>
+            <li>A revised plan with the same title shows what changed since the last version.</li>
+            <li>Checks each step against the changes: a step reported done whose named files or boxes did not change is flagged.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="repo" data-label="Repo">
+      <div class="tm-node" id="pages" data-name=".truemap pages" data-tag="HTML" data-src=".truemap">
+        <div class="tm-detail">
+          <p>Plain HTML maps and plan records, committed with the code.</p>
+          <ul><li>index.html is the blueprint; module pages link from it.</li></ul>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="git" data-name="git" data-tag="CLI">
+        <div class="tm-detail">
+          <p>Source of file times, tracked paths, snapshots and diffs. Without git, only missing paths and names are checked.</p>
+        </div>
+      </div>
+    </section>
+
+    <ol class="tm-flows">
+      <li data-path="agent cli api workspace sdk" data-note="The agent runs reply or show; the CLI posts it to the server, the server streams it to the workspace, and the SDK lights up the boxes the answer names.">The agent answers on the page</li>
+      <li data-path="agent cli api plans pages" data-note="plan --file posts the plan; the server saves it under .truemap/plans/ and puts it in the conversation, where the user approves or asks for changes.">A plan goes up for review</li>
+      <li data-path="agent cli api changes git" data-note="changes asks the server, which snapshots the tree in git, diffs it against the base and attributes each file to boxes.">Changes by box</li>
+    </ol>
+  </figure>
+
+  <section class="tm-section">
+    <h2>Where state lives</h2>
+    <dl class="tm-kv">
+      <dt>In the repo</dt><dd>.truemap/ pages and plans/, nothing else</dd>
+      <dt>~/.truemap/</dt><dd>server port and token, chat history, verified stamps, change snapshots, usage log</dd>
+      <dt>In memory</dt><dd>the message queue, the single listener, the agent's state</dd>
+    </dl>
+  </section>
+</main></body>
+</html>

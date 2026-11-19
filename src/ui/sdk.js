@@ -155,6 +155,14 @@
     for (const w of document.querySelectorAll('.tm-dg-edge, .tm-dg-head, .tm-dg-label')) w.classList.toggle('is-sel', !!el?.id && (w.dataset.from === el.id || w.dataset.to === el.id));
     if (!el && document.activeElement?.matches?.('.tm-node, .tm-step')) document.activeElement.blur();
   }
+  // Click a box: a small card beside it with what it is and a comment field, so your eyes stay on the map.
+  // If the inspector is already open on the right, it follows the box.
+  function openBox(box) {
+    select(box);
+    const existing = [...notes.values()].find((n) => n.el === box);
+    openCard({ target: box, noteId: existing?.id || null });
+    post({ type: 'peek-if-open', page: pagePath(), box: boxInfo(box) });
+  }
   function peek(el) {
     select(el);
     const r = el.getBoundingClientRect();
@@ -279,9 +287,12 @@
   shadow.innerHTML = `<style>
     :host { all: initial; }
     * { box-sizing: border-box; }
-    .card { position: absolute; width: 340px; background: #fff; color: #141413; border: 1px solid #d2d2cb; border-radius: 10px;
+    .card { position: absolute; width: 360px; background: #fff; color: #141413; border: 1px solid #d2d2cb; border-radius: 10px;
       box-shadow: 0 12px 32px -12px rgba(20,20,19,.28); font: 14px/1.45 "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; padding: 12px; }
-    .what { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0 2px 8px; }
+    .what { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0 2px 6px; }
+    .sum { margin: 0 2px 10px; font-size: 13px; line-height: 1.45; color: #4a4a45; }
+    .sum .flag { margin-top: 4px; font-size: 12px; color: #a35f00; }
+    @media (prefers-color-scheme: dark) { .sum { color: #c4c4bd; } .sum .flag { color: #e0a548; } }
     .what b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .what code { font: 11.5px "Commit Mono", ui-monospace, Consolas, monospace; color: #9a9a92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
     textarea { width: 100%; min-height: 72px; max-height: 220px; resize: none; font: inherit; color: inherit; background: #fafaf9; border: 1px solid #e6e6e1; border-radius: 7px; padding: 9px 10px; outline: none; }
@@ -290,6 +301,8 @@
     .suggest button { all: unset; cursor: pointer; font-size: 12.5px; color: #141413; }
     .suggest button:hover { text-decoration: underline; text-underline-offset: 3px; }
     .foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .foot .btn { white-space: nowrap; }
+    .foot [data-act="details"] { padding-left: 2px; text-decoration: underline; text-underline-offset: 3px; }
     .hint { flex: 1; font-size: 11.5px; color: #9a9a92; line-height: 1.3; }
     .btn { all: unset; cursor: pointer; font: 500 13px/1 "Instrument Sans", system-ui, sans-serif; padding: 8px 11px; border-radius: 6px; color: #6c6c65; }
     .btn:hover { background: #f2f2ef; color: #141413; }
@@ -347,16 +360,31 @@
     const existing = noteId ? notes.get(noteId) : null;
     const sel = getSelection();
     const range = existing ? existing.range || null : (text && sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null);
-    const label = existing?.label || (target ? labelOf(target) : clean(text, 60));
+    const label = existing?.label || (target ? clean(target.getAttribute('data-name'), 60) || labelOf(target) : clean(text, 60));
     const src = existing?.src ?? (target ? target.closest('[data-src]')?.getAttribute('data-src') || '' : (text && rangeSrc()) || '');
     const el = document.createElement('div');
     el.className = 'card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Comment');
-    el.innerHTML = `<div class="what"><b></b><code></code></div><textarea rows="3"></textarea>
+    el.innerHTML = `<div class="what"><b></b><code></code></div><div class="sum"></div><textarea rows="3"></textarea>
       <div class="suggest"></div>
-      <div class="foot"><span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${existing ? T.save : T.add}</button></div>`;
+      <div class="foot">${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${existing ? T.save : T.add}</button></div>`;
     el.querySelector('b').textContent = text ? `“${label}”` : label;
-    el.querySelector('code').textContent = src;
-    el.querySelector('.hint').textContent = T.hint;
+    el.querySelector('code').textContent = target?.getAttribute('data-tag') || src;
+    // what it is, in a line or two; what a plan or a change says about it
+    if (target) {
+      const det = target.querySelector(':scope > .tm-detail');
+      const first = clean(det?.querySelector('p')?.textContent || target.querySelector('.tm-node-desc')?.textContent || '', 220);
+      const extra = [
+        target.getAttribute('data-plan-note') && `Plan: ${clean(target.getAttribute('data-plan-note'), 160)}`,
+        target.getAttribute('data-plan') === 'new' && 'New in this plan',
+        target.getAttribute('data-tm-delta') && `Changed: ${target.getAttribute('data-tm-delta')} lines`,
+        target.getAttribute('data-tm-mark') && (target.getAttribute('data-tm-mark') === 'broken' ? 'No longer matches the code' : 'The code changed since this box was checked'),
+      ].filter(Boolean);
+      const sumEl = el.querySelector('.sum');
+      sumEl.textContent = first;
+      for (const x of extra) { const d = document.createElement('div'); d.className = 'flag'; d.textContent = x; sumEl.appendChild(d); }
+      if (!first && !extra.length) sumEl.remove();
+    } else el.querySelector('.sum').remove();
+el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]').title = T.hint;
     const ta = el.querySelector('textarea'); ta.placeholder = T.placeholder; ta.value = existing?.text || '';
     const sug = el.querySelector('.suggest');
     if (!existing) for (const [lbl, prompt] of T.suggest) {
@@ -367,7 +395,7 @@
     slot.appendChild(el);
     // position: below the target, kept inside the viewport
     const r = rect || docRect(target.getBoundingClientRect());
-    const w = 340; const vw = document.documentElement.clientWidth;
+    const w = 360; const vw = document.documentElement.clientWidth;
     let left = Math.min(Math.max(8 + scrollX, r.left), scrollX + vw - w - 12);
     let top = r.bottom + 10;
     const h = el.offsetHeight || 220;
@@ -393,6 +421,7 @@
     el.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'add') finish(false);
+      else if (act === 'details') peek(target);
       else if (act === 'cancel') closeCard();
       else if (act === 'remove') { removeNote(noteId, true); closeCard(); }
     });
@@ -503,7 +532,7 @@
       }
       if (inner && inner !== box && box.contains(inner)) return;
       e.preventDefault(); e.stopPropagation();
-      peek(box);
+      openBox(box);
       return;
     }
     if (String(getSelection?.() || '').trim().length > 1) return;
@@ -534,7 +563,7 @@
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
     if (e.key === 'Escape' && (focusSet.length || focusNote)) { clearFocus(); post({ type: 'focus-cleared' }); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); peek(e.target); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); openBox(e.target); return; }
   });
 
   // ---------- decisions: <form class="tm-ask" data-tm-ask="question"> ----------
