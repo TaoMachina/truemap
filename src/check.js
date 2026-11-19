@@ -17,7 +17,7 @@ function git(root, args) {
   const exe = gitExe();
   if (!exe) return null;
   try {
-    return execFileSync(exe, args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    return execFileSync(exe, args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
   } catch { return null; }
 }
 

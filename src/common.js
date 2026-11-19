@@ -56,7 +56,7 @@ export function findRoot(cwd = process.cwd()) {
   const git = gitExe();
   if (git) {
     try {
-      const out = execFileSync(git, ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).trim();
+      const out = execFileSync(git, ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', windowsHide: true }).trim();
       if (out) return resolve(out);
     } catch { /* not a git repo */ }
   }
