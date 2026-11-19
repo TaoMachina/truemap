@@ -319,7 +319,9 @@ async function cmdCheck(root, args, opts) {
   if (broken) steps.push('Broken anchors: the code moved or was removed. Update those pages (content and data-src).');
   if (changed) steps.push(`Changed anchors: review the code. Update the page if needed, otherwise run \`${CMD} check --ok <page>\`.`);
   if (wires) steps.push('Some map wires point at ids that are not on the page, so they are not drawn. Fix the data-to values (ids separated by spaces).');
-  if (!broken && !changed && !wires) steps.push('All pages match the code.');
+  const layout = results.reduce((n, r) => n + (r.layout || []).length, 0);
+  if (layout) steps.push('Layout notes: a map over 12 boxes (or a layer over 4) is hard to read. Keep the main parts on the map and move the detail to a module page.');
+  if (!broken && !changed && !wires && !layout) steps.push('All pages match the code.');
   block('next_step', steps.join('\n'));
 }
 

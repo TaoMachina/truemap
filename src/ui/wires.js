@@ -82,7 +82,7 @@
 
     // Plan every wire. Horizontal runs in a gap are recorded as lane requests and get their y later.
     const lanes = new Map(); // gap index -> [{x1, x2, src, ref}]
-    const lane = (gap, x1, x2, e) => { const ref = { y: null }; (lanes.get(gap) || lanes.set(gap, []).get(gap)).push({ x1: Math.min(x1, x2), x2: Math.max(x1, x2), src: e.src, ref }); return ref; };
+    const lane = (gap, x1, x2, e) => { const ref = { y: null, gap }; ref.item = { x1: Math.min(x1, x2), x2: Math.max(x1, x2), src: e.src, ref }; (lanes.get(gap) || lanes.set(gap, []).get(gap)).push(ref.item); return ref; };
     const plans = [];
     for (const e of edges) {
       const { a, b } = e;
@@ -123,6 +123,28 @@
           plans.push({ e, pts: [[sx, sy], [sx, y], [tx, y], [tx, ty]], head: over ? 'down' : 'up', tx, ty, label: { x: sx + 6, y: over ? sy - 6 : sy + 13 } });
         }
       }
+    }
+
+    // Entries keep clear of unrelated vertical lines in the same gap (at least 18px), sliding within the
+    // target box, so an entry never looks like the continuation of another box's exit.
+    const stems = [];
+    for (const p of plans) {
+      const P = p.pts;
+      if (P.length === 2 && P[0][0] === P[1][0] && p.head === 'down') { stems.push({ p, kind: 'straight', gap: p.e.ra, x: () => P[0][0] }); continue; }
+      if (P.length < 4 || typeof P[1][1] !== 'object') continue;
+      stems.push({ p, kind: 'exit', gap: P[1][1].gap, x: () => P[0][0] });
+      stems.push({ p, kind: 'entry', gap: P[P.length - 2][1].gap, x: () => P[P.length - 1][0] });
+    }
+    const shares = (p, q) => [p.e.src, p.e.dst].some((n) => n === q.e.src || n === q.e.dst);
+    for (const s of stems.filter((t) => t.kind === 'entry')) {
+      const clash = (x) => stems.some((o) => o.p !== s.p && !shares(o.p, s.p) && o.gap === s.gap && Math.abs(o.x() - x) < 18);
+      const x0 = s.x(); if (!clash(x0)) continue;
+      const b = s.p.e.b; const cands = [];
+      for (let k = 1; k <= 16; k++) cands.push(x0 + k * 7, x0 - k * 7);
+      const nx = cands.find((x) => x > b.l + 10 && x < b.r - 10 && !clash(x));
+      if (nx === undefined) continue;
+      const P = s.p.pts; P[P.length - 1][0] = nx; P[P.length - 2][0] = nx; s.p.tx = nx;
+      const item = P[P.length - 2][1].item; item.x1 = Math.min(item.x1, nx); item.x2 = Math.max(item.x2, nx);
     }
 
     // Tracks: interval colouring per gap. Wires from the same box may share a track.

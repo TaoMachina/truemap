@@ -81,11 +81,27 @@
   function extentOf(el) {
     const r0 = el.getBoundingClientRect();
     let l = r0.left; let t = r0.top; let r = r0.right; let b = r0.bottom;
-    const kids = el.querySelectorAll('*');
-    for (let i = 0; i < kids.length && i < 400; i++) {
-      const k = kids[i].getBoundingClientRect();
+    const kids = [...el.querySelectorAll('*')].slice(0, 400);
+    // Content scrolled out of view inside a scrolling block (a long code line, a map) doesn't count.
+    const clips = [el, ...kids].filter((n) => { const s = getComputedStyle(n); return s.overflowX !== 'visible' || s.overflowY !== 'visible'; });
+    for (const kid of kids) {
+      const k = kid.getBoundingClientRect();
       if (!k.width || !k.height) continue;
-      l = Math.min(l, k.left); t = Math.min(t, k.top); r = Math.max(r, k.right); b = Math.max(b, k.bottom);
+      let kl = k.left; let kt = k.top; let kr = k.right; let kb = k.bottom;
+      for (const c of clips) {
+        if (c === kid || !c.contains(kid)) continue;
+        const cr = c.getBoundingClientRect();
+        kl = Math.max(kl, cr.left); kt = Math.max(kt, cr.top); kr = Math.min(kr, cr.right); kb = Math.min(kb, cr.bottom);
+      }
+      if (kr <= kl || kb <= kt) continue;
+      l = Math.min(l, kl); t = Math.min(t, kt); r = Math.max(r, kr); b = Math.max(b, kb);
+    }
+    // An element half scrolled out of its own scrolling parent is cut at that parent's edge too.
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const s = getComputedStyle(a);
+      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const ar = a.getBoundingClientRect();
+      l = Math.max(l, ar.left - 2); t = Math.max(t, ar.top - 2); r = Math.min(r, ar.right + 2); b = Math.min(b, ar.bottom + 2);
     }
     return { left: l + scrollX - 4, top: t + scrollY - 4, width: r - l + 8, height: b - t + 8 };
   }
@@ -140,6 +156,7 @@
     .ring { position: absolute; border: 1.5px solid #2453c4; border-radius: 8px; pointer-events: none; }
     .ring.active { border-width: 2px; }
     .ring.noted { border-color: rgba(36, 83, 196, .5); }
+    @media (prefers-color-scheme: dark) { .ring { border-color: #7ea3ff; } .ring.noted { border-color: rgba(126, 163, 255, .55); } }
     .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #2453c4; color: #fff;
       font: 600 11px/20px "IBM Plex Mono", ui-monospace, Consolas, monospace; text-align: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(23,32,43,.25); }
     .select-btn { position: absolute; all: unset; position: absolute; cursor: pointer; background: #17202b; color: #fff; font: 500 12.5px/1 "IBM Plex Sans", system-ui, sans-serif; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px -8px rgba(23,32,43,.5); }
