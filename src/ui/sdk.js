@@ -26,6 +26,9 @@
     [data-tm-mark="changed"] { outline: 2px dashed var(--tm-changed, #a2690a) !important; outline-offset: 3px; }
     [data-tm-mark="broken"] { outline: 2px dashed var(--tm-broken, #c0392b) !important; outline-offset: 3px; }
     svg [data-tm-mark] { outline: none !important; }
+    .tm-diagram .tm-node[data-tm-mark] { outline: none !important; }
+    .tm-diagram .tm-node[data-tm-mark]::before { content: ""; position: absolute; top: 7px; left: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--tm-changed, #a35f00); box-shadow: 0 0 0 2px var(--tm-paper, #fff); }
+    .tm-diagram .tm-node[data-tm-mark="broken"]::before { background: var(--tm-broken, #c0392b); }
     html[data-tm-annotate] body { cursor: default; }
     html[data-tm-annotate] [data-tm-hover] { cursor: pointer; }
     html[data-tm-annotate] a, html[data-tm-annotate] label { cursor: pointer; }
@@ -126,7 +129,7 @@
       id: el.id || '', label: clean(el.getAttribute('data-name'), 60) || labelOf(el), tag: clean(el.getAttribute('data-tag'), 60), plan: el.getAttribute('data-plan') || '', detail,
       sub: txt('.tm-node-sub'), desc: det ? '' : txt('.tm-node-desc') || (el.matches('.tm-node,.tm-step') ? '' : clean(el.innerText, 300)),
       src: el.closest('[data-src]')?.getAttribute('data-src') || '', href: /^[\w./-]+\.html?(#[\w-]*)?$/i.test(href) ? href : '',
-      ext: el.classList.contains('is-ext'), to, from, mark: el.getAttribute('data-tm-mark') || '', why: clean(el.getAttribute('data-why') || det?.querySelector('.tm-why')?.textContent, 600),
+      ext: el.classList.contains('is-ext'), to, from, mark: el.getAttribute('data-tm-mark') || '', planNote: clean(el.getAttribute('data-plan-note'), 400), why: clean(el.getAttribute('data-why') || det?.querySelector('.tm-why')?.textContent, 600),
     };
   }
   let selected = null;
@@ -574,8 +577,37 @@
       applyFocus(d.items, d.note, d.who, d.scroll === undefined ? 'center' : d.scroll);
     } else if (d.type === 'select') {
       select(d.id ? document.getElementById(d.id) : null);
+    } else if (d.type === 'plan') {
+      // A plan drawn on the map: what it touches, adds (dashed, in its group) and removes.
+      for (const el of document.querySelectorAll('[data-plan-overlay]')) { el.removeAttribute('data-plan'); el.removeAttribute('data-plan-note'); el.removeAttribute('data-plan-overlay'); }
+      const p = d.plan;
+      document.documentElement.toggleAttribute('data-tm-plan', !!p);
+      const fig = document.querySelector('figure.tm-diagram');
+      if (fig && window.truemapDiagram?.setGhosts) window.truemapDiagram.setGhosts(fig, p ? p.add : []);
+      const markPlan = (box, kind, note) => {
+        const el = findItems([box])[0];
+        if (!el || el.getAttribute('data-plan') === 'new') return;
+        el.setAttribute('data-plan', kind); el.setAttribute('data-plan-overlay', ''); if (note) el.setAttribute('data-plan-note', note);
+      };
+      if (p) { for (const t of p.touch || []) markPlan(t.box, 'change', t.what); for (const r of p.remove || []) markPlan(r.box, 'remove', r.why); }
+      for (const b of document.querySelectorAll('.tm-node, .tm-step')) { if (!b.hasAttribute('tabindex') && !b.matches('a[href]')) b.setAttribute('tabindex', '0'); }
+      markWires();
+    } else if (d.type === 'changes') {
+      // Review mode: changed boxes carry their +/- lines; the rest of the map goes quiet.
+      document.documentElement.toggleAttribute('data-tm-changes', !!d.on);
+      for (const el of document.querySelectorAll('[data-tm-change]')) { el.removeAttribute('data-tm-change'); el.removeAttribute('data-tm-delta'); }
+      const names = [];
+      for (const it of d.items || []) {
+        for (const el of document.querySelectorAll('[data-src]')) {
+          if (el.getAttribute('data-src') !== it.src) continue;
+          el.setAttribute('data-tm-change', '');
+          el.setAttribute('data-tm-delta', it.add == null ? 'binary' : `+${it.add} −${it.del}`);
+          names.push({ src: it.src, name: clean(el.getAttribute('data-name'), 60) || labelOf(el) });
+        }
+      }
+      if (names.length) post({ type: 'changes-names', items: names });
     } else if (d.type === 'open-box') {
-      const el = document.getElementById(d.id);
+      const el = d.id ? document.getElementById(d.id) : [...document.querySelectorAll('[data-src]')].find((x) => x.getAttribute('data-src') === d.src);
       if (el) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); peek(el); }
     } else if (d.type === 'clear-focus') {
       clearFocus();

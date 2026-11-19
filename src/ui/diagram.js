@@ -20,6 +20,21 @@
     return n.getAttribute('data-name') || n.querySelector(':scope > b, :scope > strong')?.textContent.trim() || textOf(n) || n.id;
   }
 
+  // A node element becomes drawable: its face is the name and an optional tag; the detail stays for the inspector.
+  function adopt(m, n, groupId) {
+    n.dataset.group = groupId || '';
+    const name = nameOf(n);
+    const detail = n.querySelector(':scope > .tm-detail');
+    for (const c of [...n.childNodes]) if (c !== detail) c.remove();
+    const face = document.createElement('span'); face.className = 'tm-dg-face';
+    face.innerHTML = '<span class="tm-dg-name"></span>';
+    face.firstChild.textContent = name;
+    if (n.dataset.tag) { const t = document.createElement('span'); t.className = 'tm-dg-tag'; t.textContent = n.dataset.tag; face.appendChild(t); }
+    n.insertBefore(face, n.firstChild);
+    n.dataset.name = name;
+    m.nodes.push(n); m.stage.appendChild(n);
+  }
+
   // Turn the declared markup into the drawable structure once.
   function prepare(fig) {
     if (fig.__tm) return fig.__tm;
@@ -28,20 +43,8 @@
     stage.appendChild(svg);
     const groups = [];
     const nodes = [];
-    const take = (n, group) => {
-      n.dataset.group = group?.id || '';
-      const name = nameOf(n);
-      const detail = n.querySelector(':scope > .tm-detail');
-      // the visible face of the node: name and an optional tag; the rest stays for the inspector
-      for (const c of [...n.childNodes]) if (c !== detail) c.remove();
-      const face = document.createElement('span'); face.className = 'tm-dg-face';
-      face.innerHTML = '<span class="tm-dg-name"></span>';
-      face.firstChild.textContent = name;
-      if (n.dataset.tag) { const t = document.createElement('span'); t.className = 'tm-dg-tag'; t.textContent = n.dataset.tag; face.appendChild(t); }
-      n.insertBefore(face, n.firstChild);
-      n.dataset.name = name;
-      nodes.push(n); stage.appendChild(n);
-    };
+    const m0 = { stage, nodes };
+    const take = (n, group) => adopt(m0, n, group?.id);
     for (const sec of [...fig.querySelectorAll(':scope > .tm-group')]) {
       if (!sec.id) sec.id = `g-${groups.length}`;
       const box = document.createElement('div'); box.className = 'tm-dg-group'; box.dataset.group = sec.id;
@@ -70,7 +73,7 @@
     }
     if (tabs) fig.appendChild(tabs);
     fig.appendChild(stage);
-    fig.__tm = { stage, svg, groups, nodes, tabs };
+    fig.__tm = Object.assign(m0, { svg, groups, tabs });
     return fig.__tm;
   }
 
@@ -168,11 +171,12 @@
       const ext = byId.get(e.from)?.classList.contains('is-ext') || byId.get(e.to)?.classList.contains('is-ext');
       const path = document.createElementNS(SVGNS, 'path');
       path.setAttribute('d', curve(pts));
-      path.setAttribute('class', `tm-dg-edge${key ? ' is-main' : ''}${ext ? ' is-ext' : ''}${e.back ? ' is-back' : ''}`);
+      const planned = byId.get(e.from)?.getAttribute('data-plan') === 'new' || byId.get(e.to)?.getAttribute('data-plan') === 'new';
+      path.setAttribute('class', `tm-dg-edge${key ? ' is-main' : ''}${ext ? ' is-ext' : ''}${e.back ? ' is-back' : ''}${planned ? ' is-plan' : ''}`);
       const ux = (tip.x - a.x) / len; const uy = (tip.y - a.y) / len;
       const head = document.createElementNS(SVGNS, 'path');
       head.setAttribute('d', `M${tip.x},${tip.y} L${tip.x - ux * 7 - uy * 4},${tip.y - uy * 7 + ux * 4} L${tip.x - ux * 7 + uy * 4},${tip.y - uy * 7 - ux * 4} Z`);
-      head.setAttribute('class', `tm-dg-head${key ? ' is-main' : ''}`);
+      head.setAttribute('class', `tm-dg-head${key ? ' is-main' : ''}${planned ? ' is-plan' : ''}`);
       for (const el of [path, head]) { el.dataset.from = e.from; el.dataset.to = e.to; }
       svg.appendChild(path); svg.appendChild(head);
       if (e.label) placed.push({ e, path, key });
@@ -289,5 +293,36 @@
       }
     });
   }
-  window.truemapDiagram = { draw, interact, setFlow, nameOf };
+  // A plan's new boxes, drawn dashed in their group until the plan is built.
+  function setGhosts(fig, adds) {
+    const m = prepare(fig);
+    for (const n of m.nodes.filter((x) => x.dataset.ghost)) n.remove();
+    m.nodes = m.nodes.filter((x) => !x.dataset.ghost);
+    for (const n of m.nodes) if (n.dataset.toOrig !== undefined) { n.setAttribute('data-to', n.dataset.toOrig); delete n.dataset.toOrig; }
+    const groupOf = (g) => {
+      const k = String(g || '').toLowerCase();
+      return m.groups.find((gr) => gr.id.toLowerCase() === k || (gr.el.firstChild?.textContent || '').toLowerCase() === k) || m.groups[0] || null;
+    };
+    for (const a of adds || []) {
+      if (!a || !a.id || document.getElementById(a.id)) continue;
+      const n = document.createElement('div');
+      n.className = 'tm-node'; n.id = a.id; n.dataset.ghost = '1'; n.setAttribute('data-plan', 'new'); n.setAttribute('tabindex', '0');
+      n.setAttribute('data-name', a.name || a.id);
+      if (a.tag) n.setAttribute('data-tag', a.tag);
+      if (a.to) n.setAttribute('data-to', a.to);
+      const det = document.createElement('div'); det.className = 'tm-detail';
+      if (a.why) { const p = document.createElement('p'); p.textContent = a.why; det.appendChild(p); }
+      n.appendChild(det);
+      adopt(m, n, groupOf(a.group)?.id);
+      for (const spec of a.from || []) {
+        const [src, ...lab] = String(spec).split(':');
+        const from = m.nodes.find((x) => x.id === src);
+        if (!from) continue;
+        if (from.dataset.toOrig === undefined) from.dataset.toOrig = from.getAttribute('data-to') || '';
+        from.setAttribute('data-to', `${from.getAttribute('data-to') || ''} ${a.id}${lab.length ? `:${lab.join(':')}` : ''}`.trim());
+      }
+    }
+    layout(fig);
+  }
+  window.truemapDiagram = { draw, interact, setFlow, nameOf, setGhosts };
 })();

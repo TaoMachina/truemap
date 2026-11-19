@@ -9,9 +9,10 @@
     ok: 'Matches the code', changed: (n) => `${n} changed in code`, broken: (n) => `${n} no longer match`,
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
-    state: {
+    state: { listening: 'Listening', working: 'Working', idle: 'Stopped listening', stale: 'No reply yet', offline: 'Not listening', closed: 'Closed' },
+    stateLong: {
       listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} stopped listening`, stale: (a) => `No reply from ${a} yet`,
-      offline: () => 'No agent listening', closed: () => 'Workspace closed',
+      offline: () => 'No agent is listening', closed: () => 'This workspace is closed',
     },
   };
 
@@ -196,6 +197,7 @@
   }
   function sendMarks() {
     const r = resultFor(state.page);
+    if (panelEl.classList.contains('show-changes')) return toFrame({ type: 'marks', items: [] });
     toFrame({ type: 'marks', items: (r?.anchors || []).filter((a) => a.state !== 'ok').map((a) => ({ src: a.src, state: a.state })) });
   }
 
@@ -385,6 +387,7 @@
     const seq = ++inspSeq;
     if (!panelOpen()) { panelWasClosed = true; setPanel(true, false); }
     panelEl.classList.add('inspecting');
+    $('inspBack').lastChild.textContent = panelEl.classList.contains('show-changes') ? 'Changes' : 'Conversation';
     toFrame({ type: 'select', id: box.id || null, src: box.src || '' });
     const chips = (list) => list.map((c) => `<button type="button" class="chip" data-box="${esc(c.id)}">${esc(c.label)}${c.via ? `<i>${esc(c.via)}</i>` : ''}</button>`).join('');
     const page = box.href ? pageHref(box.href) : null;
@@ -400,8 +403,9 @@
     const rel = box.to.length || box.from.length;
     inspBody.innerHTML = `
       <div class="insp-name"><h2>${esc(box.label)}</h2>${box.tag ? `<code>${esc(box.tag)}</code>` : ''}</div>
-      ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>` : ''}
+      ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>${box.planNote ? `<p class="insp-why">${esc(box.planNote)}</p>` : ''}` : ''}
       ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
+      ${changeSection(box)}
       <form class="insp-comment"><textarea rows="1" aria-label="Comment"></textarea><button type="submit" disabled>Add</button></form>
       ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
       ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
@@ -410,6 +414,7 @@
         : box.ext ? '<div class="insp-why">Outside this code base.</div>' : ''}
       ${pageT || rel ? `<div class="insp-actions">${pageT ? `<button type="button" data-act="open">Open ${esc(titleOf(pageT))}</button>` : ''}${rel ? '<button type="button" data-act="links">Light up its connections</button>' : ''}</div>` : ''}`;
     inspBody.scrollTop = 0;
+    wireChangeSection();
     const form = inspBody.querySelector('.insp-comment'); const ta = form.querySelector('textarea'); const add = form.querySelector('button');
     ta.placeholder = `Comment on ${box.label}, or ask about it`;
     ta.addEventListener('input', () => { add.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
@@ -453,6 +458,158 @@
     if (on) el.insertAdjacentHTML('beforeend', `<div class="waiting">${S.waiting}</div>`);
   }
 
+  // ---------- changes: what changed since a base, by box ----------
+  const tabs = { convo: $('tabConvo'), changes: $('tabChanges') };
+  const BASES = { turn: 'Since the agent’s last turn began', plan: 'Since you approved the plan', head: 'Uncommitted changes', main: 'This branch vs main' };
+  const ch = { base: store.get('truemap.base') || 'auto', data: null, names: new Map() };
+  const showingChanges = () => panelEl.classList.contains('show-changes');
+  function setTab(which) {
+    panelEl.classList.toggle('show-changes', which === 'changes');
+    tabs.convo.setAttribute('aria-selected', String(which !== 'changes'));
+    tabs.changes.setAttribute('aria-selected', String(which === 'changes'));
+    closeInspector();
+    if (which === 'changes') { renderChanges(); loadChanges(); }
+    sendChangeMarks(); sendMarks();
+  }
+  tabs.convo.onclick = () => setTab('convo');
+  tabs.changes.onclick = () => setTab('changes');
+  let loadingChanges = false;
+  async function loadChanges() {
+    if (state.conn !== 'live' || loadingChanges) return;
+    loadingChanges = true;
+    let r = null;
+    try { r = await fetch(`/api/changes?base=${encodeURIComponent(ch.base)}&t=${encodeURIComponent(TOKEN)}`).then((x) => x.json()); } catch { r = null; }
+    loadingChanges = false;
+    if (!r) return;
+    ch.data = r;
+    const n = r.error ? 0 : r.files;
+    $('changesCount').hidden = !n; $('changesCount').textContent = n ? String(n) : '';
+    if (showingChanges()) renderChanges();
+    sendChangeMarks();
+  }
+  function sendChangeMarks() {
+    const on = showingChanges() && ch.data && !ch.data.error;
+    toFrame({ type: 'changes', on: !!on, items: on ? ch.data.boxes.filter((b) => b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del })) : [] });
+  }
+  const delta = (a, d) => `<span class="delta">${a == null ? 'binary' : `<span class="a">+${a}</span> <span class="d">−${d}</span>`}</span>`;
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  function renderChanges() {
+    const el = $('changes'); const r = ch.data;
+    if (!r) { el.innerHTML = '<p class="ch-empty">Reading the working tree…</p>'; return; }
+    if (r.error) { el.innerHTML = `<p class="ch-empty">Changes need a git repository with at least one commit (${esc(r.error)}).</p>`; return; }
+    const opts = r.bases.map((k) => `<option value="${k}"${k === r.base.kind ? ' selected' : ''}>${esc(k === r.base.kind ? r.base.label : BASES[k])}</option>`).join('');
+    let html = `<div class="ch-base"><select id="chBase" aria-label="Compare with">${opts}</select></div>`;
+    html += `<p class="ch-sum">${r.files ? `${plural(r.files, 'file')} changed ${delta(r.add, r.del)}` : 'Nothing changed.'}${r.base.at ? ` Measured from ${esc(timeOf(r.base.at))}.` : ''}</p>`;
+    if (r.boxes.length) {
+      html += '<div class="ch-h">On the map</div>';
+      for (const b of r.boxes) {
+        const here = b.pages.includes(state.page);
+        const name = ch.names.get(b.src) || b.src.split('#')[1] || b.src.split('/').pop();
+        const other = here ? '' : `, on ${titleOf(state.pages.find((p) => p.page === b.pages[0]) || { page: b.pages[0] })}`;
+        html += `<button type="button" class="ch-row" data-src="${esc(b.src)}" data-page="${esc(here ? state.page : b.pages[0])}"><b>${esc(name)}</b>${delta(b.add, b.del)}<small>${esc(b.files.map((f) => f.path).join(', ') + other)}</small></button>`;
+      }
+    }
+    if (r.unmapped.length) {
+      const n = r.unmapped.reduce((k, g) => k + g.files.length, 0);
+      html += `<div class="ch-h">Not on the map: ${plural(n, 'file')}</div>`;
+      for (const g of r.unmapped) {
+        html += `<details class="ch-folder"><summary><b>${esc(g.folder)}</b><span>${plural(g.files.length, 'file')}</span></summary>${g.files.map((f) => `<button type="button" class="ch-file" data-path="${esc(f.path)}"><span>${esc(f.path)}</span>${delta(f.add, f.del)}</button>`).join('')}</details>`;
+      }
+      html += '<div class="ch-act"><button type="button" data-act="map">Ask the agent to map these</button></div>';
+    }
+    if (!r.files) html += `<p class="ch-empty">Pick another base above, or keep this open: it updates while the agent works.</p>`;
+    el.innerHTML = html;
+  }
+  function diffHtml(text) {
+    const rows = [];
+    for (const l of String(text || '').split('\n')) {
+      if (/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(l)) continue;
+      const cls = l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : '';
+      rows.push(`<span class="${cls}">${esc(l) || ' '}</span>`);
+    }
+    return rows.length ? `<pre>${rows.join('')}</pre>` : '<div class="code-note">No text changes (binary or mode only).</div>';
+  }
+  async function loadDiff(path, holder) {
+    holder.innerHTML = '<div class="code-note">Reading the diff…</div>';
+    let r = {};
+    try { r = await fetch(`/api/diff?base=${encodeURIComponent(ch.data?.base?.kind || ch.base)}&path=${encodeURIComponent(path)}&t=${encodeURIComponent(TOKEN)}`).then((x) => x.json()); } catch { r = { error: 'Could not read the diff' }; }
+    holder.innerHTML = r.error ? `<div class="code-note">${esc(r.error)}</div>` : diffHtml(r.text);
+  }
+  $('changes').addEventListener('change', (e) => {
+    if (e.target.id !== 'chBase') return;
+    ch.base = e.target.value; store.set('truemap.base', ch.base); ch.data = null; renderChanges(); loadChanges();
+  });
+  $('changes').addEventListener('click', (e) => {
+    const row = e.target.closest('.ch-row');
+    if (row) {
+      if (row.dataset.page !== state.page) { state.pendingOpen = row.dataset.src; go(row.dataset.page); } else toFrame({ type: 'open-box', src: row.dataset.src });
+      return;
+    }
+    const file = e.target.closest('.ch-file');
+    if (file) {
+      const next = file.nextElementSibling;
+      if (next?.classList.contains('ch-diff')) { next.remove(); return; }
+      const box = document.createElement('div'); box.className = 'ch-diff code-box'; file.after(box); loadDiff(file.dataset.path, box);
+      return;
+    }
+    if (e.target.closest('[data-act="map"]')) {
+      const files = ch.data.unmapped.flatMap((g) => g.files.map((f) => f.path));
+      setTab('convo');
+      send(`These changed files are not on any page yet. Add boxes for the ones that matter (or say why they don't need one): ${files.slice(0, 40).join(', ')}${files.length > 40 ? ', …' : ''}`, { context: [], noNotes: true });
+    }
+  });
+  // The inspector shows what changed in a box while you review changes.
+  function changeSection(box) {
+    if (!showingChanges() || !ch.data?.boxes) return '';
+    const b = ch.data.boxes.find((x) => x.src === box.src);
+    if (!b) return '';
+    return `<div class="insp-change"><div><span>${esc(ch.data.base.label)}</span>${delta(b.add, b.del)}</div>${b.files.map((f, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(f.path)}"><summary><span>${esc(f.path)}${f.shared ? `<span class="shared">shared with ${plural(f.shared, 'other box')}</span>` : ''}</span>${delta(f.add, f.del)}</summary><div class="code-box"></div></details>`).join('')}</div>`;
+  }
+  function wireChangeSection() {
+    for (const d of inspBody.querySelectorAll('.insp-change details')) {
+      const load = () => { if (d.open && !d.dataset.loaded) { d.dataset.loaded = '1'; loadDiff(d.dataset.path, d.querySelector('.code-box')); } };
+      d.addEventListener('toggle', load); load();
+    }
+  }
+  setInterval(() => { if (document.visibilityState === 'visible') loadChanges(); }, 10_000);
+
+  // ---------- plan review: the agent's plan on the map, approve or ask for changes ----------
+  const planBar = $('planbar');
+  let planRequest = false; // the next message asks for plan changes
+  function sendPlan() { toFrame({ type: 'plan', plan: state.plan && state.plan.page === state.page ? state.plan : null }); }
+  function renderPlan() {
+    const p = state.plan;
+    if (!p || p.status === 'done' || state.planHidden === `${p.slug}:${p.status}`) { planBar.hidden = true; planBar.innerHTML = ''; return; }
+    planBar.hidden = false;
+    const counts = [p.add.length && `${p.add.length} new`, p.touch.length && `${p.touch.length} changing`, p.remove.length && `${p.remove.length} removed`].filter(Boolean).join(', ');
+    const here = p.page === state.page;
+    let html = `<div class="pb-text"><b>Plan</b><span class="pb-title">${esc(p.title)}</span><span class="pb-meta">${esc(counts)}${p.revision > 1 && p.status === 'review' ? ', revised' : ''}</span></div>`;
+    if (p.status === 'review') {
+      html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve</button></div>`;
+    } else if (p.status === 'revise') {
+      html += `<div class="pb-acts"><span class="pb-wait">Waiting for the revised plan</span></div>`;
+    } else if (p.status === 'approved') {
+      html += `<div class="pb-acts"><span class="pb-wait">Approved. ${esc(agentName())} is building it.</span><button type="button" class="pb-btn" data-pb="changes">See what changed</button><button type="button" class="pb-x" data-pb="hide" aria-label="Hide">×</button></div>`;
+    }
+    planBar.innerHTML = html;
+  }
+  planBar.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-pb]')?.dataset.pb;
+    const p = state.plan; if (!act || !p) return;
+    if (act === 'open') go(p.page);
+    else if (act === 'hide') { state.planHidden = `${p.slug}:${p.status}`; renderPlan(); }
+    else if (act === 'changes') { ch.base = 'plan'; ch.data = null; setPanel(true); setTab('changes'); }
+    else if (act === 'request') {
+      setPanel(true); setTab('convo');
+      if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { plan: 'request' }); }
+      else { planRequest = true; input.placeholder = 'What should change in the plan?'; input.focus(); }
+    } else if (act === 'approve') {
+      // comments written before approving still go to the agent, first
+      if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t); }
+      await api('/api/plan', { action: 'approve' });
+    }
+  });
+
   // ---------- agent state ----------
   let tick = null;
   function renderWorking() {
@@ -466,7 +623,8 @@
     const s = state.conn === 'closed' ? 'closed' : state.agent.state;
     const shown = s === 'working' && isStale() ? 'stale' : s;
     $('agent').dataset.state = shown;
-    $('agentLabel').textContent = S.state[shown] ? S.state[shown](agentName()) : shown;
+    $('agentLabel').textContent = S.state[shown] || shown;
+    $('agent').title = S.stateLong[shown] ? S.stateLong[shown](agentName()) : '';
     clearInterval(tick);
     const el = $('elapsed');
     if (s === 'working' && state.agent.since) {
@@ -521,6 +679,7 @@
     const about = !extra.context && !extra.answer && state.about;
     if (about) context = [...context, { kind: 'element', label: about.label, src: about.src, excerpt: about.excerpt || '', page: state.page }];
     if (!text && !context.length && !extra.answer) return;
+    if (planRequest && !extra.answer) { extra = { ...extra, plan: 'request' }; planRequest = false; input.placeholder = S.placeholder; }
     const r = await api('/api/send', { text, context, page: state.page, ...extra });
     if (r.id && !r.delivered) { state.pending.add(r.id); markPending(r.id, true); }
     if (withNotes && notes.length && r.id) { state.notes = []; renderNotes(); syncFrameNotes(); }
@@ -566,7 +725,8 @@
       if (d.page && d.page !== state.page) setCurrent(d.page);
       closeInspector();
       if (state.pendingFocus) { const pf = state.pendingFocus; state.pendingFocus = null; setTimeout(() => toFrame({ type: 'focus', note: '', who: agentName(), ...pf }), 60); }
-      renderHeader(); sendMarks();
+      renderHeader(); sendMarks(); sendChangeMarks(); sendPlan(); renderPlan();
+      if (state.pendingOpen) { const src = state.pendingOpen; state.pendingOpen = null; setTimeout(() => toFrame({ type: 'open-box', src }), 80); }
       syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
     } else if (d.type === 'scroll') {
@@ -579,6 +739,9 @@
       renderNotes(); syncFrameNotes();
       if (d.send) send(input.value).then(() => { input.value = ''; autosize(); });
       else if (!panelOpen() && !narrow()) setPanel(true, false);
+    } else if (d.type === 'changes-names') {
+      for (const it of d.items || []) if (it && it.src) ch.names.set(String(it.src), String(it.name || '').slice(0, 80));
+      if (showingChanges()) renderChanges();
     } else if (d.type === 'note-remove') {
       state.notes = state.notes.filter((x) => x.id !== d.id); renderNotes(); syncFrameNotes();
     } else if (d.type === 'answer') {
@@ -621,7 +784,8 @@
         $('ver').textContent = `truemap ${d.version}`;
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';
         state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
-        renderAll(); renderAgent(); renderNotes();
+        state.plan = d.plan || null;
+        renderAll(); renderAgent(); renderNotes(); loadChanges(); renderPlan();
         const fromHash = decodeURIComponent((location.hash.match(/page=([^&]+)/) || [])[1] || '');
         const target = [state.page, fromHash, d.current].find((p) => p && state.pages.some((x) => x.page === p)) || state.pages[0]?.page;
         target ? go(target, { force: !frame.getAttribute('src') }) : showEmpty();
@@ -650,6 +814,12 @@
       } else if (d.type === 'show') {
         if (d.clear) toFrame({ type: 'clear-focus' });
         else pointAt(d.focus || [], d.note || '', AGENTS[d.agent] || agentName(), d.page);
+      } else if (d.type === 'plan') {
+        state.plan = d.plan || null; renderPlan(); sendPlan();
+      } else if (d.type === 'changes-base') {
+        loadChanges();
+      } else if (d.type === 'view') {
+        if (d.view === 'changes') { if (d.base) { ch.base = d.base; ch.data = null; } setPanel(true); setTab('changes'); }
       } else if (d.type === 'closing') {
         es.close(); setConn('closed');
       }

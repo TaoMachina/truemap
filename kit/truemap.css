@@ -358,6 +358,26 @@ html[data-tm-focusing] .tm-dg-label:not(.is-focus) { color: var(--dg-line-strong
 .tm-dg-edge.is-focus { stroke: var(--dg-ink); stroke-width: 1.75; }
 .tm-dg-head.is-focus { fill: var(--dg-ink); }
 .tm-dg-label.is-focus { color: var(--dg-ink); }
+/* reviewing changes: changed boxes carry their lines, the rest go quiet */
+html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) { border-color: var(--dg-line); }
+html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) .tm-dg-name, html[data-tm-changes] .tm-diagram .tm-node:not([data-tm-change]) .tm-dg-tag { color: var(--dg-line-strong); }
+html[data-tm-changes] .tm-diagram .tm-node[data-tm-change] { border-color: var(--dg-ink); }
+html[data-tm-changes] .tm-dg-edge:not(.is-hot) { stroke: var(--dg-line); stroke-width: 1.25; }
+html[data-tm-changes] .tm-dg-head:not(.is-hot) { fill: var(--dg-line); }
+html[data-tm-changes] .tm-dg-label:not(.is-hot) { color: var(--dg-line-strong); }
+.tm-diagram .tm-node[data-tm-delta]::after { display: block; content: attr(data-tm-delta); position: absolute; top: -9px; right: -8px; font: 10.5px/16px var(--dg-code); padding: 0 6px; border-radius: 8px; background: var(--dg-ink); color: var(--dg-bg); white-space: nowrap; pointer-events: none; }
+html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outline: 2px solid var(--tm-ink); outline-offset: 2px; }
+/* a plan on the map: new boxes dashed, touched boxes outlined, a small word on each */
+.tm-diagram .tm-node[data-plan="new"] { border: 1.5px dashed var(--dg-ink); }
+.tm-diagram .tm-node[data-plan="change"] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
+.tm-diagram .tm-node[data-plan="remove"] .tm-dg-name { text-decoration: line-through; }
+.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 10.5px/16px var(--dg-font); padding: 0 6px; border-radius: 8px; background: var(--dg-mark); color: var(--dg-ink); white-space: nowrap; pointer-events: none; }
+.tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "New"; }
+.tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Changes"; }
+.tm-diagram .tm-node[data-plan="remove"]:not([data-tm-delta])::after { content: "Removed"; }
+html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) .tm-dg-name { color: var(--dg-muted); }
+.tm-dg-edge.is-plan { stroke: var(--dg-ink); stroke-dasharray: 4 3; }
+.tm-dg-head.is-plan { fill: var(--dg-ink); }
 /* the box whose inspector is open */
 .tm-diagram .tm-node[data-tm-selected] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
 .tm-dg-probe { position: absolute; visibility: hidden; transform: none; }

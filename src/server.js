@@ -5,7 +5,9 @@ import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
-import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, writePrivate } from './common.js';
+import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, snapshotsPath, writePrivate } from './common.js';
+import { changes, fileDiff, snapshotTree } from './changes.js';
+import { cleanPlan, currentPlan, planMessage, readPlan, savePlan } from './plan.js';
 import { checkAll, listPages } from './check.js';
 import { exportPage, kitCss } from './export.js';
 import { snippet } from './snippet.js';
@@ -44,6 +46,44 @@ let idleTimer = null;
 let seq = 0;
 let lastCheck = { gitRepo: false, results: [] };
 const history = loadHistory();
+
+// ---------- change review: where "what changed" is measured from ----------
+const snapshots = (() => { try { return JSON.parse(readFileSync(snapshotsPath(root), 'utf8')); } catch { return {}; } })();
+function saveSnapshots() { try { writePrivate(snapshotsPath(root), JSON.stringify(snapshots)); } catch { /* ignore */ } }
+async function takeSnapshot(kind, extra = {}) {
+  const tree = await snapshotTree(root).catch(() => null);
+  if (!tree) return null;
+  snapshots[kind] = { tree, at: new Date().toISOString(), ...extra };
+  saveSnapshots(); changeCache.clear();
+  broadcast({ type: 'changes-base', kind });
+  return snapshots[kind];
+}
+const changeCache = new Map(); // base -> { at, promise }
+
+// ---------- plans ----------
+let plan = (() => { try { return currentPlan(root); } catch { return null; } })();
+function setPlan(p) {
+  plan = p;
+  if (p) { try { savePlan(root, p); } catch { /* ignore */ } }
+  broadcast({ type: 'plan', plan: p && p.status !== 'done' ? p : null });
+}
+async function approvePlan(by) {
+  if (!plan || plan.status === 'done') return false;
+  setPlan({ ...plan, status: 'approved', approvedAt: new Date().toISOString() });
+  await takeSnapshot('plan', { slug: plan.slug });
+  if (by === 'user') {
+    const msg = { id: `m${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), kind: 'approval', from: 'user', page: plan.page, text: `Approved the plan: ${plan.title}`, context: [], plan: plan.slug };
+    queue.push(msg); remember({ role: 'user', ...msg }); deliverQueue();
+  }
+  return true;
+}
+function changesFor(base) {
+  const hit = changeCache.get(base);
+  if (hit && Date.now() - hit.at < 3000) return hit.promise;
+  const promise = changes(root, base, snapshots).catch((e) => ({ error: String(e?.message || e) }));
+  changeCache.set(base, { at: Date.now(), promise });
+  return promise;
+}
 
 function loadHistory() {
   try {
@@ -104,6 +144,7 @@ function deliverQueue() {
   if (listener && (listener.res.destroyed || listener.res.writableEnded)) { clearTimeout(listener.timer); listener = null; setAgentState('idle'); }
   if (!listener || queue.length === 0) return;
   const messages = queue.splice(0, queue.length);
+  takeSnapshot('turn');
   setAgentState('working');
   lastAgentActivity = Date.now();
   broadcast({ type: 'delivered', ids: messages.map((m) => m.id) });
@@ -291,7 +332,7 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       res.write(`data: ${JSON.stringify({
         type: 'hello', version: VERSION, root, cmd: CMD, agent: agentInfo(), pages: safePages(), check: lastCheck,
-        history, current: currentPage, pending: queue.map((m) => m.id), ...(annotateWish !== undefined ? { annotate: annotateWish } : {}),
+        history, current: currentPage, pending: queue.map((m) => m.id), plan: plan && plan.status !== 'done' ? plan : null, ...(annotateWish !== undefined ? { annotate: annotateWish } : {}),
       })}\n\n`);
       annotateWish = undefined;
       clients.add(res);
@@ -324,6 +365,7 @@ const server = createServer(async (req, res) => {
         context,
         ...(answer ? { answer } : {}),
       };
+      if (b.plan === 'request' && plan && plan.status !== 'done') { msg.kind = 'plan_changes'; msg.plan = plan.slug; setPlan({ ...plan, status: 'revise' }); }
       queue.push(msg);
       endRequested = false; // a new message means the conversation goes on
       remember({ role: 'user', ...msg });
@@ -347,6 +389,17 @@ const server = createServer(async (req, res) => {
     }
     if (p === '/api/snippet' && req.method === 'GET') {
       try { return sendJson(res, 200, snippet(root, url.searchParams.get('src') || '')); } catch (e) { return sendJson(res, 200, { error: String(e.message || e) }); }
+    }
+    if (p === '/api/changes' && req.method === 'GET') {
+      return sendJson(res, 200, await changesFor(url.searchParams.get('base') || 'auto'));
+    }
+    if (p === '/api/diff' && req.method === 'GET') {
+      return sendJson(res, 200, await fileDiff(root, url.searchParams.get('base') || 'auto', snapshots, String(url.searchParams.get('path') || '')));
+    }
+    if (p === '/api/plan' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (b.action === 'approve') return sendJson(res, 200, { ok: await approvePlan('user') });
+      return sendJson(res, 400, { error: 'unknown action' });
     }
     if (p === '/api/end' && req.method === 'POST') {
       // The user is done talking on the page: free the agent to go back to the terminal.
@@ -407,6 +460,35 @@ const server = createServer(async (req, res) => {
       noteAgent(b.agent);
       broadcast({ type: 'show', page: typeof b.page === 'string' ? b.page : '', focus: cleanFocus(b.focus), note: String(b.note ?? '').slice(0, 2000), clear: !!b.clear, agent: agentName });
       return sendJson(res, 200, { ok: true, browsers: clients.size });
+    }
+    if (p === '/api/agent/changes' && req.method === 'POST') {
+      // `truemap changes`: the summary for the agent, and the Changes view for the user.
+      const b = await readBody(req);
+      noteAgent(b.agent);
+      const base = ['turn', 'plan', 'head', 'main'].includes(b.base) ? b.base : 'auto';
+      const r = await changesFor(base);
+      if (b.open !== false) broadcast({ type: 'view', view: 'changes', base });
+      return sendJson(res, 200, { ...r, browsers: clients.size });
+    }
+    if (p === '/api/agent/plan' && req.method === 'POST') {
+      const b = await readBody(req);
+      noteAgent(b.agent);
+      lastAgentActivity = Date.now();
+      if (b.status) {
+        if (!plan) return sendJson(res, 404, { error: 'no plan in play' });
+        if (b.status === 'approved') await approvePlan('agent');
+        else if (b.status === 'done') setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
+        return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status });
+      }
+      let p2;
+      try { p2 = cleanPlan(b.plan); } catch (e) { return sendJson(res, 400, { error: String(e.message || e) }); }
+      const prev = readPlan(root, p2.slug);
+      p2.revision = prev && prev.status !== 'done' ? (prev.revision || 1) + 1 : 1;
+      p2.status = 'review'; p2.at = new Date().toISOString();
+      setPlan(p2);
+      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2), focus: [...p2.touch.map((t) => t.box), ...p2.add.map((a) => a.id)].slice(0, 20) });
+      broadcast({ type: 'navigate', page: p2.page, pages: safePages() });
+      return sendJson(res, 200, { ok: true, slug: p2.slug, revision: p2.revision, page: p2.page, browsers: clients.size });
     }
     if (p === '/api/agent/progress' && req.method === 'POST') {
       const b = await readBody(req);

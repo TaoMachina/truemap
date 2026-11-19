@@ -256,7 +256,11 @@ async function doListen(root, opts) {
     const decided = b.messages.filter((m) => m.kind === 'answer' && m.from === 'user');
     if (decided.length) block('decision_note', 'The user made a decision on the page. Act on it, and record it on the relevant page (what was chosen and why) so it stays with the project.');
     block('next_step', [
-      b.messages.every((m) => m.kind === 'answer')
+      b.messages.some((m) => m.kind === 'approval')
+        ? `The user APPROVED your plan. Build it now; changes are measured from this moment. When done: put new boxes on the page for real (with data-src), run \`${CMD} plan --done\`, then \`${CMD} changes\` so the user can review the result on the map.`
+        : b.messages.some((m) => m.kind === 'plan_changes')
+        ? `The user asked for changes to your plan. Answer every comment, then write the revised plan (same title) and run \`${CMD} plan --file <plan.json>\` again. Do not build yet.`
+        : b.messages.every((m) => m.kind === 'answer')
         ? 'The user answered your question. Act on the choice now, and record the decision (what and why) on the relevant page.'
         : 'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
       'If the answer changes the page (or the code it describes), update the page; the browser reloads by itself.',
@@ -308,6 +312,62 @@ async function cmdAsk(root, args, opts) {
   opts.ask = { question, options };
   opts.listen = true;
   await cmdReply(root, [question], opts);
+}
+
+async function cmdChanges(root, args, opts) {
+  const state = (await liveState(root)) || await ensureServer(root);
+  const base = opts.base || 'auto';
+  const r = (await call(state, 'POST', '/api/agent/changes', { base, open: !opts.noOpen, agent: detectAgent() })).body || {};
+  if (r.error) { out('status: error'); out(`error: ${q(r.error)}`); return; }
+  out(`base: ${q(r.base.label)}`);
+  out(`files_changed: ${r.files}  # +${r.add} -${r.del}`);
+  if (r.boxes.length) {
+    out('boxes:   # boxes whose files changed (attribution is by file)');
+    for (const b of r.boxes) out(`  - ${q(b.src)}  +${b.add} -${b.del}  files: ${b.files.map((f) => q(f.path)).join(', ')}`);
+  }
+  if (r.unmapped.length) {
+    out('not_on_the_map:');
+    for (const g of r.unmapped) out(`  - ${q(g.folder)}  ${g.files.map((f) => q(f.path)).join(', ')}`);
+  }
+  out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
+  const steps = [];
+  if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
+  if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
+  steps.push(agentLoopHint());
+  block('next_step', steps.join('\n'));
+}
+
+async function cmdPlan(root, args, opts) {
+  if (opts.approve || opts.done) {
+    const state = await liveState(root);
+    if (!state) { out('status: no_server'); return; }
+    const r = await call(state, 'POST', '/api/agent/plan', { status: opts.approve ? 'approved' : 'done', agent: detectAgent() });
+    if (r.status !== 200) throw new Error(r.body?.error || `plan update failed (${r.status})`);
+    out(`status: ${r.body.status}`);
+    out(`plan: ${q(r.body.plan)}`);
+    block('next_step', opts.approve
+      ? `The plan is approved; changes are measured from now. Build it. When you are done, put the new boxes on the page for real (with data-src), run \`${CMD} plan --done\`, then \`${CMD} changes\` so the user can review what you did.`
+      : `The plan is closed. Run \`${CMD} changes\` to show the user what changed.`);
+    return;
+  }
+  if (!opts.file) throw new Error(`plan needs --file plan.json (or --file - to read stdin); see \`${CMD} guide\` for the format`);
+  let raw;
+  try { raw = JSON.parse(opts.file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(opts.file), 'utf8')); } catch (e) { throw new Error(`could not read the plan: ${e.message}`); }
+  ensureFolder(root);
+  const state = await ensureServer(root);
+  const r = await call(state, 'POST', '/api/agent/plan', { plan: raw, agent: detectAgent() });
+  if (r.status !== 200) throw new Error(`plan rejected: ${r.body?.error || r.status}`);
+  const url = `http://127.0.0.1:${state.port}/?t=${state.token}#page=${encodeURIComponent(r.body.page)}`;
+  if (!r.body.browsers && !process.env.TRUEMAP_NO_OPEN && !opts.noOpen) openBrowser(url);
+  out('status: plan_shown');
+  out(`plan: ${q(r.body.slug)}  # ${FOLDER}/plans/${r.body.slug}.json, revision ${r.body.revision}`);
+  out(`page: ${q(r.body.page)}`);
+  out(`url: ${url}`);
+  block('next_step', [
+    'Tell the user in the terminal, in 1-3 lines, what the plan does and that they can review it on the map (or just say "go" here).',
+    `Do not start building yet. Wait for the review: ${agentLoopHint()}`,
+    `If the user says "go" in the terminal instead, run \`${CMD} plan --approve\` and start.`,
+  ].join('\n'));
 }
 
 async function cmdProgress(root, args) {
@@ -399,6 +459,10 @@ usage:
   ${CMD} reply "…" --focus id,id  answer and light up the boxes the answer is about
   ${CMD} ask "<question>" --option "A | why" --option "B | why"
                                 ask the user to choose, only when you are blocked on a real trade-off
+  ${CMD} plan --file plan.json  before a change that touches 3+ boxes or adds one: show the plan on the map for review
+  ${CMD} plan --approve|--done  the user said "go" in the terminal / the plan is built
+  ${CMD} changes [--base turn|plan|head|main]
+                                what changed, by box; opens the Changes view for the user
   ${CMD} progress "<text>"      show a short status line in the chat while you work
   ${CMD} stop                   stop the background server
 
@@ -424,6 +488,9 @@ function parseArgs(argv) {
     else if (a === '--focus') opts.focus = argv[++i];
     else if (a === '--note') opts.note = argv[++i];
     else if (a === '--clear') opts.clear = true;
+    else if (a === '--base') opts.base = argv[++i];
+    else if (a === '--approve') opts.approve = true;
+    else if (a === '--done') opts.done = true;
     else if (a === '--option') (opts.option ||= []).push(argv[++i]);
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--version' || a === '-v') opts.version = true;
@@ -435,7 +502,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, changes: cmdChanges, plan: cmdPlan, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();

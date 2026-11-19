@@ -76,6 +76,7 @@ export function rootKey(root) {
 export function serverStatePath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.json`); }
 export function serverLockPath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.lock`); }
 export function historyPath(root) { return join(stateSubdir('history'), `${rootKey(root)}.jsonl`); }
+export function snapshotsPath(root) { return join(stateSubdir('snapshots'), `${rootKey(root)}.json`); }
 
 export function readJson(file) {
   try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
