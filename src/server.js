@@ -7,7 +7,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync,
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
-import { cleanPlan, currentPlan, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox } from './plan.js';
+import { cleanPlan, currentPlan, parseReport, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox, stepCheck } from './plan.js';
 import { checkAll, listPages } from './check.js';
 import { exportPage, kitCss } from './export.js';
 import { snippet } from './snippet.js';
@@ -87,7 +87,7 @@ function changesFor(base, fresh = false) {
   const promise = changes(root, base, snapshots).then((r) => {
     // measured from the plan's approval: say how the work compares with the plan
     const p = plan && snapshots.plan?.slug === plan.slug ? plan : snapshots.plan?.slug ? readPlan(root, snapshots.plan.slug) : null;
-    if (!r.error && r.base?.kind === 'plan' && p) r.plan = planCheck(root, p, r);
+    if (!r.error && r.base?.kind === 'plan' && p) { r.plan = planCheck(root, p, r); r.plan.steps = stepCheck(root, p, r); r.plan.status = p.status; }
     return r;
   }).catch((e) => ({ error: String(e?.message || e) }));
   changeCache.set(base, { at: Date.now(), promise });
@@ -522,7 +522,12 @@ const server = createServer(async (req, res) => {
         if (b.status === 'approved') await approvePlan('agent');
         let check = null;
         if (b.status === 'done') {
-          if (snapshots.plan?.slug === plan.slug) { const r = await changesFor('plan', true); check = r.plan || null; }
+          // closing a plan takes the agent's account of every step
+          let rep2;
+          try { rep2 = parseReport(plan, Array.isArray(b.steps) ? b.steps : []); } catch (e) { return sendJson(res, 400, { error: String(e.message || e) }); }
+          if (rep2.missing.length) return sendJson(res, 400, { error: 'report every step', missing: rep2.missing, steps: plan.steps });
+          plan = { ...plan, report: rep2.report };
+          if (snapshots.plan?.slug === plan.slug) { await takeSnapshot('planEnd', { slug: plan.slug }); const r = await changesFor('plan', true); check = r.plan || null; }
           setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
         }
         return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status, check });

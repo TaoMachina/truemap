@@ -380,3 +380,10 @@ code { font-family: var(--code); font-size: 0.9em; }
 .insp-planned span { display: block; margin-top: 2px; font-size: 12px; color: var(--faint); }
 .ch-want { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .insp-back.news::after { content: "New message"; margin-left: 8px; font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 8px; background: var(--mark); color: var(--ink); }
+.ch-steps { margin: 4px 4px 10px; padding-left: 20px; display: grid; gap: 8px; font-size: 13px; }
+.ch-steps li::marker { color: var(--faint); }
+.st-text { display: block; color: var(--text); }
+.st-rep { display: inline-block; margin-top: 3px; font-size: 12px; color: var(--faint); }
+.st-rep.st-done { color: var(--fine); }
+.st-rep.st-partly, .st-rep.st-not_built, .st-rep.st-dropped { color: var(--changed); }
+.st-fact { display: block; margin-top: 2px; font-size: 12px; color: var(--changed); }

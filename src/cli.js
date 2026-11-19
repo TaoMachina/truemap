@@ -358,10 +358,14 @@ async function cmdChanges(root, args, opts) {
     for (const p of r.plan.planned.filter((x) => x.changed)) out(`  - planned, has changes: ${q(p.name || p.box)}  files: ${p.files.map(q).join(', ')}  # planned: ${q(p.what || '')}`);
     for (const p of missing) out(`  - planned, no changes: ${q(p.name || p.box)}${p.src ? '' : '   # no data-src on the page yet'}  # planned: ${q(p.what || '')}`);
     for (const u of r.plan.unplanned) out(`  - changed but not in the plan: ${q(u)}`);
+    for (const st of r.plan.steps || []) {
+      const quiet = [...st.files.filter((x) => !x.changed).map((x) => x.path), ...st.boxes.filter((x) => !x.changed).map((x) => x.name)];
+      out(`  - step ${st.n}${st.report ? ` (you reported: ${st.report.status})` : ''}: ${q(st.text)}${quiet.length ? `   # names ${quiet.map(q).join(', ')} with no changes` : ''}`);
+    }
   }
   out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
-  if (r.plan) steps.push('Compare each planned item with its diff yourself and tell the user plainly which parts are done, partly done or not built. The counts above only say where files changed.');
+  if (r.plan) steps.push(`Compare each step with the diff yourself. Your verdict goes on the page: \`${CMD} plan --done --step "1=done" --step "2=not_built:why"\` (every step), and say it in the terminal too. The counts above only say where files changed.`);
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
@@ -372,7 +376,14 @@ async function cmdPlan(root, args, opts) {
   if (opts.approve || opts.done) {
     const state = await liveState(root);
     if (!state) { out('status: no_server'); return; }
-    const r = await call(state, 'POST', '/api/agent/plan', { status: opts.approve ? 'approved' : 'done', agent: detectAgent() });
+    const r = await call(state, 'POST', '/api/agent/plan', { status: opts.approve ? 'approved' : 'done', steps: opts.step || [], agent: detectAgent() });
+    if (r.status === 400 && r.body?.missing) {
+      out('status: report_needed');
+      out('steps:   # say what happened to every step; the user sees your report beside the facts');
+      r.body.steps.forEach((st, i) => out(`  ${i + 1}. ${q(st)}${r.body.missing.includes(i + 1) ? '   # not reported' : ''}`));
+      block('next_step', `Run \`${CMD} plan --done\` again with one --step per step: --step "1=done" --step "2=partly:the UI field is missing" --step "3=not_built:hub.ts does not start the watchdog yet". Statuses: done, partly, not_built, dropped (a note after a colon is required for all but done). Check each step against your diff first; be exact.`);
+      return;
+    }
     if (r.status !== 200) throw new Error(r.body?.error || `plan update failed (${r.status})`);
     out(`status: ${r.body.status}`);
     out(`plan: ${q(r.body.plan)}`);
@@ -429,7 +440,7 @@ async function cmdProgress(root, args) {
 async function cmdCheck(root, args, opts) {
   if (opts.ok) {
     const page = resolvePage(root, opts.ok);
-    if (!markOk(root, page)) throw new Error(`page not found: ${FOLDER}/${page}`);
+    if (!markOk(root, page, opts.box)) throw new Error(`page not found: ${FOLDER}/${page}`);
     out(`status: marked ${q(page)} as reviewed`);
     const state = await liveState(root);
     if (state) await call(state, 'POST', '/api/check', {}).catch(() => {});
@@ -539,6 +550,8 @@ function parseArgs(argv) {
     else if (a === '--base') opts.base = argv[++i];
     else if (a === '--approve') opts.approve = true;
     else if (a === '--done') opts.done = true;
+    else if (a === '--step') (opts.step ||= []).push(argv[++i]);
+    else if (a === '--box') (opts.box ||= []).push(argv[++i]);
     else if (a === '--option') (opts.option ||= []).push(argv[++i]);
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--version' || a === '-v') opts.version = true;

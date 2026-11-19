@@ -334,20 +334,28 @@ export function checkAll(root, pages) {
 }
 
 /** Stamps the page as reviewed now, which clears its "changed" marks. */
-export function markOk(root, page) {
+export function markOk(root, page, boxes) {
   const rel = pageInFolder(root, page);
   if (!rel) return false;
   const file = join(root, FOLDER, rel);
   if (!existsSync(file)) return false;
   let html = readFileSync(file, 'utf8');
   const tag = `<meta name="truemap-verified" content="${new Date().toISOString()}">`;
+  if (boxes?.length) { // one box: its fingerprint only
+    const ctx = createContext(root);
+    const only = new Set(boxes.flatMap((b) => { const t = html.match(new RegExp(`<[^>]*\\sid=["']${escapeRe(b)}["'][^>]*>`))?.[0]; return [b, t?.match(/data-src=["']([^"']+)/)?.[1]].filter(Boolean); }));
+    for (const src of extractAnchors(html)) { if (!only.has(src)) continue; const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
+    ctx.recordsDirty = true; saveRecords(ctx);
+    return true;
+  }
   if (META_RE.test(html)) html = html.replace(META_RE, tag);
   else if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => `${m}\n${tag}`);
   else html = `${tag}\n${html}`;
   writeFileSync(file, html);
   // every box on the page matches its code as it is now
   const ctx = createContext(root);
-  for (const src of extractAnchors(html)) { const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
+  const only = boxes?.length ? new Set(boxes.flatMap((b) => { const tag = html.match(new RegExp(`<[^>]*\\sid=["']${escapeRe(b)}["'][^>]*>`))?.[0]; return [b, tag?.match(/data-src=["']([^"']+)/)?.[1]].filter(Boolean); })) : null;
+  for (const src of extractAnchors(html)) { if (only && !only.has(src)) continue; const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
   ctx.recordsDirty = true; saveRecords(ctx);
   return true;
 }

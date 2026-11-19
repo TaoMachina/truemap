@@ -96,3 +96,15 @@ test('planCheck: planned and changed, planned but untouched, changed outside the
   assert.match(msg, /\+ touch all/);
   assert.match(msg, /\+ new box Limits/);
 });
+
+test('steps are checked against the files and boxes they name; closing a plan needs a report for every step', async () => {
+  const { stepCheck, parseReport, cleanPlan: clean } = await import('../src/plan.js');
+  const { root } = repo();
+  const plan = clean({ title: 'T', page: 'index.html', touch: [{ box: 'runs' }], steps: ['Track it in [Runs](#runs)', 'Start it in createHub (server/hub.ts)'] });
+  const st = stepCheck(root, plan, { files_list: [{ path: 'server/routing.ts' }], boxes: [{ src: 'server/routing.ts#Runs' }] });
+  assert.equal(st[0].boxes[0].changed, true);
+  assert.deepEqual(st[1].files, [{ path: 'server/hub.ts', changed: false }]);
+  assert.deepEqual(parseReport(plan, ['1=done']).missing, [2]);
+  assert.throws(() => parseReport(plan, ['2=not_built']), /say why/);
+  assert.equal(parseReport(plan, ['1=done', '2=not_built:later']).report[1].status, 'not_built');
+});

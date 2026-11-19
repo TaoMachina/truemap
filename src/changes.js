@@ -51,7 +51,10 @@ async function mainBase(root) {
 
 export async function resolveBase(root, kind, snapshots = {}) {
   const want = kind && kind !== 'auto' ? kind : snapshots.plan ? 'plan' : snapshots.turn ? 'turn' : 'head';
-  if (want === 'plan' && snapshots.plan) return { kind: 'plan', tree: snapshots.plan.tree, at: snapshots.plan.at, label: 'Since you approved the plan' };
+  if (want === 'plan' && snapshots.plan) {
+    const end = snapshots.planEnd?.slug === snapshots.plan.slug ? snapshots.planEnd : null;
+    return { kind: 'plan', tree: snapshots.plan.tree, to: end?.tree, at: snapshots.plan.at, label: end ? 'What was done for the plan' : 'Since you approved the plan' };
+  }
   if (want === 'turn' && snapshots.turn) return { kind: 'turn', tree: snapshots.turn.tree, at: snapshots.turn.at, label: 'Since the agent’s last turn began' };
   if (want === 'main') {
     const m = await mainBase(root);
@@ -133,19 +136,19 @@ export function attribute(root, files) {
 export async function changes(root, kind, snapshots) {
   const base = await resolveBase(root, kind, snapshots);
   if (!base) return { error: 'not a git repository, or no commits yet' };
-  const now = await snapshotTree(root);
+  const now = base.to || await snapshotTree(root);
   if (!now) return { error: 'could not read the working tree' };
   const files = await diffFiles(root, base.tree, now);
   if (!files) return { error: 'git diff failed' };
   const bases = [snapshots.plan && 'plan', snapshots.turn && 'turn', 'head', 'main'].filter(Boolean);
-  return { base: { kind: base.kind, label: base.label, at: base.at || null }, bases, files: files.length, add: files.reduce((n, f) => n + (f.add || 0), 0), del: files.reduce((n, f) => n + (f.del || 0), 0), ...attribute(root, files), now };
+  return { base: { kind: base.kind, label: base.label, at: base.at || null }, bases, files_list: files.map((x) => ({ path: x.path })), files: files.length, add: files.reduce((n, f) => n + (f.add || 0), 0), del: files.reduce((n, f) => n + (f.del || 0), 0), ...attribute(root, files), now };
 }
 
 /** The unified diff of one file against the base (cut at 200 KB). */
 export async function fileDiff(root, kind, snapshots, path) {
   const base = await resolveBase(root, kind, snapshots);
   if (!base) return { error: 'no base' };
-  const now = await snapshotTree(root);
+  const now = base.to || await snapshotTree(root);
   const text = await git(root, ['diff', '--no-renames', '--no-color', '-U3', base.tree, now, '--', path]);
   if (text === null) return { error: 'git diff failed' };
   return { path, text: text.length > 200_000 ? `${text.slice(0, 200_000)}\n… (cut)` : text };

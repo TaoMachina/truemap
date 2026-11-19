@@ -82,13 +82,9 @@ function revisionDiff(prev, plan, nameOf = (b) => b) {
   for (const [k, v] of a) if (!b.has(k)) out.push(`− no longer ${k.split(':')[0] === 'add' ? 'adds' : k.split(':')[0] === 'touch' ? 'touches' : 'removes'} ${v}`);
   const what = (p) => new Map(p.touch.map((t) => [t.box, t.what]));
   for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${nameOf(box)}: was "${what(prev).get(box)}", now "${w}"`);
-  const n = Math.max(prev.steps.length, plan.steps.length);
-  for (let i = 0; i < n; i++) {
-    if (prev.steps[i] === plan.steps[i]) continue;
-    if (prev.steps[i] === undefined) out.push(`+ step ${i + 1}: ${plan.steps[i]}`);
-    else if (plan.steps[i] === undefined) out.push(`− step ${i + 1}: ${prev.steps[i]}`);
-    else out.push(`~ step ${i + 1}: was "${prev.steps[i]}", now "${plan.steps[i]}"`);
-  }
+  const before = new Set(prev.steps); const after = new Set(plan.steps);
+  plan.steps.forEach((st, i) => { if (!before.has(st)) out.push(`+ step ${i + 1}: ${st}`); });
+  prev.steps.forEach((st) => { if (!after.has(st)) out.push(`− removed step: ${st}`); });
   return out;
 }
 
@@ -112,6 +108,37 @@ export function srcOfBox(root, page, box, want = 'data-src') {
   const esc = box.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const tag = html.match(new RegExp(`<[^>]*\\sid=["']${esc}["'][^>]*>`, 'i'))?.[0];
   return tag?.match(new RegExp(`\\s${want}=["']([^"']+)["']`, 'i'))?.[1] || null;
+}
+
+const PATH_RE = /(?<![\w@/.-])((?:[\w.-]+\/)*[\w.-]+\.(?:[a-z]{1,6}))(?![\w/])/gi;
+/** Each step against the facts: files it names and boxes it links, and whether those changed. */
+export function stepCheck(root, plan, result) {
+  const changedFiles = new Set((result.files_list || []).map((x) => x.path));
+  const changedBoxes = new Set((result.boxes || []).map((b) => b.src));
+  return plan.steps.map((text, i) => {
+    const files = [...new Set([...text.matchAll(PATH_RE)].map((m) => m[1]).filter((p) => p.includes('/') || /\.(ts|tsx|js|jsx|mjs|py|go|rs|java|rb|php|cs|sql|json|ya?ml|css|html|md)$/i.test(p)))]
+      .map((p) => ({ path: p, changed: [...changedFiles].some((c) => c === p || c.endsWith(`/${p}`)) }));
+    const boxes = [...text.matchAll(/\[([^\]]+)\]\(#([\w-]+)\)/g)].map((m) => { const src = srcOfBox(root, plan.page, m[2]); return { id: m[2], name: m[1], changed: !!src && changedBoxes.has(src) }; });
+    const rep = plan.report?.[i] || null;
+    return { n: i + 1, text, files, boxes, report: rep };
+  });
+}
+
+/** The agent's account of each step, required to close a plan. */
+const STATUS = new Set(['done', 'partly', 'not_built', 'dropped']);
+export function parseReport(plan, specs) {
+  const report = plan.steps.map(() => null);
+  for (const spec of specs) {
+    const m = String(spec).match(/^\s*(\d+)\s*=\s*([a-z_]+)\s*(?::\s*(.*))?$/i);
+    if (!m) throw new Error(`--step "${spec}": write it as N=done|partly|not_built|dropped[:note]`);
+    const n = +m[1]; const status = m[2].toLowerCase();
+    if (n < 1 || n > plan.steps.length) throw new Error(`--step ${n}: the plan has ${plan.steps.length} steps`);
+    if (!STATUS.has(status)) throw new Error(`--step ${n}: status must be done, partly, not_built or dropped`);
+    if (status !== 'done' && !m[3]) throw new Error(`--step ${n}=${status}: say why after a colon`);
+    report[n - 1] = { status, note: (m[3] || '').slice(0, 400) };
+  }
+  const missing = report.map((r, i) => (r ? 0 : i + 1)).filter(Boolean);
+  return { report, missing };
 }
 
 /** Plan entries that name boxes or groups the page doesn't have. */
