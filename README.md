@@ -2,24 +2,24 @@
 
 # truemap
 
-**A map of your codebase that your agent draws, and that stays true to the code.**
+**Review what your coding agents plan and what they changed, on a map of your system that stays true to the code.**
 
-Your coding agent explains the project as HTML pages in your repo: a blueprint of the whole system, a page per module, the options when it needs your call. You read them in the browser, click any box to comment on it, and the agent answers right next to the page. Every box is pinned to real code, so when the code moves on, the map tells you.
+Your agent keeps a map of the project in your repo: small boxes in groups, each pinned to real code. Before a bigger change it draws the plan on that map and waits for your approval. After it edits, the changed boxes light up with their lines, one click away from the diff. You ask about anything right next to the map, and the answer points at the boxes it talks about.
 
-![The truemap workspace: the agent answers a question and lights up the two boxes it is talking about, with a note beside them](docs/images/workspace.png)
+![The truemap workspace: a plan drawn on the project map, with the new box dashed and the touched boxes marked, waiting for approval](docs/images/workspace.png)
 
 ## Why
 
-Coding agents write code faster than anyone can read it. Their explanations come back as walls of text, and the diagrams they draw are gone after one chat.
+Coding agents write code faster than anyone can read it. Review is the bottleneck, and a wall of text or a 40-file diff is the wrong place to do it.
 
-- **Pages, not paragraphs.** The agent draws the architecture, a flow, or the options as a page and opens it for you.
-- **Click any box, see the real code.** Every box opens a panel: what it does, why it is built that way, the actual lines it points to (read live from your repo), and what it calls and what calls it.
-- **Follow a behaviour.** "Follow a path" buttons light up how a request travels through the system; hover a box and its own wires come forward.
-- **The agent points back.** While it explains, the agent lights up the boxes it is talking about and pins a note beside them. Its answers link straight to boxes on the map.
-- **Point at it.** Switch on Annotate, click a box or select a sentence, write a comment. Comments go out together, each with the code it points to. It is the agent session you already have open: no login, no extra app.
-- **Decide only when it matters.** The agent asks only when it is blocked on a choice that is hard to undo; the options show up in the conversation and one click answers.
-- **Pages that stay true.** Every box carries a `data-src="path#name"` anchor. When that code changes or disappears, the box is marked and the agent fixes the page.
-- **It stays in the repo.** Pages live in `.truemap/`, with `index.html` as the blueprint. Plain files you commit, diff and share.
+- **Review the plan before the work.** For a change that touches several parts, the agent draws what it will add and touch on the map. Click a box to comment, then approve or ask for changes. The agent waits.
+- **Review the change after the work.** Changed boxes carry their +/− lines; files no box covers are listed by folder. Click a box to see its diff. Measured from when the agent picked up your message, from when you approved the plan, or against your main branch.
+- **Ask, and the answer points.** Answers come as short steps; each step lights up the boxes it is about. Escape or a click on empty space brings back the plain map.
+- **Click any box.** What it does, what to know, why it is built that way, what it calls, and the real code (read live from your repo) when you want it.
+- **A map that stays true.** Every box carries a `data-src="path#name"` anchor. When that code changes or disappears, the box is marked and the agent fixes the map.
+- **Many projects.** Every project with truemap running is one click away, and the tab tells you when another one needs you (a plan to review, a new reply).
+- **Any agent.** Claude Code, Codex, OpenCode, Cursor CLI, or agents inside hosts such as T3 Code: anything that can run a shell command.
+- **It stays in the repo.** Maps live in `.truemap/`. Plain HTML files you commit, diff and share.
 
 ## Install
 
@@ -29,7 +29,7 @@ Install the skill once. That is the whole setup.
 npx skills add TaoMachina/truemap --skill truemap
 ```
 
-Then talk to your agent (Claude Code or Codex) as usual: *"How does payment work?"* or *"Show me the project."* The agent writes or updates a page and opens it. You can also ask directly: `/truemap draw the architecture`.
+Then work with your agent as usual. Ask *"show me the project"* for a first map; ask for a bigger change and the agent shows the plan first. You can also ask directly: `/truemap draw the architecture`.
 
 No skill installed? Tell the agent: *"use `npx -y truemap-cli --help`"*.
 
@@ -38,40 +38,39 @@ No skill installed? Tell the agent: *"use `npx -y truemap-cli --help`"*.
 ```
 your repo/
 └── .truemap/
-    ├── index.html          the blueprint: every module links to its page
-    ├── payments.html
-    ├── retry-decision.html
-    └── assets/theme.css    optional: your brand colors and font
+    ├── index.html        the map of the whole system
+    ├── payments.html     a page per module, when one is needed
+    └── plans/            plans the agent proposed (JSON)
 ```
 
 | Command (run by the agent) | What it does |
 |---|---|
-| `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in your browser, or switches the tab you already have open |
-| `npx -y truemap-cli outline` | A compact map of the repo, so the first blueprint takes minutes, not an hour |
-| `npx -y truemap-cli listen` | Waits for your next message or comments from the page |
-| `npx -y truemap-cli reply "…" --listen [--focus ids]` | Shows the answer in the conversation panel (lighting up boxes it is about), then keeps listening |
-| `npx -y truemap-cli show [page] --focus ids --note "…"` | Points at the map while explaining: lights up boxes and pins a note |
-| `npx -y truemap-cli ask "…" --option "A \| why" …` | Asks the user to choose, only when the agent is blocked on a real trade-off |
-| `npx -y truemap-cli check` | Checks every `data-src` anchor against the code, and that every map wire has a target |
-| `npx -y truemap-cli export <page>` | Writes the page as one self-contained HTML file to share (also in the workspace ⋮ menu) |
-| `npx -y truemap-cli guide` | The page-writing guide for agents: the map, anchors, decisions, design rules |
+| `npx -y truemap-cli [page]` | Opens the workspace in your browser, or switches the tab you already have open |
+| `npx -y truemap-cli outline` | A compact outline of the repo, so the first map takes minutes |
+| `npx -y truemap-cli plan --file plan.json` | Draws a plan on the map for review; `--approve` / `--done` from the terminal |
+| `npx -y truemap-cli changes [--base head\|main]` | What changed, by box; opens the Changes view |
+| `npx -y truemap-cli listen` | Waits for your next message, comments or approval |
+| `npx -y truemap-cli reply "…" --listen` | Shows the answer in the panel, then keeps listening |
+| `npx -y truemap-cli show [page] --focus ids --note "…"` | Points at the map while explaining |
+| `npx -y truemap-cli check` | Checks every anchor against the code, and that each map follows the drawing rules |
+| `npx -y truemap-cli export <page>` | Writes a page as one self-contained HTML file to share |
+| `npx -y truemap-cli guide` | The guide for agents: maps, anchors, plans, changes |
 
-The checker works for any language. It uses git and a plain-text search:
+The map is declared, not drawn: the agent writes groups, boxes and connections in HTML, and truemap lays them out (one reading direction, few crossings, curved arrows with a verb on each). The look is fixed on purpose, so every map reads the same.
 
-- **No longer matches**: the path is gone, or `#name` no longer appears in the file (whole word, case-sensitive).
-- **Changed in code**: the file changed after the page was last updated. The agent reviews it, then updates the page or runs `check --ok`.
+Changes come from git. truemap snapshots the working tree through a throwaway copy of the index (your staging area is never touched) and attributes each changed file to the boxes whose anchors cover it.
 
 Everything runs on your machine:
 
 - The server listens on `127.0.0.1` only and needs a per-launch token.
 - Pages render in a sandboxed frame on a separate origin, so page scripts can't reach the agent.
-- Nothing leaves your machine. truemap keeps a local log of which commands ran (`~/.truemap/usage.jsonl`) and the chat history per repo (`~/.truemap/history/`); delete them any time.
+- Nothing leaves your machine. truemap keeps a local log of which commands ran (`~/.truemap/usage.jsonl`), the chat history and change snapshots per repo (`~/.truemap/`); delete them any time.
 
 ## Requirements
 
 - Node.js 20 or newer
-- git (optional; without it, only missing paths and names are checked)
+- git (for change review; without it, only missing paths and names are checked)
 
 ## License
 
-MIT. Fonts: IBM Plex Sans and IBM Plex Mono, SIL Open Font License (`kit/fonts/OFL.txt`).
+MIT. Layout: [dagre](https://github.com/dagrejs/dagre) (MIT). Fonts: Instrument Sans and Commit Mono, SIL Open Font License (`kit/fonts/`).

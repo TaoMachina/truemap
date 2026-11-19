@@ -1,6 +1,6 @@
-# Architecture (v0.1, solo)
+# Architecture
 
-> 2026-11-19, v0.2. This describes what is implemented. Earlier, heavier designs are kept in [archive/](archive/).
+> 2026-11-19, v0.5. This describes what is implemented; the v0.5 decisions are in [SPEC-v0.5.md](SPEC-v0.5.md). Earlier, heavier designs are kept in [archive/](archive/).
 
 ## First principles
 
@@ -41,7 +41,9 @@ We own three distribution points:
 
 | Command | What it does |
 |---|---|
-| `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. `--annotate` turns on comment mode. Prints the check result for the page and a `next_step` |
+| `npx -y truemap-cli [page]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. Prints the check result for the page and a `next_step` |
+| `npx -y truemap-cli plan --file plan.json` / `--approve` / `--done` | Draws a plan on its map for review; `listen` returns the approval or the requested changes |
+| `npx -y truemap-cli changes [--base turn\|plan\|head\|main]` | What changed, by box, and opens the Changes view |
 | `npx -y truemap-cli outline` | A compact repo outline (folders, sizes, manifests, likely entry points) so the first blueprint is fast |
 | `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
 | `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-] [--focus ids]` | Shows the answer in the chat and lights up the boxes it is about. With `--listen` it keeps listening in the same call |
@@ -61,11 +63,11 @@ We own three distribution points:
 
 ```
 browser workspace (http://127.0.0.1:<port>/?t=<token>)
- ├─ top bar: mark + page switcher (Ctrl/Cmd+K) + check status + Annotate switch + one panel toggle
+ ├─ top bar: projects menu + page switcher (Ctrl/Cmd+K) + check status + one panel toggle
+ ├─ plan bar (when a plan is in review): Approve / Request changes
  ├─ center: the page in a sandboxed iframe from a SEPARATE origin (http://127.0.0.1:<contentPort>)
- │    the injected SDK draws map wires (data-to), shows check marks, and in annotate mode turns
- │    clicks and text selections into numbered comments
- └─ conversation panel (collapsible): agent state, history, queued comments, composer, state notices
+ │    the injected SDK lays out maps (dagre), draws connections, marks stale / changed / planned boxes
+ └─ panel (collapsible): Conversation | Changes tabs; the inspector replaces it while a box is open
         │  SSE (server → browser) + fetch POST (browser → server)
 local server (src/server.js, one per repo, detached, auto-exits when idle)
  ├─ chat queue between browser and agent
@@ -83,10 +85,13 @@ CLI (src/cli.js) ← run by the agent
 | `src/check.js` | Anchor checker; also lists pages |
 | `src/outline.js` | Repo outline for `truemap outline` |
 | `src/export.js` | One-file export; also builds the served kit CSS |
-| `src/ui/wires.js` | Map wire router: one track per wire in each gap, routes round boxes, gaps grow to fit. Shared by the SDK and exports |
+| `src/ui/diagram.js` | v0.5 maps (`figure.tm-diagram`): groups and small boxes laid out by dagre (vendored, MIT) in the author's group order, curved arrows, labels placed on their own edge, flows as tabs with numbered steps, plan ghosts. Shared by the SDK and exports |
+| `src/ui/wires.js` | The older `.tm-map` wire router, kept so v0.2-0.4 pages still render |
+| `src/changes.js` | Change review: working-tree snapshots as git trees (through a throwaway index), diffs against a base, file-level attribution to boxes |
+| `src/plan.js` | Plans: validation, `.truemap/plans/<slug>.json`, the plan as a chat message |
 | `src/ui/workspace.*` | Workspace UI: zero dependencies, no build step |
 | `src/ui/sdk.js` | Injected into served pages only (never written to files). Draws map wires, runs annotate mode and the comment card, decision forms and check marks |
-| `kit/truemap.css`, `kit/fonts/` | The page kit and IBM Plex fonts, served to every page as `assets/truemap.css`, so repos always get the current kit. A repo that keeps its own `assets/truemap.css` (older setups) keeps it |
+| `kit/truemap.css`, `kit/fonts/` | The page kit and fonts (Instrument Sans, Commit Mono; IBM Plex kept for older copied kits), served to every page as `assets/truemap.css`, so repos always get the current kit. A repo that keeps its own `assets/truemap.css` (older setups) keeps it |
 | `src/guide.md` | Printed by `truemap guide` |
 | `skills/truemap/SKILL.md` | A short skill stub that sends the agent to the CLI |
 
@@ -95,7 +100,7 @@ Zero runtime dependencies, Node ≥ 20.
 ## Chat rules (listen / reply)
 
 - **Messages queue.** Messages sent while the agent is busy are kept. The next `listen` returns all of them at once, in order, each with its page and its numbered comments (element or text, `data-src`, comment text).
-- **Comments.** With Annotate on, a click on a box or a text selection opens a comment card on the page. Enter adds the comment (a numbered pin on the page, a row in the panel); Send delivers all of them in one message. Ctrl+Enter sends at once. Outside annotate mode, links work normally and a text selection offers a small Comment button. The agent can switch annotate on with `--annotate` or `<meta name="truemap-annotate" content="on">`.
+- **Comments.** A click on a box opens the inspector with a comment field on top; a text selection offers a small Comment button. Each comment becomes a numbered pin on the page and a row in the panel; Send delivers all of them in one message. (v0.4's Annotate mode is gone: one click model.)
 - **There is one listener at a time.** A new `listen` replaces the old one, which returns `replaced`.
 - **`browser_closed`** is returned about 10 s after the last tab closes, so the agent never waits forever.
 - **`reply --listen`** answers and keeps listening in one call, so the conversation doesn't drop when the agent forgets to listen again.
@@ -159,3 +164,13 @@ Why: developers mostly no longer read agent-written code line by line, and compr
 - **Two-way pointing.** `show`, `reply --focus` and `[text](#id)` links in replies light up boxes and pin a note beside them, live.
 - **Ask rarely.** `ask` puts a choice card in the conversation and waits. The guide limits it to decisions that are hard to undo; otherwise the agent decides and states its assumption.
 - **Navigation.** The map is the table of contents. The top bar keeps the blueprint one click away (`Blueprint › Page`), with back/forward (Alt+←/→).
+
+## Plans, changes, many projects (v0.5)
+
+Review is the bottleneck of working with agents, and it happens at two moments: before a larger change (the plan) and after it (the change). Both are overlays on the same map, so the user reviews in the picture they already know.
+
+- **Plans are data,** not pages: `.truemap/plans/<slug>.json` names the boxes a change touches, adds (with group and connections) and removes, plus its steps. The SDK marks touched boxes and inserts the new ones, dashed, into their group, then lays the map out again. The plan bar offers Approve / Request changes; the comments go to the agent as usual. `listen` returns `kind: approval` or `kind: plan_changes`. The user can also say "go" in the terminal (`plan --approve`).
+- **Changes are measured from snapshots,** taken as git tree objects through a copy of the index (`GIT_INDEX_FILE`), so the user's staging area is never touched: when the agent picks up a message (its turn begins), when a plan is approved, or against HEAD / the main branch. Files under `.truemap/` are left out.
+- **Attribution is by file and says so.** A box owns the files its `data-src` path covers (a folder covers everything under it). A file shared by two boxes shows on both, marked as shared. Files no box covers are grouped by folder, with "Ask the agent to map these".
+- **Many projects.** Each repo keeps its own server; the workspace reads the other servers' state files and asks each for its status (agent state, plan in review, a reply nobody has seen). The projects menu lists them; the tab title carries "(n)" when other projects need the user.
+- **The look is fixed.** One typeface (Instrument Sans) and one mono (Commit Mono), neutrals and ink, a highlighter for "the agent points here", status colours for status only. The checker lints maps (size, groups, names, anchors, flows, no custom colours) so agents learn the rules from `check`.
