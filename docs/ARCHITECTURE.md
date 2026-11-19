@@ -66,7 +66,7 @@ browser workspace (http://127.0.0.1:<port>/?t=<token>)
  ├─ top bar: projects menu + page switcher (Ctrl/Cmd+K) + check status + one panel toggle
  ├─ plan bar (when a plan is in review): Approve / Request changes
  ├─ center: the page in a sandboxed iframe from a SEPARATE origin (http://127.0.0.1:<contentPort>)
- │    the injected SDK lays out maps (dagre), draws connections, marks stale / changed / planned boxes
+ │    the injected SDK lays out maps, routes connections, marks stale / changed / planned boxes
  └─ panel (collapsible): Conversation | Changes tabs; the inspector replaces it while a box is open
         │  SSE (server → browser) + fetch POST (browser → server)
 local server (src/server.js, one per repo, detached, auto-exits when idle)
@@ -85,7 +85,7 @@ CLI (src/cli.js) ← run by the agent
 | `src/check.js` | Anchor checker; also lists pages |
 | `src/outline.js` | Repo outline for `truemap outline` |
 | `src/export.js` | One-file export; also builds the served kit CSS |
-| `src/ui/diagram.js` | v0.5 maps (`figure.tm-diagram`): groups and small boxes laid out by dagre (vendored, MIT) in the author's group order, curved arrows, labels placed on their own edge, flows as tabs with numbered steps, plan ghosts. Shared by the SDK and exports |
+| `src/ui/diagram.js` | v0.5 maps (`figure.tm-diagram`): groups as bands of rows in the author's order, a small layered layout (crossing reduction, block-merged positions), right-angled connections that only run between rows, labels placed on their own edge, flows as tabs with numbered steps, plan ghosts. Shared by the SDK and exports |
 | `src/ui/wires.js` | The older `.tm-map` wire router, kept so v0.2-0.4 pages still render |
 | `src/changes.js` | Change review: working-tree snapshots as git trees (through a throwaway index), diffs against a base, file-level attribution to boxes |
 | `src/plan.js` | Plans: validation, `.truemap/plans/<slug>.json`, the plan as a chat message |

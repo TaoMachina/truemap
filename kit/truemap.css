@@ -371,10 +371,12 @@ html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outli
 .tm-diagram .tm-node[data-plan="new"] { border: 1.5px dashed var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="change"] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="remove"] .tm-dg-name { text-decoration: line-through; }
-.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 10.5px/16px var(--dg-font); padding: 0 6px; border-radius: 8px; background: var(--dg-mark); color: var(--dg-ink); white-space: nowrap; pointer-events: none; }
-.tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "New"; }
-.tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Changes"; }
-.tm-diagram .tm-node[data-plan="remove"]:not([data-tm-delta])::after { content: "Removed"; }
+.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 10.5px/14px var(--dg-font); padding: 0 6px; border-radius: 8px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
+.tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "Plan: new"; }
+.tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Plan: edit"; }
+.tm-diagram .tm-node[data-plan="remove"]:not([data-tm-delta])::after { content: "Plan: remove"; }
+html[data-tm-changes] .tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: none; }
+html[data-tm-changes] .tm-diagram .tm-node[data-plan="change"]:not([data-tm-change]) { box-shadow: none; }
 html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) .tm-dg-name { color: var(--dg-muted); }
 .tm-dg-edge.is-plan { stroke: var(--dg-ink); stroke-dasharray: 4 3; }
 .tm-dg-head.is-plan { fill: var(--dg-ink); }
@@ -386,6 +388,7 @@ html[data-tm-plan]:not([data-tm-changes]) .tm-diagram .tm-node:not([data-plan]) 
 .tm-dg-tab { font: 500 13px/1 var(--dg-font); color: var(--dg-muted); background: none; border: 0; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
 .tm-dg-tab:hover { color: var(--dg-ink); background: var(--dg-surface); }
 .tm-dg-tab[aria-selected="true"] { color: var(--dg-bg); background: var(--dg-ink); }
+.tm-dg-tab[aria-selected="true"]::after { content: "×"; margin-left: 8px; font-weight: 400; opacity: .75; }
 .tm-dg-note { margin: -4px 0 10px; font-size: 14px; color: var(--dg-text); max-width: 72ch; }
 .tm-diagram[data-flow] .tm-node:not([data-in-flow]) .tm-dg-name, .tm-diagram[data-flow] .tm-node:not([data-in-flow]) .tm-dg-tag { color: var(--dg-line-strong); }
 .tm-diagram[data-flow] .tm-node[data-in-flow] { border-color: var(--dg-ink); }

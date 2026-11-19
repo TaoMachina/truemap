@@ -74,9 +74,8 @@ export function currentPlan(root) {
 
 /** The plan as a chat message: summary and steps, with box links the user can hover. */
 export function planMessage(plan) {
-  const lines = [`**Plan: ${plan.title}**${plan.revision > 1 ? ` (revision ${plan.revision})` : ''}`];
+  const lines = [`**${plan.revision > 1 ? 'Revised plan' : 'Plan'}: ${plan.title}**`];
   if (plan.summary) lines.push(plan.summary);
   if (plan.steps.length) { lines.push(''); plan.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`)); }
-  lines.push('', 'Click a box to comment on it, then approve or request changes above the map.');
   return lines.join('\n');
 }

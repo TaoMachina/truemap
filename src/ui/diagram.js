@@ -1,5 +1,5 @@
-// truemap diagrams: the agent declares groups, nodes and edges; this lays them out (dagre, left to right) and
-// draws them. Used by the page SDK and by exported pages. Plain script; needs window.dagre.
+// truemap diagrams: the agent declares groups, nodes and edges; this lays them out (layered, groups as bands)
+// and draws them. Used by the page SDK and by exported pages. Plain script, no dependencies.
 //
 //   <figure class="tm-diagram" data-direction="LR">
 //     <section class="tm-group" id="core" data-label="Hub core">
@@ -77,40 +77,231 @@
     return fig.__tm;
   }
 
-  // A smooth curve through dagre's bend points.
-  function curve(pts) {
-    if (pts.length < 3) return `M${pts[0].x},${pts[0].y} L${pts[pts.length - 1].x},${pts[pts.length - 1].y}`;
+  // Orthogonal polyline with rounded corners.
+  function roundPath(pts, r = 7) {
     let d = `M${pts[0].x},${pts[0].y}`;
     for (let i = 1; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i + 1].x) / 2; const my = (pts[i].y + pts[i + 1].y) / 2;
-      d += ` Q${pts[i].x},${pts[i].y} ${i === pts.length - 2 ? pts[i + 1].x : mx},${i === pts.length - 2 ? pts[i + 1].y : my}`;
+      const a = pts[i - 1]; const b = pts[i]; const c = pts[i + 1];
+      const l1 = Math.hypot(b.x - a.x, b.y - a.y); const l2 = Math.hypot(c.x - b.x, c.y - b.y);
+      const k = Math.min(r, l1 / 2, l2 / 2);
+      if (k < 0.5) { d += ` L${b.x},${b.y}`; continue; }
+      const p1 = { x: b.x - ((b.x - a.x) / l1) * k, y: b.y - ((b.y - a.y) / l1) * k };
+      const p2 = { x: b.x + ((c.x - b.x) / l2) * k, y: b.y + ((c.y - b.y) / l2) * k };
+      d += ` L${p1.x},${p1.y} Q${b.x},${b.y} ${p2.x},${p2.y}`;
     }
-    return d;
+    const z = pts[pts.length - 1];
+    return `${d} L${z.x},${z.y}`;
   }
+  const simplify = (pts) => pts.filter((p, i) => {
+    if (i === 0 || i === pts.length - 1) return true;
+    const a = pts[i - 1]; const c = pts[i + 1];
+    if (Math.abs(a.x - p.x) < 0.5 && Math.abs(a.y - p.y) < 0.5) return false;
+    return !((Math.abs(a.x - p.x) < 0.5 && Math.abs(p.x - c.x) < 0.5) || (Math.abs(a.y - p.y) < 0.5 && Math.abs(p.y - c.y) < 0.5));
+  });
 
-  // One dagre run. Labels are not layout nodes (that doubles the ranks and the width); instead the gap
-  // between ranks is wide enough for the longest label when ranks run left to right.
-  function run(m, edges, dir, labelW) {
-    const g = new window.dagre.graphlib.Graph({ compound: true, multigraph: true });
-    const ranksep = dir === 'LR' || dir === 'RL' ? Math.max(56, Math.min(150, labelW + 30)) : 54;
-    g.setGraph({ rankdir: dir, nodesep: dir === 'LR' || dir === 'RL' ? 18 : 28, ranksep, edgesep: 12, marginx: 16, marginy: 38, ranker: 'network-simplex' });
-    g.setDefaultEdgeLabel(() => ({}));
-    for (const gr of m.groups) g.setNode(`g:${gr.id}`, {});
-    for (const n of m.nodes) {
-      g.setNode(n.id, { width: n.offsetWidth, height: n.offsetHeight });
-      if (n.dataset.group) g.setParent(n.id, `g:${n.dataset.group}`);
+  // The layered layout, computed top to bottom ("rows"); left to right is the same picture turned.
+  //  - Groups are bands of rows in the author's order: a group never shares a row with another, so groups
+  //    never overlap or interleave.
+  //  - Inside a group a box sits one row below the boxes that call it (longest path).
+  //  - A connection that skips rows reserves a narrow slot in each row it crosses.
+  //  - Order within rows: barycenter sweeps, keeping the order with the fewest crossings.
+  //  - Positions: as close to the connected boxes as the ordering and spacing allow (block merging).
+  //  - Connections run only through the gaps between rows and through their reserved slots, so they
+  //    never cross a box.
+  function layered(m, edges, dir, labelW) {
+    const lr = dir === 'LR';
+    const nodes = m.nodes;
+    const idx = new Map(nodes.map((n, i) => [n.id, i]));
+    const S = nodes.map((n) => (lr ? { w: n.offsetHeight, h: n.offsetWidth } : { w: n.offsetWidth, h: n.offsetHeight }));
+    const NODESEP = lr ? 18 : 24; const SLOT = 12;
+    // Top to bottom, groups are swimlanes with their label in a left gutter; left to right, columns with
+    // the label above the boxes.
+    const gutter = Math.max(72, ...m.groups.map((gr) => (gr.el.firstChild?.offsetWidth || 0) + 30));
+    const GAP = lr ? Math.max(60, Math.min(170, labelW + 48)) : 44;
+    const HEAD = 0; const BANDPAD = lr ? 12 : 12; const GAPB = lr ? 14 : 12;
+    const MX = lr ? 34 : gutter; const MY = lr ? 6 : 4;
+    const gOf = nodes.map((n) => { const k = m.groups.findIndex((gr) => gr.id === n.dataset.group); return k < 0 ? m.groups.length : k; });
+    const E = edges.map((e) => ({ e, a: idx.get(e.back ? e.to : e.from), b: idx.get(e.back ? e.from : e.to) }));
+    // 1. rows
+    const rank = new Array(nodes.length).fill(0);
+    const bands = [];
+    let base = 0;
+    for (const g of [...new Set(gOf)].sort((x, y) => x - y)) {
+      const members = nodes.map((_, i) => i).filter((i) => gOf[i] === g);
+      const local = new Map(members.map((i) => [i, 0]));
+      for (const i of members) for (const x of E) if (x.a === i && gOf[x.b] === g) local.set(x.b, Math.max(local.get(x.b), local.get(i) + 1));
+      let top = base;
+      for (const i of members) { rank[i] = base + local.get(i); top = Math.max(top, rank[i]); }
+      bands.push({ g, from: base, to: top });
+      base = top + 1;
     }
-    for (const e of edges) g.setEdge(e.back ? e.to : e.from, e.back ? e.from : e.to, { minlen: 1 }, e.name);
-    window.dagre.layout(g);
-    return g;
+    const R = base;
+    const rows = Array.from({ length: R }, () => []);
+    const item = nodes.map((_, i) => { const it = { node: i, w: S[i].w, h: S[i].h, order: i }; rows[rank[i]].push(it); return it; });
+    for (const x of E) {
+      x.chain = [item[x.a]];
+      for (let r = rank[x.a] + 1; r < rank[x.b]; r++) { const d = { dummy: x, w: SLOT, h: 0, order: x.a + 0.5, row: r }; rows[r].push(d); x.chain.push(d); }
+      x.chain.push(item[x.b]);
+    }
+    for (let r = 0; r < R; r++) for (const it of rows[r]) it.row = r;
+    const up = new Map(); const down = new Map();
+    const link = (map, k, v) => { if (!map.has(k)) map.set(k, []); map.get(k).push(v); };
+    for (const x of E) for (let k = 0; k + 1 < x.chain.length; k++) { link(down, x.chain[k], x.chain[k + 1]); link(up, x.chain[k + 1], x.chain[k]); }
+    // 2. order within rows
+    const number = () => { for (const row of rows) row.forEach((it, k) => { it.k = k; }); };
+    for (const row of rows) row.sort((p, q) => p.order - q.order);
+    number();
+    const crossings = () => {
+      let c = 0;
+      for (let r = 0; r + 1 < R; r++) {
+        const segs = [];
+        for (const it of rows[r]) for (const q of down.get(it) || []) segs.push([it.k, q.k]);
+        for (let s = 0; s < segs.length; s++) for (let t = s + 1; t < segs.length; t++) if ((segs[s][0] - segs[t][0]) * (segs[s][1] - segs[t][1]) < 0) c++;
+      }
+      return c;
+    };
+    let best = rows.map((row) => row.slice()); let bestC = crossings();
+    for (let iter = 0; iter < 16 && bestC > 0; iter++) {
+      const downward = iter % 2 === 0;
+      const seq = downward ? [...rows.keys()].slice(1) : [...rows.keys()].reverse().slice(1);
+      for (const r of seq) {
+        const nb = downward ? up : down;
+        for (const it of rows[r]) { const ns = nb.get(it) || []; it.bc = ns.length ? ns.reduce((s, q) => s + q.k, 0) / ns.length : it.k; }
+        rows[r].sort((p, q) => p.bc - q.bc || p.k - q.k);
+        rows[r].forEach((it, k) => { it.k = k; });
+      }
+      const c = crossings();
+      if (c < bestC) { bestC = c; best = rows.map((row) => row.slice()); }
+    }
+    for (let r = 0; r < R; r++) rows[r] = best[r];
+    number();
+    // 3. positions across the rows
+    const sep = (p, q) => (p.dummy || q.dummy ? 10 : NODESEP);
+    function settle(row, want) {
+      const blocks = [];
+      row.forEach((it, k) => {
+        blocks.push({ items: [k], off: [0], sum: want[k], n: 1, pos: want[k] });
+        while (blocks.length > 1) {
+          const B = blocks[blocks.length - 1]; const A = blocks[blocks.length - 2];
+          const la = row[A.items[A.items.length - 1]]; const fb = row[B.items[0]];
+          const gap = la.w / 2 + sep(la, fb) + fb.w / 2;
+          const aEnd = A.pos + A.off[A.off.length - 1];
+          if (aEnd + gap <= B.pos + 0.01) break;
+          const b0 = A.off[A.off.length - 1] + gap;
+          for (let j = 0; j < B.items.length; j++) { A.items.push(B.items[j]); A.off.push(b0 + B.off[j]); }
+          A.sum += B.sum - B.n * b0; A.n += B.n; A.pos = A.sum / A.n;
+          blocks.pop();
+        }
+      });
+      for (const b of blocks) b.items.forEach((k, j) => { row[k].x = b.pos + b.off[j]; });
+    }
+    for (const row of rows) { let x = 0; row.forEach((it, k) => { if (k) x += sep(row[k - 1], it); it.x = x + it.w / 2; x += it.w; }); const c = x / 2; for (const it of row) it.x -= c; }
+    for (let it = 0; it < 10; it++) {
+      const seq = it % 2 === 0 ? [...rows.keys()] : [...rows.keys()].reverse();
+      for (const r of seq) {
+        const want = rows[r].map((p) => {
+          const ns = [...(up.get(p) || []), ...(down.get(p) || [])];
+          return ns.length ? ns.reduce((s, q) => s + q.x, 0) / ns.length : p.x;
+        });
+        settle(rows[r], want);
+      }
+    }
+    let minX = Infinity; let maxX = -Infinity;
+    for (const row of rows) for (const it of row) { minX = Math.min(minX, it.x - it.w / 2); maxX = Math.max(maxX, it.x + it.w / 2); }
+    for (const row of rows) for (const it of row) it.x += MX - minX;
+    const W = maxX - minX + MX + 12;
+    const rowH = rows.map((row) => Math.max(1, ...row.map((it) => it.h)));
+    const bandOf = (r) => bands.find((b) => r >= b.from && r <= b.to);
+    const ys = []; const gapAfter = []; let y = MY + (lr ? 0 : BANDPAD);
+    for (let r = 0; r < R; r++) {
+      const b = bandOf(r);
+      if (b.from === r) y += HEAD;
+      ys[r] = y + rowH[r] / 2; y += rowH[r];
+      if (r + 1 < R) { const g = bandOf(r + 1) !== b ? BANDPAD * 2 + GAPB : GAP; gapAfter[r] = { top: y, bottom: y + g }; y += g; }
+    }
+    y += BANDPAD + MY;
+    const H = y;
+    // 4. routes
+    const out = new Map(); const inc = new Map();
+    for (const x of E) {
+      x.label = x.e.label; x.bundle = `${x.a}|${x.e.back ? '<' : '>'}|${x.label}`;
+      if (!out.has(x.a)) out.set(x.a, []); out.get(x.a).push(x);
+      if (!inc.has(x.b)) inc.set(x.b, []); inc.get(x.b).push(x);
+    }
+    const portX = (it, list, keyOf, otherX) => {
+      const keys = [...new Set(list.map(keyOf))];
+      keys.sort((p, q) => otherX(p) - otherX(q));
+      const step = Math.min(16, (it.w * 0.7) / Math.max(1, keys.length));
+      return new Map(keys.map((k, i) => [k, it.x + (i - (keys.length - 1) / 2) * step]));
+    };
+    for (const [a, list] of out) {
+      const it = item[a];
+      const ports = portX(it, list, (x) => x.bundle, (k) => { const x = list.find((z) => z.bundle === k); return x.chain[1].x; });
+      for (const x of list) x.exit = ports.get(x.bundle);
+    }
+    for (const [b, list] of inc) {
+      const it = item[b];
+      const ports = portX(it, list, (x) => x.e.name, (k) => { const x = list.find((z) => z.e.name === k); return x.chain[x.chain.length - 2].x; });
+      for (const x of list) x.entry = ports.get(x.e.name);
+    }
+    // horizontal runs share a gap: give each its own lane (a bundle shares one)
+    const lanes = new Map(); // row -> [{key, lo, hi}]
+    const hops = [];
+    for (const x of E) {
+      const pts = [];
+      for (let k = 0; k + 1 < x.chain.length; k++) {
+        const p = x.chain[k]; const q = x.chain[k + 1];
+        const px = k === 0 ? x.exit : p.x; const qx = k + 1 === x.chain.length - 1 ? x.entry : q.x;
+        hops.push({ x, k, row: p.row, px, qx, key: k === 0 ? `${x.bundle}` : `${x.e.name}:${k}` });
+      }
+      x.pts = pts;
+    }
+    for (const h of hops) {
+      if (Math.abs(h.px - h.qx) < 1) continue;
+      if (!lanes.has(h.row)) lanes.set(h.row, new Map());
+      const L = lanes.get(h.row);
+      const cur = L.get(h.key);
+      if (cur) { cur.lo = Math.min(cur.lo, h.px, h.qx); cur.hi = Math.max(cur.hi, h.px, h.qx); } else L.set(h.key, { lo: Math.min(h.px, h.qx), hi: Math.max(h.px, h.qx) });
+    }
+    const laneY = new Map();
+    for (const [row, L] of lanes) {
+      const g = gapAfter[row]; const list = [...L.entries()].sort((p, q) => p[1].lo - q[1].lo);
+      const span = g.bottom - g.top; const step = Math.min(7, (span - 18) / Math.max(1, list.length));
+      list.forEach(([key], i) => laneY.set(`${row}|${key}`, g.top + span / 2 + (i - (list.length - 1) / 2) * step));
+    }
+    for (const x of E) {
+      const pts = [{ x: x.exit, y: ys[rank[x.a]] + item[x.a].h / 2 }];
+      for (const h of hops.filter((z) => z.x === x)) {
+        const ly = laneY.get(`${h.row}|${h.key}`) ?? (gapAfter[h.row].top + gapAfter[h.row].bottom) / 2;
+        const nextRow = h.row + 1;
+        const q = x.chain[h.k + 1];
+        pts.push({ x: h.px, y: ly }, { x: h.qx, y: ly });
+        if (q.dummy) pts.push({ x: h.qx, y: ys[nextRow] - rowH[nextRow] / 2 }, { x: h.qx, y: ys[nextRow] + rowH[nextRow] / 2 });
+        else pts.push({ x: h.qx, y: ys[nextRow] - q.h / 2 });
+      }
+      x.pts = simplify(pts);
+    }
+    // 5. back to screen coordinates
+    const T = lr ? (p) => ({ x: p.y, y: p.x }) : (p) => p;
+    const pos = nodes.map((n, i) => { const c = T({ x: item[i].x, y: ys[rank[i]] }); return { x: c.x, y: c.y, w: n.offsetWidth, h: n.offsetHeight }; });
+    const bandBoxes = bands.map((b) => {
+      const top = ys[b.from] - rowH[b.from] / 2 - HEAD - (lr ? 0 : BANDPAD) + (lr ? 0 : 0); const bottom = ys[b.to] + rowH[b.to] / 2 + BANDPAD;
+      const box = lr ? { l: top, t: 4, w: bottom - top, h: W - 8 } : { l: 4, t: top, w: W - 8, h: bottom - top };
+      return { g: b.g, box };
+    });
+    const routes = new Map(E.map((x) => {
+      let pts = x.pts.map(T);
+      if (x.e.back) pts = pts.reverse();
+      return [x.e.name, pts];
+    }));
+    return { width: lr ? H : W, height: lr ? W : H, pos, bands: bandBoxes, routes, dir, gutter: lr ? 0 : gutter };
   }
 
   function layout(fig) {
     const m = prepare(fig);
-    if (!window.dagre) return;
     const byId = new Map(m.nodes.map((n) => [n.id, n]));
-    // The author's order is the reading order: groups left to right (or top to bottom), nodes inside a
-    // group in order. An edge that points back against it is a callback; it never pulls a box forward.
+    // The author's order is the reading order: groups first to last, boxes inside a group in order.
+    // A connection that points back against it is a callback; it never pulls a box forward.
     const gIndex = new Map(m.groups.map((gr, i) => [gr.id, i]));
     const order = (n) => (gIndex.get(n.dataset.group) ?? m.groups.length) * 1000 + m.nodes.indexOf(n);
     const probe = document.createElement('span'); probe.className = 'tm-dg-label tm-dg-probe'; m.stage.appendChild(probe);
@@ -119,7 +310,7 @@
     for (const src of m.nodes) {
       for (const spec of (src.getAttribute('data-to') || '').split(/[\s,]+/).filter(Boolean)) {
         const [id, ...lab] = spec.split(':');
-        if (!byId.has(id) || id === src.id) continue;
+        if (!byId.has(id) || id === src.id || edges.some((e) => e.from === src.id && e.to === id)) continue;
         const label = viaOf(lab.join(':'));
         if (label) { probe.textContent = label; labelW = Math.max(labelW, probe.offsetWidth); }
         edges.push({ from: src.id, to: id, label, name: `${src.id}>${id}`, back: order(src) > order(byId.get(id)) });
@@ -129,51 +320,48 @@
     // Direction: the author's, or left to right when it fits the column, else top to bottom.
     const room = fig.clientWidth || 860;
     const asked = (fig.getAttribute('data-direction') || '').toUpperCase();
-    let g = run(m, edges, asked || 'LR', labelW);
-    if (!asked && g.graph().width > room) {
-      const tb = run(m, edges, 'TB', labelW);
-      if (tb.graph().width < g.graph().width) g = tb;
+    let L = layered(m, edges, asked === 'TB' ? 'TB' : 'LR', labelW);
+    if (!asked && L.width > room) L = layered(m, edges, 'TB', labelW);
+    fig.dataset.laidOut = L.dir;
+    if (L.dir === 'TB' && L.width < room) {
+      const dx = (room - L.width) / 2;
+      for (const v of L.pos) v.x += dx;
+      for (const pts of L.routes.values()) for (const p of pts) p.x += dx;
+      for (const b of L.bands) b.box.w = room - 8;
+      L.width = room;
     }
-    fig.dataset.laidOut = g.graph().rankdir;
-    fig.dataset.widths = `${g.graph().width}/${room}`;
-
-    // nodes
-    for (const n of m.nodes) {
-      const v = g.node(n.id);
-      n.style.left = `${v.x - v.width / 2}px`; n.style.top = `${v.y - v.height / 2}px`;
+    const gw = L.width; const gh = L.height;
+    m.nodes.forEach((n, i) => { const v = L.pos[i]; n.style.left = `${v.x - v.w / 2}px`; n.style.top = `${v.y - v.h / 2}px`; });
+    for (const gr of m.groups) gr.box = null;
+    for (const b of L.bands) {
+      const gr = m.groups[b.g];
+      if (!gr) continue;
+      gr.box = b.box;
     }
-    // groups: the cluster box, with room for its label
     for (const gr of m.groups) {
-      const v = g.node(`g:${gr.id}`);
-      if (!v || !v.width) { gr.el.hidden = true; continue; }
-      gr.el.hidden = false;
-      gr.box = { l: v.x - v.width / 2 - 6, t: v.y - v.height / 2 - 30, w: v.width + 12, h: v.height + 36 };
-      Object.assign(gr.el.style, { left: `${gr.box.l}px`, top: `${gr.box.t}px`, width: `${gr.box.w}px`, height: `${gr.box.h}px` });
+      gr.el.hidden = !gr.box;
+      if (gr.box) Object.assign(gr.el.style, { left: `${gr.box.l}px`, top: `${gr.box.t}px`, width: `${gr.box.w}px`, height: `${gr.box.h}px` });
     }
-    const gw = g.graph().width; const gh = g.graph().height;
-    m.stage.style.width = `${gw + 8}px`; m.stage.style.height = `${gh + 8}px`;
-    // edges
+    m.stage.style.width = `${gw}px`; m.stage.style.height = `${gh}px`;
     const svg = m.svg; svg.innerHTML = '';
-    svg.setAttribute('width', gw + 8); svg.setAttribute('height', gh + 8); svg.setAttribute('viewBox', `0 0 ${gw + 8} ${gh + 8}`);
+    svg.setAttribute('width', gw); svg.setAttribute('height', gh); svg.setAttribute('viewBox', `0 0 ${gw} ${gh}`);
     for (const lab of m.stage.querySelectorAll('.tm-dg-label')) lab.remove();
     const isKey = (id) => byId.get(id)?.classList.contains('is-key');
     const placed = [];
     for (const e of edges) {
-      const ed = g.edge({ v: e.back ? e.to : e.from, w: e.back ? e.from : e.to, name: e.name });
-      if (!ed?.points?.length) continue;
-      const pts = ed.points.slice();
-      if (e.back) pts.reverse();
+      const pts = L.routes.get(e.name)?.map((p) => ({ ...p }));
+      if (!pts || pts.length < 2) continue;
       // stop short of the target so the arrowhead sits outside the box
       const a = pts[pts.length - 2]; const b = pts[pts.length - 1];
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-      const tip = { x: b.x, y: b.y }; pts[pts.length - 1] = { x: b.x - ((b.x - a.x) / len) * 7, y: b.y - ((b.y - a.y) / len) * 7 };
+      const ux = (b.x - a.x) / len; const uy = (b.y - a.y) / len;
+      const tip = { x: b.x, y: b.y }; pts[pts.length - 1] = { x: b.x - ux * 7, y: b.y - uy * 7 };
       const key = isKey(e.from) && isKey(e.to);
       const ext = byId.get(e.from)?.classList.contains('is-ext') || byId.get(e.to)?.classList.contains('is-ext');
-      const path = document.createElementNS(SVGNS, 'path');
-      path.setAttribute('d', curve(pts));
       const planned = byId.get(e.from)?.getAttribute('data-plan') === 'new' || byId.get(e.to)?.getAttribute('data-plan') === 'new';
+      const path = document.createElementNS(SVGNS, 'path');
+      path.setAttribute('d', roundPath(pts));
       path.setAttribute('class', `tm-dg-edge${key ? ' is-main' : ''}${ext ? ' is-ext' : ''}${e.back ? ' is-back' : ''}${planned ? ' is-plan' : ''}`);
-      const ux = (tip.x - a.x) / len; const uy = (tip.y - a.y) / len;
       const head = document.createElementNS(SVGNS, 'path');
       head.setAttribute('d', `M${tip.x},${tip.y} L${tip.x - ux * 7 - uy * 4},${tip.y - uy * 7 + ux * 4} L${tip.x - ux * 7 + uy * 4},${tip.y - uy * 7 - ux * 4} Z`);
       head.setAttribute('class', `tm-dg-head${key ? ' is-main' : ''}${planned ? ' is-plan' : ''}`);
@@ -181,7 +369,7 @@
       svg.appendChild(path); svg.appendChild(head);
       if (e.label) placed.push({ e, path, key });
     }
-    const boxes = m.nodes.map((n) => { const v = g.node(n.id); return { l: v.x - v.width / 2 - 3, r: v.x + v.width / 2 + 3, t: v.y - v.height / 2 - 3, b: v.y + v.height / 2 + 3 }; });
+    const boxes = L.pos.map((v) => ({ l: v.x - v.w / 2 - 3, r: v.x + v.w / 2 + 3, t: v.y - v.h / 2 - 3, b: v.y + v.h / 2 + 3 }));
     const taken = [];
     const hits = (a, list) => list.some((o) => a.l < o.r && a.r > o.l && a.t < o.b && a.b > o.t);
     // points along every edge, so a group label can keep off the wires
@@ -191,6 +379,7 @@
     for (const gr of m.groups) {
       if (!gr.box) continue;
       const lab = gr.el.firstChild; lab.style.left = '0px'; lab.style.top = '0px';
+      if (L.dir === 'TB') { lab.style.left = '14px'; lab.style.top = '12px'; continue; }
       const w = lab.offsetWidth + 6; const h = lab.offsetHeight + 4; const { l, t, w: W, h: H } = gr.box;
       const spots = [[l + 10, t + 6], [l + W - 10 - w, t + 6], [l + 10, t + H - 6 - h], [l + W - 10 - w, t + H - 6 - h]];
       let best = null; let bestScore = Infinity;
@@ -203,13 +392,17 @@
     const seen = new Set();
     placed.sort((x, y) => (y.key - x.key));
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; pl.dup = seen.has(k); seen.add(k); }
+    const bundleSize = new Map();
+    for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; bundleSize.set(k, (bundleSize.get(k) || 0) + 1); }
     for (const { e, path, key, dup } of placed) {
       const t = document.createElement('span'); t.className = `tm-dg-label${key ? ' is-main' : ''}${dup ? ' is-dup' : ''}`; t.textContent = e.label;
       t.dataset.from = e.from; t.dataset.to = e.to;
       m.stage.appendChild(t);
       const w = t.offsetWidth; const h = t.offsetHeight; const L = path.getTotalLength();
       let best = null;
-      for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]) {
+      const trunk = bundleSize.get(`${e.from}|${e.label}`) > 1;
+      const fr = trunk ? [0.14, 0.2, 0.1, 0.26, 0.32] : [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82];
+      for (const f of fr) {
         const p = path.getPointAtLength(L * f);
         const r = { l: p.x - w / 2, r: p.x + w / 2, t: p.y - h / 2, b: p.y + h / 2 };
         if (!best) best = r;
@@ -221,10 +414,11 @@
     // main-path edges on top
     for (const el of [...svg.querySelectorAll('.is-main')]) svg.appendChild(el);
     // Still wider than the column: shrink a little, then scroll rather than make text unreadable.
-    const k = Math.max(0.82, Math.min(1, room / (gw + 8)));
+    const k = Math.max(0.8, Math.min(1, room / gw));
     m.stage.style.transform = k < 1 ? `scale(${k})` : '';
-    m.stage.style.marginBottom = k < 1 ? `${-(gh + 8) * (1 - k)}px` : '';
-    fig.classList.toggle('is-wide', (gw + 8) * k > room + 1);
+    m.stage.style.marginBottom = k < 1 ? `${-gh * (1 - k)}px` : '';
+    m.stage.style.marginRight = k < 1 ? `${-gw * (1 - k)}px` : '';
+    fig.classList.toggle('is-wide', gw * k > room + 1);
     markFlow(fig);
   }
 

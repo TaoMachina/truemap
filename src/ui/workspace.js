@@ -227,8 +227,8 @@
   const notesForPage = () => state.notes.filter((n) => n.page === state.page);
   function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector, rect }) => ({ id, kind, label, src, text, selector, rect })) }); }
   // Unsent comments survive a reload of this tab.
-  try { state.notes = JSON.parse(sessionStorage.getItem('truemap.notes') || '[]'); } catch { state.notes = []; }
-  function saveNotes() { try { sessionStorage.setItem('truemap.notes', JSON.stringify(state.notes)); } catch { /* ignore */ } }
+  try { state.notes = JSON.parse(localStorage.getItem('truemap.notes') || '[]'); } catch { state.notes = []; }
+  function saveNotes() { try { localStorage.setItem('truemap.notes', JSON.stringify(state.notes)); } catch { /* ignore */ } }
   function renderNotes() {
     saveNotes(); renderBadge();
     const list = $('notes'); list.innerHTML = '';
@@ -241,8 +241,8 @@
       list.appendChild(li);
     });
     const count = state.notes.length;
-    $('send').textContent = count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
-    input.placeholder = count ? S.placeholderNotes : S.placeholder;
+    $('send').textContent = planRequest ? 'Send request' : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
+    if (!planRequest) input.placeholder = count ? S.placeholderNotes : S.placeholder;
   }
 
   // ---------- conversation ----------
@@ -259,7 +259,7 @@
     }
     for (const e of state.history) appendEntry(e, false);
     renderWorking();
-    scrollChat();
+    scrollChat(); requestAnimationFrame(scrollChat); setTimeout(scrollChat, 300);
   }
   function appendEntry(e, scroll = true, live = false) {
     msgsEl.querySelector('.intro')?.remove();
@@ -270,7 +270,7 @@
       el.innerHTML = e.ask && e.text.trim() === e.ask.question.trim() ? '' : md(e.text);
       for (const li of el.querySelectorAll('li')) if (li.querySelector('a.ref')) li.classList.add('has-ref');
       if (e.focus?.length) {
-        el.insertAdjacentHTML('beforeend', `<p><a href="#" class="ref" data-focus="${esc(e.focus.join(','))}">Show on the map</a></p>`);
+        if (!e.plan) el.insertAdjacentHTML('beforeend', `<p class="show-map"><a href="#" data-focus="${esc(e.focus.join(','))}">Show on the map</a></p>`);
         if (live) pointAt(e.focus, '', AGENTS[e.agent] || agentName());
       }
       if (e.ask) el.appendChild(askCard(e));
@@ -306,7 +306,7 @@
     if (key === hoverLit || (!key && (hoverLit === '__pinned' || !hoverLit))) return;
     msgsEl.querySelector('li.lit')?.classList.remove('lit');
     hoverLit = key;
-    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: 'nearest' }); }
+    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: 'nearest', transient: true }); }
     else toFrame({ type: 'clear-focus' });
   });
   msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); } });
@@ -361,7 +361,7 @@
   const inspecting = () => panelEl.classList.contains('inspecting');
   function closeInspector() {
     if (!inspecting()) return;
-    panelEl.classList.remove('inspecting'); inspBody.innerHTML = ''; inspSeq++;
+    panelEl.classList.remove('inspecting'); inspBody.innerHTML = ''; inspSeq++; app.classList.remove('wide-panel');
     toFrame({ type: 'select', id: null });
     if (panelWasClosed) { panelWasClosed = false; setPanel(false, false); }
   }
@@ -406,13 +406,13 @@
       ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>${box.planNote ? `<p class="insp-why">${esc(box.planNote)}</p>` : ''}` : ''}
       ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
       ${changeSection(box)}
-      <form class="insp-comment"><textarea rows="1" aria-label="Comment"></textarea><button type="submit" disabled>Add</button></form>
       ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
       ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
+      <form class="insp-comment"><textarea rows="1" aria-label="Comment"></textarea><button type="submit" disabled>Add</button></form>
       ${rel ? `<div class="insp-rel">${box.to.length ? `<span>Calls</span><div>${chips(box.to)}</div>` : ''}${box.from.length ? `<span>Called by</span><div>${chips(box.from)}</div>` : ''}</div>` : ''}
       ${box.src ? `<details class="insp-code"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>Code <code>${esc(box.src.split('#')[0])}</code><a class="open-ed" hidden>Open in VS Code</a></summary><div class="code-box"><div class="code-note">Reading the code…</div></div></details>`
         : box.ext ? '<div class="insp-why">Outside this code base.</div>' : ''}
-      ${pageT || rel ? `<div class="insp-actions">${pageT ? `<button type="button" data-act="open">Open ${esc(titleOf(pageT))}</button>` : ''}${rel ? '<button type="button" data-act="links">Light up its connections</button>' : ''}</div>` : ''}`;
+      ${pageT ? `<div class="insp-actions">${pageT ? `<button type="button" data-act="open">Open ${esc(titleOf(pageT))}</button>` : ''}</div>` : ''}`;
     inspBody.scrollTop = 0;
     wireChangeSection();
     const form = inspBody.querySelector('.insp-comment'); const ta = form.querySelector('textarea'); const add = form.querySelector('button');
@@ -426,6 +426,9 @@
       renderNotes(); syncFrameNotes();
       panelWasClosed = false; closeInspector(); input.focus();
     };
+    const widen = () => app.classList.toggle('wide-panel', !!inspBody.querySelector('.insp-code[open], .insp-change details[open]'));
+    for (const d of inspBody.querySelectorAll('details')) d.addEventListener('toggle', widen);
+    widen();
     const code = inspBody.querySelector('.insp-code');
     if (code) code.addEventListener('toggle', () => { if (code.open && !code.dataset.loaded) { code.dataset.loaded = '1'; loadCode(box, code.querySelector('.code-box'), seq); } });
     inspBody.querySelector('.open-ed')?.addEventListener('click', (e) => e.stopPropagation());
@@ -517,7 +520,7 @@
       }
       html += '<div class="ch-act"><button type="button" data-act="map">Ask the agent to map these</button></div>';
     }
-    if (!r.files) html += `<p class="ch-empty">Pick another base above, or keep this open: it updates while the agent works.</p>`;
+    if (!r.files) html += r.base.kind !== 'head' ? '<div class="ch-act"><button type="button" data-act="head">Show uncommitted changes instead</button></div>' : '<p class="ch-empty">It updates by itself while the agent works.</p>';
     el.innerHTML = html;
   }
   function diffHtml(text) {
@@ -552,6 +555,7 @@
       const box = document.createElement('div'); box.className = 'ch-diff code-box'; file.after(box); loadDiff(file.dataset.path, box);
       return;
     }
+    if (e.target.closest('[data-act="head"]')) { ch.base = 'head'; store.set('truemap.base', 'head'); ch.data = null; renderChanges(); loadChanges(); return; }
     if (e.target.closest('[data-act="map"]')) {
       const files = ch.data.unmapped.flatMap((g) => g.files.map((f) => f.path));
       setTab('convo');
@@ -574,6 +578,19 @@
   setInterval(() => { if (document.visibilityState === 'visible') loadChanges(); }, 10_000);
 
   // ---------- plan review: the agent's plan on the map, approve or ask for changes ----------
+  // Requesting changes is a mode of the composer: a heading says so, Send sends the request (comments included).
+  function setRequest(on) {
+    planRequest = !!on;
+    const el = $('about');
+    if (on) {
+      el.hidden = false;
+      el.innerHTML = '<span><b>Requesting changes to the plan</b></span><button type="button" aria-label="Cancel">×</button>';
+      el.querySelector('button').onclick = () => setRequest(false);
+      input.placeholder = 'What should change? (comments above go along)';
+      input.focus(); scrollChat();
+    } else { renderAbout(); input.placeholder = state.notes.length ? S.placeholderNotes : S.placeholder; }
+    renderNotes();
+  }
   const planBar = $('planbar');
   let planRequest = false; // the next message asks for plan changes
   function sendPlan() { toFrame({ type: 'plan', plan: state.plan && state.plan.page === state.page ? state.plan : null }); }
@@ -589,7 +606,8 @@
     } else if (p.status === 'revise') {
       html += `<div class="pb-acts"><span class="pb-wait">Waiting for the revised plan</span></div>`;
     } else if (p.status === 'approved') {
-      html += `<div class="pb-acts"><span class="pb-wait">Approved. ${esc(agentName())} is building it.</span><button type="button" class="pb-btn" data-pb="changes">See what changed</button><button type="button" class="pb-x" data-pb="hide" aria-label="Hide">×</button></div>`;
+      const building = state.agent.state === 'working' && state.conn === 'live';
+      html += `<div class="pb-acts"><span class="pb-wait">${building ? `Approved. ${esc(agentName())} is building it.` : `Approved. Waiting for ${esc(agentName())} to pick it up.`}</span><button type="button" class="pb-btn" data-pb="changes">See what changed</button><button type="button" class="pb-x" data-pb="hide" aria-label="Hide">×</button></div>`;
     }
     planBar.innerHTML = html;
   }
@@ -599,11 +617,8 @@
     if (act === 'open') go(p.page);
     else if (act === 'hide') { state.planHidden = `${p.slug}:${p.status}`; renderPlan(); }
     else if (act === 'changes') { ch.base = 'plan'; ch.data = null; setPanel(true); setTab('changes'); }
-    else if (act === 'request') {
-      setPanel(true); setTab('convo');
-      if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { plan: 'request' }); }
-      else { planRequest = true; input.placeholder = 'What should change in the plan?'; input.focus(); }
-    } else if (act === 'approve') {
+    else if (act === 'request') { setPanel(true); setTab('convo'); setRequest(true); }
+    else if (act === 'approve') {
       // comments written before approving still go to the agent, first
       if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t); }
       await api('/api/plan', { action: 'approve' });
@@ -614,18 +629,18 @@
   const projMenu = $('projMenu');
   let projList = [];
   const PSTATE = { listening: 'Agent listening', working: 'Agent working', idle: 'Agent stopped listening', offline: 'No agent' };
-  const needsYou = (p) => !p.self && (p.unread || p.plan?.status === 'review');
+  const needsYou = (p) => !p.self && (p.unread || p.asking || p.plan?.status === 'review');
   function renderProjects() {
     const self = projList.find((p) => p.self);
     if (self) $('projName').textContent = self.name;
     const n = projList.filter(needsYou).length;
-    $('projCount').hidden = !n; $('projCount').textContent = n ? String(n) : '';
+    $('projCount').hidden = !n; $('projCount').textContent = n ? `${n} waiting` : '';
     $('projBtn').title = n ? `${n} other project${n > 1 ? 's' : ''} need${n > 1 ? '' : 's'} you` : 'Projects';
     const p = state.pages.find((x) => x.page === state.page);
     document.title = `${n ? `(${n}) ` : ''}${p ? `${titleOf(p)} – ` : ''}${self ? self.name : 'truemap'}`;
     if (projMenu.hidden) return;
     projMenu.innerHTML = projList.map((x) => {
-      const why = x.plan?.status === 'review' ? `<em>Plan to review</em> ${esc(x.plan.title)}` : x.unread ? '<em>New reply</em>' : esc(PSTATE[x.agent] || '');
+      const why = x.plan?.status === 'review' ? `<em>Plan to review</em> ${esc(x.plan.title)}` : x.asking ? '<em>Waiting for your decision</em>' : x.unread ? '<em>New reply</em>' : esc(PSTATE[x.agent] || '');
       return `<a class="proj-item${x.self ? ' self' : ''}" role="menuitem" ${x.self ? '' : `href="${esc(x.url)}" target="_blank" rel="noopener"`} data-self="${x.self ? 1 : ''}"><i class="${esc(x.agent || '')}"></i><b>${esc(x.name)}</b><small>${why}</small></a>`;
     }).join('') + `<div class="proj-foot">Projects with truemap running. Run <code>${esc(state.cmd)}</code> in another repo to add it.</div>`;
   }
@@ -667,7 +682,7 @@
       };
       upd(); el.hidden = false; tick = setInterval(upd, 1000);
     } else el.hidden = true;
-    renderWorking(); renderNotice();
+    renderWorking(); renderNotice(); if (typeof renderPlan === "function" && state.plan) renderPlan();
   }
   function renderNotice() {
     const n = $('notice');
@@ -685,7 +700,9 @@
     } else if (s === 'working' && isStale()) {
       html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped, or be waiting for you in the terminal. Check there, or ask it to run:${listen}<p class="after">If it no longer knows your last comments, send them again.</p>`;
     }
+    const atEnd = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 40;
     n.innerHTML = html; n.hidden = !html;
+    if (atEnd) scrollChat();
     n.querySelector('.copy')?.addEventListener('click', (e) => {
       const text = n.querySelector('.cmd code').textContent;
       navigator.clipboard?.writeText(text).then(() => { e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy'; }, 1400); }).catch(() => {});
@@ -711,7 +728,7 @@
     const about = !extra.context && !extra.answer && state.about;
     if (about) context = [...context, { kind: 'element', label: about.label, src: about.src, excerpt: about.excerpt || '', page: state.page }];
     if (!text && !context.length && !extra.answer) return;
-    if (planRequest && !extra.answer) { extra = { ...extra, plan: 'request' }; planRequest = false; input.placeholder = S.placeholder; }
+    if (planRequest && !extra.answer) { extra = { ...extra, plan: 'request' }; setRequest(false); }
     const r = await api('/api/send', { text, context, page: state.page, ...extra });
     if (r.id && !r.delivered) { state.pending.add(r.id); markPending(r.id, true); }
     if (withNotes && notes.length && r.id) { state.notes = []; renderNotes(); syncFrameNotes(); }
@@ -726,7 +743,7 @@
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const text = input.value;
-    if (!text.trim() && !state.notes.length) { input.focus(); return; }
+    if (!text.trim() && !state.notes.length && !planRequest) { input.focus(); return; }
     input.value = ''; autosize();
     send(text);
   });
@@ -735,8 +752,12 @@
   $('checkChip').onclick = () => {
     const r = resultFor(state.page);
     if (!r || (!r.counts.changed && !r.counts.broken)) return;
-    setPanel(true);
-    send(S.fixPrompt(`.truemap/${state.page}`, r.counts.changed, r.counts.broken), { context: [], noNotes: true });
+    const stale = r.anchors.filter((a) => a.state !== 'ok');
+    const broken = stale.filter((a) => a.state === 'broken').length;
+    pointAt(stale.map((a) => a.src), broken ? 'These boxes no longer match the code.' : 'The code under these boxes changed after this page was written.', 'truemap');
+    setPanel(true); setTab('convo');
+    if (!input.value.trim()) { input.value = `Update this page: ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} ${broken ? 'no longer match the code' : 'changed in the code'}.`; autosize(); }
+    input.focus();
   };
 
   // A decision only counts as the user's if the user actually moved focus into the page.
@@ -771,6 +792,12 @@
       renderNotes(); syncFrameNotes();
       if (d.send) send(input.value).then(() => { input.value = ''; autosize(); });
       else if (!panelOpen() && !narrow()) setPanel(true, false);
+    } else if (d.type === 'focus-state') {
+      const n = Number(d.count) || 0;
+      $('litPill').hidden = !n || !!d.transient;
+      $('litText').textContent = n === 1 ? '1 box lit' : `${n} boxes lit`;
+    } else if (d.type === 'focus-cleared') {
+      $('litPill').hidden = true;
     } else if (d.type === 'changes-names') {
       for (const it of d.items || []) if (it && it.src) ch.names.set(String(it.src), String(it.name || '').slice(0, 80));
       if (showingChanges()) renderChanges();
@@ -787,6 +814,8 @@
       if (d.text) send(d.text, { from: 'page', context: [], noNotes: true });
     }
   });
+
+  $('litClear').onclick = () => { toFrame({ type: 'clear-focus' }); $('litPill').hidden = true; };
 
   // ---------- live events from the server ----------
   let closedTimer = null;
@@ -819,6 +848,8 @@
         state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
         state.plan = d.plan || null;
         renderAll(); renderAgent(); renderNotes(); loadChanges(); renderPlan();
+        const last = [...state.history].reverse().find((h) => h.role === 'agent');
+        if (!panelOpen() && !narrow() && (state.plan?.status === 'review' || (last?.ask && !state.history.some((h) => h.kind === 'answer' && h.at > last.at)))) setPanel(true, false);
         const fromHash = decodeURIComponent((location.hash.match(/page=([^&]+)/) || [])[1] || '');
         const target = [state.page, fromHash, d.current].find((p) => p && state.pages.some((x) => x.page === p)) || state.pages[0]?.page;
         target ? go(target, { force: !frame.getAttribute('src') }) : showEmpty();

@@ -73,4 +73,4 @@ Everything runs on your machine:
 
 ## License
 
-MIT. Layout: [dagre](https://github.com/dagrejs/dagre) (MIT). Fonts: Instrument Sans and Commit Mono, SIL Open Font License (`kit/fonts/`).
+MIT. Fonts: Instrument Sans and Commit Mono, SIL Open Font License (`kit/fonts/`).

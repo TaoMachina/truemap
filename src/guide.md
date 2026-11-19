@@ -28,7 +28,8 @@ ANCHORS (this is what keeps pages true)
 - `{{CMD}} check` reports broken (path or name gone) and changed (code changed after the page was written).
   Fix the page, or if it is still accurate run `{{CMD}} check --ok <page>`.
 - Changes are attributed to boxes by file: a box owns the file its data-src names. Anchor the file that holds
-  the module's main code, not a shared index file, or every change lands on every box.
+  the module's main code, not a shared index file, or every change lands on every box. For a web app, anchor
+  the file that holds its state or routes (e.g. web/src/lib/store.ts), not the root component.
 
 THE MAP – small boxes in groups; truemap does the layout
 You declare groups, boxes and connections. truemap places everything (layered, one reading direction, few
@@ -116,6 +117,7 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
     "steps":  ["Add a rate_limits table to [Store](#store)", "Call [Rate limits](#limits) from [Runs](#runs)"]
   }
   "box" is a box id or data-src on that page; "group" is a group id or label; steps may link boxes [Name](#id).
+- The plan appears in the conversation by itself; do not also reply. Wait with listen.
 - The user sees new boxes dashed in their group and touched boxes marked, comments on boxes, then clicks
   Approve or Request changes. `listen` returns kind: approval, or kind: plan_changes with their comments
   (then revise and run `plan --file` again with the same title). If the user says "go" in the terminal instead,

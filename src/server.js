@@ -42,6 +42,8 @@ let annotateWish;                   // set by `truemap <page> --annotate` before
 let lastAgentActivity = 0;
 let lastSeenAt = Date.now();        // when a person last had this project open
 let lastReplyAt = 0;                // when the agent last wrote in the chat
+let everConnected = false;          // a tab has been open since this server started
+const asking = () => { const a = [...history].reverse().find((h) => h.role === 'agent'); return !!(a?.ask && !history.some((h) => h.kind === 'answer' && h.at > a.at)); };
 let currentPage = null;
 let closeTimer = null;
 let idleTimer = null;
@@ -158,7 +160,7 @@ function scheduleCloseCheck() {
   if (!listener || clients.size > 0) return;
   closeTimer = setTimeout(() => {
     if (listener && clients.size === 0 && queue.length === 0) {
-      finishListen({ status: 'browser_closed' });
+      finishListen({ status: everConnected ? 'browser_closed' : 'no_tab' });
       setAgentState('idle');
     }
   }, CLOSE_GRACE_MS);
@@ -222,9 +224,9 @@ async function projects() {
     let st; try { st = JSON.parse(readFileSync(join(serversDir(), name), 'utf8')); } catch { return null; }
     if (!st?.port || !st.token) return null;
     const self = st.pid === process.pid;
-    const s = self ? { root, name: basename(root), agent: agentState, agentName, plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null, unread: false, clients: clients.size } : await peek(st);
+    const s = self ? { root, name: basename(root), agent: agentState, agentName, plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null, unread: false, asking: false, clients: clients.size } : await peek(st);
     if (!s?.root) return null;
-    return { self, name: s.name || basename(s.root), root: s.root, agent: s.agent, agentName: s.agentName || '', plan: s.plan || null, unread: !!s.unread, url: `http://127.0.0.1:${st.port}/?t=${encodeURIComponent(st.token)}` };
+    return { self, name: s.name || basename(s.root), root: s.root, agent: s.agent, agentName: s.agentName || '', plan: s.plan || null, unread: !!s.unread, asking: !!s.asking, url: `http://127.0.0.1:${st.port}/?t=${encodeURIComponent(st.token)}` };
   }));
   // one entry per project, even when two state files (old path spellings) point at the same server
   const seen = new Set();
@@ -364,7 +366,7 @@ const server = createServer(async (req, res) => {
         history, current: currentPage, pending: queue.map((m) => m.id), plan: plan && plan.status !== 'done' ? plan : null, ...(annotateWish !== undefined ? { annotate: annotateWish } : {}),
       })}\n\n`);
       annotateWish = undefined;
-      clients.add(res);
+      clients.add(res); everConnected = true;
       clearTimeout(closeTimer);
       const ping = setInterval(() => res.write(': ping\n\n'), 20_000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); lastSeenAt = Date.now(); scheduleCloseCheck(); touchIdle(); });
@@ -443,7 +445,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         version: VERSION, pid: process.pid, root, name: basename(root), clients: clients.size, agent: agentState, agentName, queued: queue.length, current: currentPage,
         plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null,
-        unread: !clients.size && lastReplyAt > lastSeenAt,
+        unread: !clients.size && lastReplyAt > lastSeenAt, asking: !clients.size && asking(),
       });
     }
     if (p === '/api/agent/listen' && req.method === 'POST') {
@@ -521,7 +523,7 @@ const server = createServer(async (req, res) => {
       p2.revision = prev && prev.status !== 'done' ? (prev.revision || 1) + 1 : 1;
       p2.status = 'review'; p2.at = new Date().toISOString();
       setPlan(p2);
-      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2), focus: [...p2.touch.map((t) => t.box), ...p2.add.map((a) => a.id)].slice(0, 20) });
+      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2), plan: p2.slug });
       broadcast({ type: 'navigate', page: p2.page, pages: safePages() });
       return sendJson(res, 200, { ok: true, slug: p2.slug, revision: p2.revision, page: p2.page, browsers: clients.size });
     }
@@ -548,7 +550,7 @@ const content = createServer((req, res) => {
   const p = new URL(req.url, `http://127.0.0.1:${contentPort}`).pathname;
   try {
     if (p === '/__truemap/sdk.js') {
-      const js = [join(KIT_DIR, 'vendor', 'dagre.min.js'), join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
+      const js = [join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
         + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);

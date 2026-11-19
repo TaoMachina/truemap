@@ -44,7 +44,7 @@ button { font: inherit; color: inherit; }
 code { font-family: var(--code); font-size: 0.9em; }
 [hidden] { display: none !important; }
 
-.app { display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); grid-template-rows: 44px minmax(0, 1fr); height: 100vh; height: 100dvh; }
+.app { transition: grid-template-columns 160ms ease; display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); grid-template-rows: 44px minmax(0, 1fr); height: 100vh; height: 100dvh; }
 .app.panel-closed { grid-template-columns: minmax(0, 1fr) 0; }
 .app.panel-closed .panel { display: none; }
 
@@ -124,7 +124,7 @@ code { font-family: var(--code); font-size: 0.9em; }
 /* plan review bar: what the agent proposes, and the decision */
 .planbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 12px 8px 16px; background: var(--chrome); border-bottom: 1px solid var(--line); font-size: 13px; }
 .pb-text { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.pb-text b { font-weight: 600; color: var(--ink); background: var(--mark); padding: 0 6px; border-radius: 4px; }
+.pb-text b { font-weight: 600; color: var(--ink); border: 1px solid var(--ink); padding: 0 6px; border-radius: 6px; font-size: 12px; }
 .pb-title { font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-meta { color: var(--faint); white-space: nowrap; }
 .pb-acts { display: flex; align-items: center; gap: 6px; }
@@ -359,3 +359,12 @@ code { font-family: var(--code); font-size: 0.9em; }
 .insp-change summary { display: flex; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; font: 12px var(--code); color: var(--ink); padding: 3px 0; }
 .insp-change summary::-webkit-details-marker { display: none; }
 .insp-change .shared { font: 11.5px var(--font); color: var(--faint); margin-left: 6px; }
+
+/* boxes are lit: a visible way back */
+.lit-pill { position: absolute; z-index: 12; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 999px; box-shadow: 0 6px 20px -10px rgba(20, 20, 19, .35); font-size: 12px; color: var(--muted); }
+.planbar:not([hidden]) ~ .lit-pill { top: 60px; }
+.lit-pill button { border: 0; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+/* code and diffs get room while they are open */
+.app.wide-panel { --panel-w: min(640px, 48vw); }
+.msg .show-map { font-size: 12px; }
+.msg .show-map a { color: var(--muted); }

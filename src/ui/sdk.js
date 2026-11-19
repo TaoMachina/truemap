@@ -82,7 +82,18 @@
     // labels are placed afresh for what is now visible
     window.truemapWires?.labels?.({ hot: hot || null, focus: [...ids] });
   }
-  function applyFocus(items, note, who, scroll = 'center') {
+  // Brings elements into view by scrolling the page itself; scrollIntoView would also scroll a map's own
+  // clipped box sideways and hide part of it.
+  function reveal(els, how = 'center') {
+    const rs = els.filter((el) => el.isConnected).map((el) => el.getBoundingClientRect());
+    if (!rs.length) return;
+    const top = Math.min(...rs.map((r) => r.top)); const bottom = Math.max(...rs.map((r) => r.bottom));
+    const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    if (how === 'nearest' && top >= 8 && bottom <= innerHeight - 8) return;
+    const dy = bottom - top > innerHeight - 80 ? top - 60 : (top + bottom) / 2 - innerHeight / 2;
+    window.scrollBy({ top: dy, behavior: smooth });
+  }
+  function applyFocus(items, note, who, scroll = 'center', transient = false) {
     clearFocus(false);
     for (const btn of document.querySelectorAll('[data-tm-flow]')) btn.setAttribute('aria-pressed', 'false');
     focusSet = findItems(items);
@@ -90,17 +101,20 @@
     if (focusSet.length) {
       document.documentElement.setAttribute('data-tm-focusing', '');
       for (const el of focusSet) el.setAttribute('data-tm-focus', '');
-      if (scroll) focusSet[0].scrollIntoView({ block: scroll, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      if (scroll) reveal(focusSet, scroll);
     } else if (focusNote) window.scrollTo({ top: 0 });
     // the page scrolls smoothly to the group: place the note again once it has settled
     markWires(); paintRings(); setTimeout(paintRings, 350); setTimeout(paintRings, 900);
+    post({ type: 'focus-state', count: focusSet.length, transient });
   }
   function clearFocus(repaint = true) {
     document.documentElement.removeAttribute('data-tm-focusing');
     for (const el of document.querySelectorAll('[data-tm-focus]')) el.removeAttribute('data-tm-focus');
     if (repaint) for (const btn of document.querySelectorAll('[data-tm-flow]')) btn.setAttribute('aria-pressed', 'false');
+    const had = focusSet.length;
     focusSet = []; focusNote = null;
     markWires(); if (repaint) paintRings();
+    if (had && repaint) post({ type: 'focus-state', count: 0 });
   }
 
   // ---------- peek: click a box to see what it is in the code ----------
@@ -477,7 +491,11 @@
       if (String(getSelection?.() || '').trim().length > 1) return;
       if (!box) {
         // Empty space: back to the plain map.
-        if (!inner) { if (focusSet.length || focusNote) { clearFocus(); post({ type: 'focus-cleared' }); } if (selected) { select(null); post({ type: 'deselect' }); } }
+        if (!inner) {
+          if (focusSet.length || focusNote) { clearFocus(); post({ type: 'focus-cleared' }); }
+          if (selected) { select(null); post({ type: 'deselect' }); }
+          for (const fig of document.querySelectorAll('figure.tm-diagram[data-flow]')) window.truemapDiagram?.setFlow(fig, null);
+        }
         return;
       }
       if (inner && inner !== box && box.contains(inner)) return;
@@ -574,7 +592,7 @@
     } else if (d.type === 'scroll') {
       window.scrollTo(0, d.y || 0);
     } else if (d.type === 'focus') {
-      applyFocus(d.items, d.note, d.who, d.scroll === undefined ? 'center' : d.scroll);
+      applyFocus(d.items, d.note, d.who, d.scroll === undefined ? 'center' : d.scroll, !!d.transient);
     } else if (d.type === 'select') {
       select(d.id ? document.getElementById(d.id) : null);
     } else if (d.type === 'plan') {
@@ -608,7 +626,7 @@
       if (names.length) post({ type: 'changes-names', items: names });
     } else if (d.type === 'open-box') {
       const el = d.id ? document.getElementById(d.id) : [...document.querySelectorAll('[data-src]')].find((x) => x.getAttribute('data-src') === d.src);
-      if (el) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); peek(el); }
+      if (el) { reveal([el], 'nearest'); peek(el); }
     } else if (d.type === 'clear-focus') {
       clearFocus();
     } else if (d.type === 'highlight') {

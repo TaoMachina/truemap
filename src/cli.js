@@ -266,6 +266,8 @@ async function doListen(root, opts) {
       'If the answer changes the page (or the code it describes), update the page; the browser reloads by itself.',
       `Then run \`${CMD} reply "<answer>" --listen\`${detectAgent() === 'claude-code' ? ' with run_in_background' : ''}. Keep the reply short and concrete; use - lists and **bold** sparingly.`,
     ].join('\n'));
+  } else if (b.status === 'no_tab') {
+    block('next_step', `No truemap tab is open, so nobody can answer on the page. Open it with \`${CMD} <page>\` (the url it prints works too), then listen again; or continue in the terminal.`);
   } else if (b.status === 'browser_closed') {
     block('next_step', 'The user closed the truemap tab. Stop listening and continue in the terminal. Do not reopen the browser unless the user asks or something important needs their eyes.');
   } else if (b.status === 'ended') {
