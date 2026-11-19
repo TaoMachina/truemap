@@ -48,6 +48,7 @@
       .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?![*\w])/g, '$1<em>$2</em>')
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, href) => {
         if (/^[\w./-]+\.html?(#[\w-]*)?$/i.test(href)) return `<a href="#" data-page="${href}">${t}</a>`;
+        if (/^#[\w-]+$/.test(href)) return `<a href="#" class="ref" data-focus="${href.slice(1)}">${t}</a>`;
         if (/^https:\/\/[^\s"'<>]+$/i.test(href)) return `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
         return t;
       });
@@ -270,7 +271,12 @@
     const el = document.createElement('div');
     if (e.role === 'agent') {
       el.className = 'msg agent';
-      el.innerHTML = md(e.text);
+      el.innerHTML = e.ask && e.text.trim() === e.ask.question.trim() ? '' : md(e.text);
+      if (e.focus?.length) {
+        el.insertAdjacentHTML('beforeend', `<p><a href="#" class="ref" data-focus="${esc(e.focus.join(','))}">Show on the map</a></p>`);
+        if (live) pointAt(e.focus, '', AGENTS[e.agent] || agentName());
+      }
+      if (e.ask) el.appendChild(askCard(e));
       if (live && !panelOpen()) { state.unread = true; renderBadge(); }
     } else {
       el.className = 'msg user'; el.dataset.id = e.id;
@@ -296,12 +302,108 @@
   }
   const scrollChat = () => { msgsEl.scrollTop = msgsEl.scrollHeight; };
   msgsEl.addEventListener('click', (e) => {
+    const ref = e.target.closest('[data-focus]');
+    if (ref) { e.preventDefault(); pointAt(ref.dataset.focus.split(',').filter(Boolean), '', ''); return; }
+    const opt = e.target.closest('.ask-opt');
+    if (opt && !opt.disabled) { e.preventDefault(); answerAsk(opt); return; }
     const a = e.target.closest('a[data-page]');
     if (!a) return;
     e.preventDefault();
-    const [page] = a.dataset.page.split('#');
-    if (state.pages.some((p) => p.page === page)) go(page);
+    const [page, id] = a.dataset.page.split('#');
+    if (state.pages.some((p) => p.page === page)) { if (id) state.pendingFocus = { items: [id] }; go(page); }
   });
+
+  // ---------- the agent points at the map ----------
+  function pointAt(items, note, who, page) {
+    const target = page && state.pages.some((p) => p.page === page) ? page : state.page;
+    const msg = { type: 'focus', items, note: note || '', who: who || agentName() };
+    if (target && target !== state.page) { state.pendingFocus = msg; go(target); } else toFrame(msg);
+  }
+
+  // ---------- choices the agent asks for (only when it is blocked on a real trade-off) ----------
+  function askCard(e) {
+    const answered = state.history.find((h) => h.kind === 'answer' && h.answer?.question === e.ask.question && h.at > e.at);
+    const box = document.createElement('div'); box.className = 'ask';
+    box.innerHTML = `<div class="ask-q">${esc(e.ask.question)}</div>` + e.ask.options.map((o, i) =>
+      `<button type="button" class="ask-opt${answered?.answer?.choice === o.label ? ' chosen' : ''}" data-i="${i}" ${answered ? 'disabled' : ''}><b>${esc(o.label)}</b>${o.why ? `<span>${esc(o.why)}</span>` : ''}</button>`).join('');
+    box.dataset.q = e.ask.question;
+    return box;
+  }
+  function answerAsk(btn) {
+    const box = btn.closest('.ask');
+    for (const b of box.querySelectorAll('.ask-opt')) b.disabled = true;
+    btn.classList.add('chosen');
+    send('', { kind: 'answer', noNotes: true, context: [], answer: { question: box.dataset.q, choice: btn.querySelector('b').textContent, note: '' } });
+  }
+
+  // ---------- peek: what a box is, in the code ----------
+  const peekEl = $('peek');
+  const closePeek = () => { peekEl.hidden = true; peekEl.innerHTML = ''; };
+  const pageHref = (href) => {
+    const [file, id] = href.split('#');
+    const base = state.page && state.page.includes('/') ? state.page.replace(/[^/]+$/, '') : '';
+    const parts = (base + file).split('/'); const outp = [];
+    for (const p of parts) { if (p === '..') outp.pop(); else if (p && p !== '.') outp.push(p); }
+    return { page: outp.join('/'), id };
+  };
+  async function openPeek(box, rect) {
+    const stage = document.querySelector('.stage').getBoundingClientRect();
+    const rel = (list, label) => (list.length ? `<div class="peek-rel"><span>${label}</span>${list.map((c) => `<button type="button" class="ref" data-focus="${esc(c.id)}">${esc(c.label)}${c.via ? ` <i>${esc(c.via)}</i>` : ''}</button>`).join('')}</div>` : '');
+    const page = box.href ? pageHref(box.href) : null;
+    const pageTitle = page && state.pages.find((p) => p.page === page.page);
+    peekEl.innerHTML = `
+      <div class="peek-head"><div class="peek-title"><b>${esc(box.label)}</b>${box.src ? `<code>${esc(box.src)}</code>` : (box.ext ? '<span>Outside this code</span>' : '')}</div><button class="peek-x" type="button" aria-label="Close">×</button></div>
+      ${box.mark ? `<div class="peek-mark ${esc(box.mark)}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
+      ${box.desc ? `<p class="peek-desc">${esc(box.desc)}</p>` : ''}
+      ${box.why ? `<p class="peek-why"><b>Why it is built this way.</b> ${esc(box.why)}</p>` : ''}
+      ${box.src ? '<div class="peek-code"><div class="peek-loading">Reading the code…</div></div>' : ''}
+      ${rel(box.to, 'Calls')}${rel(box.from, 'Called by')}
+      <div class="peek-actions">
+        ${pageTitle ? `<button type="button" class="primary" data-act="open">Open ${esc(titleOf(pageTitle))}</button>` : ''}
+        <button type="button" data-act="ask">Ask about this</button>
+        ${box.id && (box.to.length || box.from.length) ? '<button type="button" data-act="links">Show its connections</button>' : ''}
+      </div>`;
+    peekEl.hidden = false;
+    // place it beside the box, inside the stage
+    const W = Math.min(400, stage.width - 24); peekEl.style.width = `${W}px`;
+    const H = () => peekEl.offsetHeight;
+    let left = rect.r + 12; let top = rect.t;
+    if (left + W > stage.width - 12) left = rect.l - W - 12;
+    if (left < 12) { left = Math.max(12, Math.min(rect.l, stage.width - W - 12)); top = rect.b + 10; }
+    const place = () => { peekEl.style.left = `${left}px`; peekEl.style.top = `${Math.max(12, Math.min(top, stage.height - H() - 12))}px`; };
+    place();
+    peekEl.querySelector('.peek-x').onclick = closePeek;
+    peekEl.onclick = (ev) => {
+      const act = ev.target.closest('[data-act]')?.dataset.act;
+      const ref = ev.target.closest('[data-focus]');
+      if (ref) { pointAt([box.id, ref.dataset.focus].filter(Boolean), '', ''); return; }
+      if (act === 'open') { closePeek(); if (page.id) state.pendingFocus = { type: 'focus', items: [page.id] }; go(page.page); }
+      else if (act === 'ask') { state.about = { kind: 'element', label: box.label, src: box.src, excerpt: box.desc }; renderAbout(); closePeek(); setPanel(true); input.focus(); }
+      else if (act === 'links') { pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', ''); }
+    };
+    if (box.src) {
+      let sn = {};
+      try { sn = await fetch(`/api/snippet?src=${encodeURIComponent(box.src)}&t=${encodeURIComponent(TOKEN)}`).then((r) => r.json()); } catch { sn = { error: 'could not read the code' }; }
+      const code = peekEl.querySelector('.peek-code'); if (!code || peekEl.hidden) return;
+      if (sn.kind === 'folder') code.innerHTML = `<div class="peek-loading">A folder: ${esc(sn.path)}</div>`;
+      else if (sn.error) code.innerHTML = `<div class="peek-loading">${esc(sn.error)}</div>`;
+      else {
+        code.innerHTML = `<div class="peek-codehead">${esc(sn.path)}, line ${sn.line}${sn.lastChange ? `, changed ${esc(sn.lastChange)}` : ''}</div><pre>${sn.lines.map((l, i) => `<span class="${sn.start + i === sn.line ? 'hit' : ''}"><i>${sn.start + i}</i>${esc(l) || ' '}</span>`).join('')}</pre>`;
+        place();
+      }
+    }
+  }
+  document.addEventListener('mousedown', (e) => { if (!peekEl.hidden && !e.target.closest('#peek')) closePeek(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !peekEl.hidden) { closePeek(); e.stopPropagation(); } }, true);
+
+  // "Ask about this": the box goes along with the next message.
+  function renderAbout() {
+    const el = $('about'); const a = state.about;
+    el.hidden = !a; if (!a) { el.innerHTML = ''; return; }
+    el.innerHTML = `<span>About <b>${esc(a.label)}</b>${a.src ? ` <code>${esc(a.src)}</code>` : ''}</span><button type="button" aria-label="Remove">×</button>`;
+    el.querySelector('button').onclick = () => { state.about = null; renderAbout(); };
+    input.placeholder = `Ask about ${a.label}`;
+  }
   function markPending(id, on) {
     const el = msgsEl.querySelector(`.msg[data-id="${CSS.escape(id)}"]`);
     if (!el) return;
@@ -373,11 +475,14 @@
     text = String(text || '').trim();
     const withNotes = !extra.answer && !extra.noNotes;
     const notes = withNotes ? state.notes : [];
-    const context = extra.context ?? notes.map((n) => ({ kind: n.kind, label: n.label, src: n.src, excerpt: n.excerpt, comment: n.text, page: n.page }));
+    let context = extra.context ?? notes.map((n) => ({ kind: n.kind, label: n.label, src: n.src, excerpt: n.excerpt, comment: n.text, page: n.page }));
+    const about = !extra.context && !extra.answer && state.about;
+    if (about) context = [...context, { kind: 'element', label: about.label, src: about.src, excerpt: about.excerpt || '', page: state.page }];
     if (!text && !context.length && !extra.answer) return;
     const r = await api('/api/send', { text, context, page: state.page, ...extra });
     if (r.id && !r.delivered) { state.pending.add(r.id); markPending(r.id, true); }
     if (withNotes && notes.length && r.id) { state.notes = []; renderNotes(); syncFrameNotes(); }
+    if (about && r.id) { state.about = null; renderAbout(); input.placeholder = S.placeholder; }
   }
 
   const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; };
@@ -409,15 +514,21 @@
   window.addEventListener('message', (e) => {
     if (e.source !== frame.contentWindow || e.origin !== CONTENT || !e.data || !e.data.__truemap) return;
     const d = e.data;
-    if (d.type === 'loaded') {
+    if (d.type === 'press') {
+      closePeek();
+    } else if (d.type === 'peek') {
+      if (d.box && d.rect) openPeek(d.box, d.rect);
+    } else if (d.type === 'loaded') {
       if (d.page && d.page !== state.page) setCurrent(d.page);
+      closePeek();
+      if (state.pendingFocus) { const pf = state.pendingFocus; state.pendingFocus = null; setTimeout(() => toFrame({ type: 'focus', note: '', who: agentName(), ...pf }), 60); }
       renderHeader(); sendMarks();
       if (!state.annotateTouched && typeof d.annotate === 'boolean') state.annotate = d.annotate;
       setAnnotate(state.annotate);
       syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
     } else if (d.type === 'scroll') {
-      state.scroll[d.page] = d.y;
+      state.scroll[d.page] = d.y; closePeek();
     } else if (d.type === 'note' || d.type === 'note-update') {
       const n = d.note || {};
       const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || ''), rect: n.rect && typeof n.rect === 'object' ? { left: +n.rect.left || 0, top: +n.rect.top || 0, right: +n.rect.right || 0, bottom: +n.rect.bottom || 0 } : null };
@@ -502,6 +613,9 @@
         if (d.page && state.pages.some((p) => p.page === d.page)) go(d.page, { force: true });
         else setAnnotate(state.annotate);
         renderHeader();
+      } else if (d.type === 'show') {
+        if (d.clear) toFrame({ type: 'clear-focus' });
+        else pointAt(d.focus || [], d.note || '', AGENTS[d.agent] || agentName(), d.page);
       } else if (d.type === 'closing') {
         es.close(); setConn('closed');
       }

@@ -8,6 +8,7 @@ import { extname, join, resolve, sep } from 'node:path';
 import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, writePrivate } from './common.js';
 import { checkAll, listPages } from './check.js';
 import { exportPage, kitCss } from './export.js';
+import { snippet } from './snippet.js';
 
 const root = resolve(process.argv[2] || process.cwd());
 const folder = join(root, FOLDER);
@@ -158,6 +159,8 @@ function startWatching() {
 function safePages() {
   try { return listPages(root); } catch { return []; }
 }
+
+const cleanFocus = (f) => (Array.isArray(f) ? f : []).map((x) => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 20);
 
 // ---------- http helpers ----------
 function sendJson(res, status, body) {
@@ -342,6 +345,9 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name.replace(/[^\w.-]/g, '_')}-truemap.html"` });
       return res.end(html);
     }
+    if (p === '/api/snippet' && req.method === 'GET') {
+      try { return sendJson(res, 200, snippet(root, url.searchParams.get('src') || '')); } catch (e) { return sendJson(res, 200, { error: String(e.message || e) }); }
+    }
     if (p === '/api/end' && req.method === 'POST') {
       // The user is done talking on the page: free the agent to go back to the terminal.
       if (listener) finishListen({ status: 'ended' }); else if (agentState === 'working' || agentState === 'listening') endRequested = true;
@@ -377,7 +383,11 @@ const server = createServer(async (req, res) => {
       if (!text.trim()) return sendJson(res, 400, { error: 'empty reply' });
       lastAgentActivity = Date.now();
       noteAgent(b.agent);
-      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, text });
+      const focus = cleanFocus(b.focus);
+      const ask = b.ask && typeof b.ask === 'object' && Array.isArray(b.ask.options) && b.ask.options.length >= 2
+        ? { question: String(b.ask.question ?? '').slice(0, 500), options: b.ask.options.slice(0, 6).map((o) => ({ label: String(o.label ?? '').slice(0, 200), why: String(o.why ?? '').slice(0, 400) })) }
+        : null;
+      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, text, ...(focus.length ? { focus } : {}), ...(ask ? { ask } : {}) });
       if (!listener) setAgentState(b.keepWorking || b.willListen ? 'working' : 'idle');
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
@@ -388,6 +398,14 @@ const server = createServer(async (req, res) => {
       if (typeof b.annotate === 'boolean' && clients.size === 0) annotateWish = b.annotate;
       broadcast({ type: 'navigate', page, pages: safePages(), ...(typeof b.annotate === 'boolean' ? { annotate: b.annotate } : {}) });
       scheduleChecks();
+      return sendJson(res, 200, { ok: true, browsers: clients.size });
+    }
+    if (p === '/api/agent/show' && req.method === 'POST') {
+      // The agent points at the map: light up boxes (by id or data-src), optionally with a note.
+      const b = await readBody(req);
+      lastAgentActivity = Date.now();
+      noteAgent(b.agent);
+      broadcast({ type: 'show', page: typeof b.page === 'string' ? b.page : '', focus: cleanFocus(b.focus), note: String(b.note ?? '').slice(0, 2000), clear: !!b.clear, agent: agentName });
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
     if (p === '/api/agent/progress' && req.method === 'POST') {

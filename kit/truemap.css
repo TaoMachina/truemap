@@ -124,25 +124,19 @@ html[style*="--tm-vw"] .tm-map, html[style*="--tm-vw"] .tm-blueprint { width: ca
 .tm-node, .tm-step {
   position: relative; z-index: 1;
   display: flex; flex-direction: column; flex: 0 1 216px; min-width: 156px; max-width: 280px;
-  padding: 11px 26px 12px 14px;
+  padding: 11px 14px 12px;
   background: var(--tm-sheet); color: var(--tm-text);
   border: 1px solid var(--tm-rule-strong); border-radius: var(--tm-radius);
   text-decoration: none; line-height: 1.4;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-a.tm-node:hover, a.tm-step:hover { border-color: var(--tm-graphite); }
+/* Every box opens (its code, its connections, its page), so every box answers the pointer. */
+.tm-node:hover, .tm-step:hover { border-color: var(--tm-graphite); }
 .tm-node-title, .tm-step > b, .tm-step > strong { font-size: 15px; font-weight: 600; color: var(--tm-ink); }
 .tm-node-sub { font-family: var(--tm-code); font-size: 12px; color: var(--tm-pencil); margin-top: 2px; overflow-wrap: break-word; }
 .tm-node-desc { font-size: 13.5px; line-height: 1.45; color: var(--tm-graphite); margin-top: 7px; }
 
-/* The survey mark: a box pinned to real code (data-src) carries a small triangle. */
-.tm-node[data-src]::after, .tm-step[data-src]::after, .tm-card[data-src]::after {
-  content: ""; position: absolute; top: 11px; right: 11px; width: 8px; height: 7px;
-  background: var(--tm-pencil); clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
-.tm-node.is-key, .tm-step.is-key { border-color: var(--tm-route); box-shadow: inset 0 0 0 1px var(--tm-route); }
-.tm-node.is-key .tm-node-title, .tm-step.is-key > b, .tm-step.is-key > strong { color: var(--tm-route-ink); }
-.tm-node.is-key::after, .tm-step.is-key::after { background: var(--tm-route); }
+/* .is-key marks the main path. The boxes stay plain; the path shows as the blue wire between them. */
 .tm-node.is-ext, .tm-step.is-ext { background: transparent; border-style: dashed; }
 .tm-node.is-ext .tm-node-title, .tm-step.is-ext > b { color: var(--tm-graphite); font-weight: 500; }
 .tm-node.is-new, .tm-step.is-new { border-color: var(--tm-fine); }
@@ -150,12 +144,26 @@ a.tm-node:hover, a.tm-step:hover { border-color: var(--tm-graphite); }
 
 /* Wires (drawn by truemap into svg.tm-wires) */
 .tm-wires { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; overflow: visible; z-index: 0; }
-.tm-wire { fill: none; stroke: var(--tm-rule-strong); stroke-width: 1.5; }
+/* Quiet by default: the main path is the only strong line. Hover a box and its own wires come forward. */
+.tm-wire { fill: none; stroke: var(--tm-rule-strong); stroke-width: 1.25; }
 .tm-wire.is-key { stroke: var(--tm-route); stroke-width: 2; }
 .tm-wire.is-ext { stroke-dasharray: 4 4; }
 .tm-wire-head { fill: var(--tm-rule-strong); }
 .tm-wire-head.is-key { fill: var(--tm-route); }
-.tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-graphite); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 4px; stroke-linejoin: round; }
+.tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-pencil); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 4px; stroke-linejoin: round; }
+.tm-wire.is-hot { stroke: var(--tm-ink); stroke-width: 1.75; }
+.tm-wire-head.is-hot { fill: var(--tm-ink); }
+.tm-wire-label.is-hot { fill: var(--tm-ink); }
+.tm-wire.is-focus { stroke: var(--tm-route); stroke-width: 2.5; }
+.tm-wire-head.is-focus { fill: var(--tm-route); }
+.tm-wire-label.is-focus { fill: var(--tm-route-ink); }
+
+/* Paths through the map: one click lights a path up (data-tm-flow="id id id"). */
+.tm-flows { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 18px 0 0; }
+.tm-flows > span { font-size: 13px; color: var(--tm-graphite); margin-right: 2px; }
+.tm-flows button, .tm-flow-btn { font: 500 13px/1.2 var(--tm-font); color: var(--tm-text); background: var(--tm-sheet); border: 1px solid var(--tm-rule-strong); border-radius: var(--tm-radius); padding: 6px 10px; cursor: pointer; }
+.tm-flows button:hover, .tm-flow-btn:hover { border-color: var(--tm-graphite); }
+.tm-flows button[aria-pressed="true"], .tm-flow-btn[aria-pressed="true"] { border-color: var(--tm-route); background: var(--tm-route-wash); color: var(--tm-route-ink); }
 
 /* Legend under a map */
 .tm-legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 22px 0 0 132px; font-size: 13px; color: var(--tm-graphite); }
@@ -163,7 +171,7 @@ a.tm-node:hover, a.tm-step:hover { border-color: var(--tm-graphite); }
 .tm-legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--tm-route); }
 .tm-legend i.is-wire { border-top: 1.5px solid var(--tm-rule-strong); }
 .tm-legend i.is-ext { border-top: 1.5px dashed var(--tm-rule-strong); }
-.tm-legend i.is-mark { width: 8px; height: 7px; border: 0; background: var(--tm-pencil); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.tm-legend span:has(> i.is-mark) { display: none; } /* older pages: the corner mark is gone */
 
 /* ---------- flow: a real sequence ---------- */
 .tm-flow { display: flex; align-items: stretch; gap: 30px; margin: 24px 0 8px; overflow-x: auto; padding: 2px 2px 6px; }

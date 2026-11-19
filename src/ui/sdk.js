@@ -33,12 +33,94 @@
     [data-tm-flash] { outline: 2px solid var(--tm-route, #2453c4) !important; outline-offset: 4px; animation: tm-flash 1.1s ease 2; }
     @media (prefers-reduced-motion: reduce) { [data-tm-flash] { animation: none; } }
     ::highlight(tm-note) { background-color: color-mix(in oklab, var(--tm-route, #2453c4) 20%, transparent); }
+    /* Every box can be opened: click shows its code and connections. */
+    .tm-node, .tm-step, [data-src] { cursor: pointer; }
+    .tm-node:focus-visible, .tm-step:focus-visible { outline: 2px solid var(--tm-route, #2453c4); outline-offset: 3px; }
+    /* The agent points at the map: everything else steps back. */
+    html[data-tm-focusing] .tm-node:not([data-tm-focus]), html[data-tm-focusing] .tm-step:not([data-tm-focus]) { opacity: .34; }
+    html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus), html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: .16; }
+    .tm-node, .tm-step, .tm-wire, .tm-wire-head, .tm-wire-label { transition: opacity .18s ease, stroke .12s ease, fill .12s ease; }
+    @media (prefers-reduced-motion: reduce) { .tm-node, .tm-step, .tm-wire, .tm-wire-head, .tm-wire-label { transition: none; } }
   `;
   (document.head || document.documentElement).appendChild(style);
 
-  const drawWires = () => window.truemapWires?.draw();
+  const drawWires = () => { window.truemapWires?.draw(); markWires(); };
   let wireTimer = null;
   const scheduleWires = () => { clearTimeout(wireTimer); wireTimer = setTimeout(() => { drawWires(); placePins(); }, 40); };
+
+  // ---------- focus: the agent (or a chat link) points at boxes ----------
+  let focusSet = []; let focusNote = null; let hotBox = null;
+  function findItems(items) {
+    const all = [...document.querySelectorAll('[data-src], .tm-node[id], .tm-step[id]')];
+    const out = [];
+    for (const it of items || []) {
+      const s = String(it);
+      const el = (/^[\w-]+$/.test(s) && document.getElementById(s))
+        || all.find((x) => x.getAttribute('data-src') === s)
+        || (!s.includes('#') && all.find((x) => (x.getAttribute('data-src') || '').split('#')[0].replace(/\/$/, '') === s.replace(/\/$/, '')))
+        || all.find((x) => (x.getAttribute('data-src') || '').endsWith(`#${s.split('#').pop()}`) && s.includes('#'));
+      if (el && !out.includes(el)) out.push(el);
+    }
+    return out;
+  }
+  // Classes on wires follow the focused / hovered boxes; re-applied after every redraw.
+  function markWires() {
+    const ids = new Set(focusSet.map((e) => e.id).filter(Boolean));
+    const hot = hotBox?.id;
+    for (const w of document.querySelectorAll('.tm-wire, .tm-wire-head, .tm-wire-label')) {
+      const { from, to } = w.dataset;
+      w.classList.toggle('is-focus', ids.has(from) && ids.has(to));
+      w.classList.toggle('is-hot', !!hot && (from === hot || to === hot));
+    }
+  }
+  function applyFocus(items, note, who) {
+    clearFocus(false);
+    for (const btn of document.querySelectorAll('[data-tm-flow]')) btn.setAttribute('aria-pressed', 'false');
+    focusSet = findItems(items);
+    focusNote = note ? { text: String(note), who: who || 'Agent' } : null;
+    if (focusSet.length) {
+      document.documentElement.setAttribute('data-tm-focusing', '');
+      for (const el of focusSet) el.setAttribute('data-tm-focus', '');
+      focusSet[0].scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    } else if (focusNote) window.scrollTo({ top: 0 });
+    markWires(); setTimeout(paintRings, 350); paintRings();
+  }
+  function clearFocus(repaint = true) {
+    document.documentElement.removeAttribute('data-tm-focusing');
+    for (const el of document.querySelectorAll('[data-tm-focus]')) el.removeAttribute('data-tm-focus');
+    if (repaint) for (const btn of document.querySelectorAll('[data-tm-flow]')) btn.setAttribute('aria-pressed', 'false');
+    focusSet = []; focusNote = null;
+    markWires(); if (repaint) paintRings();
+  }
+
+  // ---------- peek: click a box to see what it is in the code ----------
+  const boxSel = '.tm-node, .tm-step, .tm-card[data-src], [data-src]';
+  function boxInfo(el) {
+    const txt = (sel) => clean(el.querySelector(sel)?.textContent, 300);
+    const nameOf = (n) => clean(n.querySelector?.('.tm-node-title,b,strong,h3,h4')?.textContent || n.textContent, 60);
+    const to = [];
+    for (const spec of (el.getAttribute('data-to') || '').split(/[\s,]+/).filter(Boolean)) {
+      const [id, ...lab] = spec.split(':'); const n = document.getElementById(id);
+      if (n) to.push({ id, label: nameOf(n), via: lab.join(':').replace(/_/g, ' ') });
+    }
+    const from = [];
+    if (el.id) {
+      for (const n of document.querySelectorAll('[data-to]')) {
+        const spec = n.getAttribute('data-to').split(/[\s,]+/).find((x) => x.split(':')[0] === el.id);
+        if (spec && n.id) from.push({ id: n.id, label: nameOf(n), via: spec.split(':').slice(1).join(':').replace(/_/g, ' ') });
+      }
+    }
+    const href = el.matches('a[href]') ? el.getAttribute('href') : (el.querySelector('a[href$=".html"], a[href*=".html#"]')?.getAttribute('href') || '');
+    return {
+      id: el.id || '', label: labelOf(el), sub: txt('.tm-node-sub'), desc: txt('.tm-node-desc') || (el.matches('.tm-node,.tm-step') ? '' : clean(el.innerText, 300)),
+      src: el.closest('[data-src]')?.getAttribute('data-src') || '', href: /^[\w./-]+\.html?(#[\w-]*)?$/i.test(href) ? href : '',
+      ext: el.classList.contains('is-ext'), to, from, mark: el.getAttribute('data-tm-mark') || '', why: clean(el.getAttribute('data-why'), 600),
+    };
+  }
+  function peek(el) {
+    const r = el.getBoundingClientRect();
+    post({ type: 'peek', page: pagePath(), box: boxInfo(el), rect: { l: r.left, t: r.top, r: r.right, b: r.bottom } });
+  }
 
   // ---------- annotate ----------
   const INTERACTIVE = 'a[href],button,input,select,textarea,label,summary,[contenteditable],[role=button]';
@@ -117,6 +199,25 @@
       rings.appendChild(d);
     };
     for (const n of notes.values()) if (n.el && n.el !== card?.target) ring(n.el, 'noted');
+    for (const el of focusSet) ring(el, 'agent');
+    if (focusNote) {
+      mount();
+      const b = document.createElement('div'); b.className = 'bubble'; b.setAttribute('role', 'note');
+      b.innerHTML = '<div class="bubble-who"></div><div class="bubble-text"></div><button class="bubble-x" type="button" aria-label="Dismiss">×</button>';
+      b.querySelector('.bubble-who').textContent = focusNote.who;
+      b.querySelector('.bubble-text').textContent = focusNote.text;
+      b.querySelector('.bubble-x').onclick = (ev) => { ev.stopPropagation(); clearFocus(); post({ type: 'focus-cleared' }); };
+      rings.appendChild(b);
+      // The note sits beside the whole lit group (never on one of its boxes): right of it, else below it.
+      const vw = document.documentElement.clientWidth; const w = 300;
+      const live = focusSet.filter((el) => el.isConnected).map(extentOf);
+      if (live.length) {
+        const g = { l: Math.min(...live.map((x) => x.left)), t: Math.min(...live.map((x) => x.top)), r: Math.max(...live.map((x) => x.left + x.width)), b: Math.max(...live.map((x) => x.top + x.height)) };
+        const fitsRight = g.r + 14 + w < scrollX + vw - 8;
+        b.style.left = `${fitsRight ? g.r + 14 : Math.max(scrollX + 8, Math.min(g.l, scrollX + vw - w - 8))}px`;
+        b.style.top = `${fitsRight ? g.t : g.b + 12}px`;
+      } else { b.style.left = `${scrollX + vw - 320}px`; b.style.top = `${scrollY + 16}px`; }
+    }
     if (card?.target) ring(card.target, 'active');
     else if (annotating && hovered) ring(hovered, 'hover');
   }
@@ -155,6 +256,12 @@
     .btn:focus-visible { outline: 2px solid #2453c4; outline-offset: 2px; }
     .ring { position: absolute; border: 1.5px solid #2453c4; border-radius: 8px; pointer-events: none; }
     .ring.active { border-width: 2px; }
+    .ring.agent { border: 2px solid #2453c4; border-radius: 9px; }
+    .bubble { position: absolute; width: 300px; background: #17202b; color: #f6f7f4; border-radius: 10px; padding: 10px 30px 11px 12px; box-shadow: 0 14px 34px -14px rgba(23,32,43,.5); font: 13.5px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: auto; }
+    .bubble-who { font-size: 11.5px; font-weight: 600; color: #9fb7ff; margin-bottom: 3px; }
+    .bubble-text { white-space: pre-wrap; }
+    .bubble-x { all: unset; position: absolute; top: 6px; right: 8px; cursor: pointer; color: #9ba4af; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+    .bubble-x:hover { color: #fff; background: rgba(255,255,255,.1); }
     .ring.noted { border-color: rgba(36, 83, 196, .5); }
     @media (prefers-color-scheme: dark) { .ring { border-color: #7ea3ff; } .ring.noted { border-color: rgba(126, 163, 255, .55); } }
     .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #2453c4; color: #fff;
@@ -309,18 +416,44 @@
     return t.closest('a.tm-node,a.tm-link') || pickTarget(t);
   }
   document.addEventListener('mousemove', (e) => {
-    if (!annotating || card) return;
     const t = e.target instanceof Element ? e.target : null;
+    if (!annotating) {
+      // Reading mode: hovering a box lights up its own wires.
+      const box = t?.closest('.tm-map .tm-node, .tm-blueprint .tm-node') || null;
+      if (box !== hotBox) { hotBox = box; markWires(); }
+      return;
+    }
+    if (card) return;
     setHover(annotTarget(t));
   }, { passive: true });
-  document.addEventListener('mouseleave', () => setHover(null));
+  document.addEventListener('mouseleave', () => { setHover(null); if (hotBox) { hotBox = null; markWires(); } });
 
   document.addEventListener('click', (e) => {
     if (!e.isTrusted) return;
     if (e.composedPath().includes(host)) return;
     const t = e.target instanceof Element ? e.target : null;
     if (card) { closeCard(); if (!annotating) return; }
-    if (!annotating || !t) return;
+    if (!t) return;
+    // A flow button lights up a whole path across the map (works in both modes).
+    const flow = t.closest('[data-tm-flow]');
+    if (flow) {
+      e.preventDefault(); e.stopPropagation();
+      const ids = flow.getAttribute('data-tm-flow').split(/[\s,]+/).filter(Boolean);
+      const same = focusSet.length && ids.every((id) => focusSet.some((el) => el.id === id));
+      if (same) clearFocus(); else applyFocus(ids, flow.getAttribute('data-note') || '', clean(flow.textContent, 60));
+      for (const b of document.querySelectorAll('[data-tm-flow]')) b.setAttribute('aria-pressed', String(!same && b === flow));
+      return;
+    }
+    if (!annotating) {
+      // Reading mode: a box opens its peek (code, connections, page). Real links and controls inside work as usual.
+      const box = t.closest(boxSel);
+      const inner = t.closest('a[href],button,input,select,textarea,label,summary,.tm-ask');
+      if (!box || (inner && inner !== box && box.contains(inner))) return;
+      if (String(getSelection?.() || '').trim().length > 1) return;
+      e.preventDefault(); e.stopPropagation();
+      peek(box);
+      return;
+    }
     if (String(getSelection?.() || '').trim().length > 1) return;
     const el = annotTarget(t);
     if (!el) return;
@@ -341,9 +474,14 @@
   });
   document.addEventListener('selectionchange', () => { if (!String(getSelection() || '').trim()) hideSelectBtn(); });
 
+  // The workspace's own popovers (the peek) close when the user presses anywhere in the page or hits Escape.
+  document.addEventListener('mousedown', () => post({ type: 'press' }), true);
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') post({ type: 'press' });
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
+    if (e.key === 'Escape' && (focusSet.length || focusNote)) { clearFocus(); post({ type: 'focus-cleared' }); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); peek(e.target); return; }
     if (e.key === 'Escape' && annotating && !typing && !e.defaultPrevented && !e.composedPath().includes(host)) { post({ type: 'annotate-off' }); return; }
     if (!typing && !e.composedPath().includes(host) && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a') {
       post({ type: 'toggle-annotate' });
@@ -407,6 +545,10 @@
       else if (n?.rect) window.scrollTo({ top: n.rect.top - innerHeight / 3, behavior: 'smooth' });
     } else if (d.type === 'scroll') {
       window.scrollTo(0, d.y || 0);
+    } else if (d.type === 'focus') {
+      applyFocus(d.items, d.note, d.who);
+    } else if (d.type === 'clear-focus') {
+      clearFocus();
     } else if (d.type === 'highlight') {
       const el = [...document.querySelectorAll('[data-src]')].find((x) => x.getAttribute('data-src') === d.src);
       if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.setAttribute('data-tm-flash', ''); setTimeout(() => el.removeAttribute('data-tm-flash'), 2400); }
@@ -424,6 +566,8 @@
 
   const ready = () => {
     drawWires();
+    // Boxes are reachable from the keyboard too.
+    for (const b of document.querySelectorAll('.tm-node, .tm-step')) { if (!b.hasAttribute('tabindex') && !b.matches('a[href]')) b.setAttribute('tabindex', '0'); }
     if ('ResizeObserver' in window) new ResizeObserver(scheduleWires).observe(document.body);
     document.fonts?.ready?.then(scheduleWires);
     const meta = document.querySelector('meta[name="truemap-annotate"]')?.getAttribute('content');

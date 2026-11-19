@@ -283,10 +283,29 @@ async function cmdReply(root, args, opts) {
     block('next_step', `truemap is not running. Give the answer in the terminal, or run \`${CMD}\` to reopen the page.`);
     return;
   }
-  const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working, willListen: !!opts.listen, agent: detectAgent() });
+  const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working, willListen: !!opts.listen, agent: detectAgent(), focus: splitList(opts.focus), ...(opts.ask ? { ask: opts.ask } : {}) });
   if (r.status !== 200) throw new Error(`reply was rejected: ${r.body?.error || r.status}`);
   out(`reply: ${r.body?.browsers ? `shown in ${r.body.browsers} tab(s)` : 'saved (no tab open right now; the user sees it next time)'}`);
   if (opts.listen) await doListen(root, opts);
+}
+
+const splitList = (v) => (v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : []);
+
+async function cmdShow(root, args, opts) {
+  const state = await liveState(root);
+  if (!state) { out('status: no_server'); block('next_step', `truemap is not running. Run \`${CMD} <page>\` first.`); return; }
+  const page = args[0] ? resolvePage(root, args[0]) : '';
+  const r = await call(state, 'POST', '/api/agent/show', { page, focus: splitList(opts.focus), note: opts.note || '', clear: !!opts.clear, agent: detectAgent() });
+  out(`status: ${opts.clear ? 'cleared' : 'shown'}${r.body?.browsers ? '' : '   # no tab is open; nobody saw it'}`);
+}
+
+async function cmdAsk(root, args, opts) {
+  const question = args.join(' ').trim();
+  const options = (opts.option || []).map((o) => { const [label, ...why] = String(o).split('|'); return { label: label.trim(), why: why.join('|').trim() }; }).filter((o) => o.label);
+  if (!question || options.length < 2) throw new Error('ask needs a question and at least two --option "Label | why"');
+  opts.ask = { question, options };
+  opts.listen = true;
+  await cmdReply(root, [question], opts);
 }
 
 async function cmdProgress(root, args) {
@@ -373,6 +392,11 @@ usage:
   ${CMD} outline                a compact map of the repo (folders, sizes, entry points) for a fast first blueprint
   ${CMD} guide                  how to write pages: folder rules, data-src, page kit, decisions
   ${CMD} export <page> [--out f] write the page as one self-contained HTML file to share
+  ${CMD} show [page] --focus id,id [--note "…"]
+                                point at the map while you explain: light up boxes (ids or data-src), add a note
+  ${CMD} reply "…" --focus id,id  answer and light up the boxes the answer is about
+  ${CMD} ask "<question>" --option "A | why" --option "B | why"
+                                ask the user to choose, only when you are blocked on a real trade-off
   ${CMD} progress "<text>"      show a short status line in the chat while you work
   ${CMD} stop                   stop the background server
 
@@ -395,6 +419,10 @@ function parseArgs(argv) {
     else if (a === '--file') opts.file = argv[++i];
     else if (a === '--ok') opts.ok = argv[++i];
     else if (a === '--out') opts.out = argv[++i];
+    else if (a === '--focus') opts.focus = argv[++i];
+    else if (a === '--note') opts.note = argv[++i];
+    else if (a === '--clear') opts.clear = true;
+    else if (a === '--option') (opts.option ||= []).push(argv[++i]);
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--version' || a === '-v') opts.version = true;
     else args.push(a);
@@ -405,7 +433,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, export: cmdExport, show: cmdShow, ask: cmdAsk, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();

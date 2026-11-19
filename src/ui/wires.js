@@ -194,6 +194,7 @@
         right: `M${tx - 1},${ty - 4.5} L${tx - 1},${ty + 4.5} L${tx + 6},${ty} Z`, left: `M${tx + 1},${ty - 4.5} L${tx + 1},${ty + 4.5} L${tx - 6},${ty} Z` }[p.head];
       const arrow = document.createElementNS(SVGNS, 'path');
       arrow.setAttribute('d', head); arrow.setAttribute('class', `tm-wire-head${key ? ' is-key' : ''}`);
+      for (const el of [path, arrow]) { el.dataset.from = e.src.id; el.dataset.to = e.dst.id; }
       svg.appendChild(path); svg.appendChild(arrow);
       // Labels sit by the box the wire leaves; one per text per box; never on another label or a box.
       const used = labelsBy.get(e.src) || labelsBy.set(e.src, { texts: [], x: null }).get(e.src);
@@ -205,6 +206,7 @@
         for (let i = 0; i < 40 && hits(x); i++) x += 12;
         const t = document.createElementNS(SVGNS, 'text');
         t.setAttribute('class', 'tm-wire-label'); t.setAttribute('x', x); t.setAttribute('y', y);
+        t.dataset.from = e.src.id; t.dataset.to = e.dst.id;
         t.textContent = e.label; svg.appendChild(t);
         placed.push({ l: x, r: x + lw, y });
         if (!p.label.middle) used.x = x + lw + 12;

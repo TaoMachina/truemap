@@ -54,6 +54,7 @@
 
   <main class="stage">
     <iframe id="frame" title="Page" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+    <div class="peek" id="peek" role="dialog" aria-label="What this box is" hidden></div>
     <section class="empty" id="empty" hidden>
       <svg class="empty-mark" viewBox="0 0 20 20" aria-hidden="true"><path class="mark-line" d="M10 2.2 15.6 17.6 10 14.4 4.4 17.6z"/><path class="mark-fill" d="M10 2.2V14.4L4.4 17.6z"/></svg>
       <h1>No map of this project yet</h1>
@@ -71,6 +72,7 @@
     <div class="notice" id="notice" hidden></div>
     <form class="composer" id="composer" autocomplete="off">
       <ol class="notes" id="notes" hidden></ol>
+      <div class="about" id="about" hidden></div>
       <div class="box">
         <textarea id="input" rows="1" aria-label="Message"></textarea>
         <div class="box-foot">
