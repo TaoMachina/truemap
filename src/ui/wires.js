@@ -14,6 +14,20 @@
       return r.left >= gapL && r.right <= gapR && r.bottom > s.top && r.top < s.bottom;
     });
   }
+  // An orthogonal path through the given points with rounded corners.
+  function ortho(points, r) {
+    const pts = points.filter((p, i) => i === 0 || p[0] !== points[i - 1][0] || p[1] !== points[i - 1][1]);
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, py] = pts[i - 1]; const [x, y] = pts[i]; const [nx, ny] = pts[i + 1];
+      const l1 = Math.hypot(x - px, y - py); const l2 = Math.hypot(nx - x, ny - y);
+      if (!l1 || !l2 || (px === x && x === nx) || (py === y && y === ny)) continue;
+      const rr = Math.min(r, l1 / 2, l2 / 2);
+      d += ` L${x - ((x - px) / l1) * rr},${y - ((y - py) / l1) * rr} Q${x},${y} ${x + ((nx - x) / l2) * rr},${y + ((ny - y) / l2) * rr}`;
+    }
+    const last = pts[pts.length - 1];
+    return `${d} L${last[0]},${last[1]}`;
+  }
   const overTop = new Map();
   function drawWires() {
     overTop.clear();
@@ -49,6 +63,7 @@
         (into.get(e.dst) || into.set(e.dst, []).get(e.dst)).push(e);
       }
       for (const l of [...outOf.values(), ...into.values()]) l.sort((p, q) => p.b.cx - q.b.cx || p.a.cx - q.a.cx);
+      const rects = [...map.querySelectorAll('.tm-node, .tm-step')].map((n) => ({ n, ...rel(n.getBoundingClientRect()) }));
       for (const e of edges) {
           const { src, dst, a, b } = e;
           const key = src.classList.contains('is-key') && dst.classList.contains('is-key');
@@ -56,17 +71,32 @@
           let d; let head; let mid;
           const r = 7;
           if (down(e)) { // below: leave from the bottom, enter at the top
-            const so = slot(outOf.get(src), e); const ti = slot(into.get(dst), e);
-            const sx = a.cx + so * 14; const sy = a.b; const tx = b.cx + ti * 14; const ty = b.t - 6;
-            const my = sy + Math.max(12, Math.min(22, (ty - sy) / 2)) + ti * 7;
-            if (Math.abs(tx - sx) < 2) d = `M${sx},${sy} V${ty}`;
-            else {
-              const dir = tx > sx ? 1 : -1; const rr = Math.min(r, Math.abs(tx - sx) / 2);
-              d = `M${sx},${sy} V${my - rr} Q${sx},${my} ${sx + dir * rr},${my} H${tx - dir * rr} Q${tx},${my} ${tx},${my + rr} V${ty}`;
+            const so = slot(outOf.get(src), e);
+            const sx = a.cx + so * 14; const sy = a.b; const ty = b.t - 6;
+            // Exits leave from the middle of a box, entries arrive in its left third, so an exit and an
+            // unrelated entry can never line up into one line. Only a box straight above, as the single
+            // caller, enters in the middle.
+            const ins = into.get(dst);
+            const straight = ins.length === 1 && Math.abs(a.cx - b.cx) < 4;
+            const ti = ins.indexOf(e);
+            const tx = straight ? b.cx : Math.min(b.l + 26 + ti * 14, b.cx - 14);
+            // Boxes in layers between source and target are obstacles: go round them through a free column.
+            const blockers = rects.filter((o) => o.n !== src && o.n !== dst && o.t > a.b + 1 && o.b < b.t - 1);
+            let pts;
+            if (!blockers.length) {
+              const my = sy + Math.max(12, Math.min(22, (ty - sy) / 2)) + (straight ? 0 : ti * 6);
+              pts = [[sx, sy], [sx, my], [tx, my], [tx, ty]];
+            } else {
+              const free = (x) => !blockers.some((o) => x > o.l - 7 && x < o.r + 7);
+              const cands = [sx, tx, ...blockers.flatMap((o) => [o.l - 13, o.r + 13])].filter(free);
+              const x = cands.sort((p, q) => Math.abs(p - sx) + Math.abs(p - tx) - Math.abs(q - sx) - Math.abs(q - tx))[0] ?? sx;
+              const y1 = sy + 12 + Math.abs(so) * 5; const y2 = b.t - 16 - ti * 6;
+              pts = [[sx, sy], [sx, y1], [x, y1], [x, y2], [tx, y2], [tx, ty]];
             }
+            d = ortho(pts, r);
             head = `M${tx - 4.5},${ty - 1} L${tx + 4.5},${ty - 1} L${tx},${ty + 6} Z`;
             // the label sits by the box the wire leaves, so it is clear which wire it names
-            mid = { x: sx - 2, y: Math.min(sy + 10, my - 6) };
+            mid = { x: sx - 2, y: sy + 10 };
           } else if (b.b <= a.t + 2) { // above
             const sx = a.cx; const sy = a.t; const tx = b.cx; const ty = b.b + 6;
             const my = sy - Math.max(12, Math.min(22, (sy - ty) / 2));

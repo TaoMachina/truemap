@@ -139,7 +139,7 @@
     const typing = e.target.closest?.('input,textarea,select,[contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); menu.hidden ? openMenu() : closeMenu(); }
     else if (e.key === 'Escape' && !menu.hidden) { closeMenu(); $('pageBtn').focus(); }
-    else if (e.key === 'Escape' && !typing && state.annotate) setAnnotate(false, { touched: true });
+    else if (e.key === 'Escape' && !typing && state.annotate && $('moreMenu').hidden) setAnnotate(false, { touched: true });
     else if (!menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       const items = [...menu.querySelectorAll('.page-item')]; if (!items.length) return;
       e.preventDefault();
@@ -159,7 +159,7 @@
     return [state.root, '.truemap', ...state.page.split('/')].join(sepChar);
   };
   function renderMore() {
-    $('moreFile').textContent = state.page ? `.truemap/${state.page}` : 'No page open';
+    $('moreFile').textContent = state.page ? `‎.truemap/${state.page}` : 'No page open';
     $('moreFile').title = filePath();
     $('copyPath').disabled = !state.page;
     $('exportPage').disabled = !state.page || state.conn !== 'live';

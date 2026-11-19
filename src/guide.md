@@ -71,7 +71,7 @@ PAGE SKELETON
 </head>
 <body><main class="tm-page">
   <header class="tm-header">
-    <nav class="tm-crumb"><a href="index.html">Shop blueprint</a> / Payments</nav>
+    <nav class="tm-crumb"><a href="index.html">Shop blueprint</a> / Payments</nav>   (module pages only; index.html has none)
     <h1 class="tm-title">Payments</h1>
     <p class="tm-lede">Charges the card when an order is created and retries failed charges.</p>
   </header>
