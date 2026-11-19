@@ -292,6 +292,11 @@ export function lintDiagrams(html) {
     if (nodes.length > 16) notes.push(`${where}${nodes.length} boxes; 16 is the most a map can carry. Merge minor neighbours or give a part its own page.`);
     const groups = (body.match(/<section\b[^>]*class=["'][^"']*\btm-group\b/gi) || []).length;
     if (!groups && nodes.length > 4) notes.push(`${where}no groups. Put the boxes in <section class="tm-group" data-label="…"> by responsibility.`);
+    for (const sec of body.matchAll(/<section\b[^>]*class=["'][^"']*\btm-group\b[^>]*>([\s\S]*?)<\/section>/gi)) {
+      const n = (sec[1].match(/class=["'][^"']*\btm-node\b/gi) || []).length;
+      const label = sec[0].match(/data-label=["']([^"']+)/)?.[1] || 'a group';
+      if (n > 5) notes.push(`${where}group "${label}" has ${n} boxes; keep a group to 5 or fewer (split it by responsibility) so it reads as one row.`);
+    }
     const outside = body.replace(/<section\b[^>]*class=["'][^"']*\btm-group\b[\s\S]*?<\/section>/gi, '');
     const loose = (outside.match(/class=["'][^"']*\btm-node\b/gi) || []).length;
     if (groups && loose) notes.push(`${where}${loose} box(es) outside any group; every box belongs to one group.`);

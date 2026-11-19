@@ -62,7 +62,7 @@ crossings) and draws curved arrows with their labels. Never position boxes or dr
   No sentences on the map. Everything else goes in .tm-detail: 1 sentence of what it does, 2-5 points worth
   knowing (limits, numbers, failure modes), and .tm-why when you know why it is built this way. The user reads
   it in the inspector when they click the box, with the live code under it.
-- Size: 7-12 boxes, never more than 16. Merge minor neighbours or give a part its own page instead of dropping
+- Size: 7-12 boxes, never more than 16; at most 5 per group (a group then reads as one row). Merge minor neighbours or give a part its own page instead of dropping
   something that matters (an auth boundary, the store).
 - data-to lists the boxes this one calls or feeds, each with a verb after a colon (underscores become spaces,
   \_ is a real underscore): data-to="store:writes runs:posts_message". A connection back against the reading

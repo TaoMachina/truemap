@@ -88,12 +88,12 @@ li::marker { color: var(--tm-pencil); }
 hr { border: 0; border-top: 1px solid var(--tm-rule); margin: 40px 0; }
 
 /* ---------- page ---------- */
-.tm-page { max-width: 960px; margin: 0 auto; padding: 48px 48px 112px; }
+.tm-page { max-width: 960px; margin: 0 auto; padding: 36px 48px 96px; }
 .tm-header { margin-bottom: 8px; }
 .tm-crumb, .tm-eyebrow { font-size: 13.5px; color: var(--tm-graphite); margin: 0 0 14px; }
 .tm-crumb a { color: var(--tm-graphite); text-decoration-color: var(--tm-rule-strong); }
 .tm-crumb a:hover { color: var(--tm-route); }
-.tm-title { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 12px; max-width: 24ch; }
+.tm-title { font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 8px; max-width: 24ch; }
 .tm-lede { font-size: 17px; line-height: 1.55; color: var(--tm-graphite); margin: 0; max-width: 60ch; }
 .tm-lede strong { color: var(--tm-text); font-weight: 500; }
 
@@ -316,7 +316,7 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
   --dg-bg: var(--tm-paper); --dg-surface: var(--tm-wash); --dg-line: var(--tm-rule); --dg-line-strong: var(--tm-rule-strong);
   --dg-muted: var(--tm-graphite); --dg-text: var(--tm-text); --dg-ink: var(--tm-ink); --dg-mark: var(--tm-mark);
   --dg-font: var(--tm-font); --dg-code: var(--tm-code);
-  position: relative; margin: 28px 0 8px; font-family: var(--dg-font);
+  position: relative; margin: 20px 0 8px; font-family: var(--dg-font);
   overflow-x: hidden; overflow-y: hidden; padding: 0 0 8px;
 }
 .tm-dg-stage { position: relative; transform-origin: 0 0; }

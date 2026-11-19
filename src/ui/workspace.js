@@ -738,9 +738,9 @@
     if (s === 'closed') {
       html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen this page, ask your agent to run:${cmdBox(state.cmd + page)}`;
     } else if (s === 'offline') {
-      html = `<b>No agent is listening</b>Messages wait here. To get answers, ask your agent to run${listen}`;
+      html = `<b>No agent is listening.</b> Messages wait here; ask your agent to run${listen}`;
     } else if (s === 'idle') {
-      html = `<b>${esc(agentName())} stopped listening</b>Messages wait here. To continue, ask it to run${listen}`;
+      html = `<b>${esc(agentName())} stopped listening.</b> Messages wait here; ask it to run${listen}`;
     } else if (s === 'working' && isStale()) {
       html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped, or be waiting for you in the terminal. Check there, or ask it to run:${listen}<p class="after">If it no longer knows your last comments, send them again.</p>`;
     }

@@ -132,7 +132,13 @@
       for (const i of members) for (const x of E) if (x.a === i && gOf[x.b] === g) local.set(x.b, Math.max(local.get(x.b), local.get(i) + 1));
       let top = base;
       const intra = E.filter((x) => gOf[x.a] === g && gOf[x.b] === g);
-      const rowW = members.reduce((n, i) => n + S[i].w, 0) + (members.length - 1) * NODESEP + intra.reduce((n, x) => n + (x.e.lw ? x.e.lw + 30 : 12), 0);
+      // width of the row in its first order: only neighbours that call each other need room for a label
+      const inOrder = [...members].sort((u, v) => local.get(u) - local.get(v) || u - v);
+      let rowW = inOrder.reduce((n, i) => n + S[i].w, 0) + (members.length - 1) * NODESEP;
+      for (let k = 1; k < inOrder.length; k++) {
+        const pair = intra.filter((x) => (x.a === inOrder[k - 1] && x.b === inOrder[k]) || (x.b === inOrder[k - 1] && x.a === inOrder[k]));
+        if (pair.length) rowW += Math.max(...pair.map((x) => (x.e.lw ? x.e.lw + 30 : 28))) - NODESEP;
+      }
       const oneRow = !lr && rowW <= (room - gutter - 24) / 0.82;
       for (const i of members) { rank[i] = oneRow ? base : base + local.get(i); localRank[i] = local.get(i); top = Math.max(top, rank[i]); }
       bands.push({ g, from: base, to: top });
@@ -236,13 +242,20 @@
     const ys = []; const gapAfter = []; let y = MY + (lr ? 0 : BANDPAD);
     const adjacent = (x) => Math.abs(item[x.a].k - item[x.b].k) === 1;
     const needsBelow = new Set(sameEdges.filter((x) => !adjacent(x)).map((x) => rank[x.a]));
+    // a gap grows with the lines that turn in it, so their lanes and labels have room
+    const turning = new Array(R).fill(0);
+    for (const x of E) {
+      if (x.same) { if (!adjacent(x)) turning[rank[x.a]] += 1; continue; }
+      for (let k = 0; k + 1 < x.chain.length; k++) if (Math.abs((x.chain[k].x ?? 0) - (x.chain[k + 1].x ?? 0)) > 2) turning[x.chain[k].row] += 1;
+    }
+    const roomFor = (r, base) => Math.min(lr ? 200 : 110, Math.max(base, 20 + turning[r] * 9));
     for (let r = 0; r < R; r++) {
       const b = bandOf(r);
       if (b.from === r) y += HEAD;
       ys[r] = y + rowH[r] / 2; y += rowH[r];
-      if (r + 1 < R) { const g = bandOf(r + 1) !== b ? BANDPAD * 2 + GAPB : GAP; gapAfter[r] = { top: y, bottom: y + g }; y += g; }
+      if (r + 1 < R) { const g = roomFor(r, bandOf(r + 1) !== b ? BANDPAD * 2 + GAPB : GAP); gapAfter[r] = { top: y, bottom: y + g }; y += g; }
     }
-    if (needsBelow.has(R - 1)) { gapAfter[R - 1] = { top: y, bottom: y + 30 }; y += 30; }
+    if (needsBelow.has(R - 1)) { const g = roomFor(R - 1, 30); gapAfter[R - 1] = { top: y, bottom: y + g }; y += g; }
     y += BANDPAD + MY;
     const H = y;
     // 4. routes
@@ -390,6 +403,9 @@
     svg.setAttribute('width', gw); svg.setAttribute('height', gh); svg.setAttribute('viewBox', `0 0 ${gw} ${gh}`);
     for (const lab of m.stage.querySelectorAll('.tm-dg-label')) lab.remove();
     const isKey = (id) => byId.get(id)?.classList.contains('is-key');
+    const firstFlow = (m.tabs?.querySelector('.tm-dg-tab')?.getAttribute('data-path') || '').split(/[\s,]+/).filter(Boolean);
+    const mainPairs = new Set(firstFlow.slice(1).flatMap((id, i) => [`${firstFlow[i]}>${id}`, `${id}>${firstFlow[i]}`]));
+    const isMain = (e) => (mainPairs.size ? mainPairs.has(`${e.from}>${e.to}`) : isKey(e.from) && isKey(e.to));
     const placed = [];
     for (const e of edges) {
       const pts = L.routes.get(e.name)?.map((p) => ({ ...p }));
@@ -399,7 +415,7 @@
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const ux = (b.x - a.x) / len; const uy = (b.y - a.y) / len;
       const tip = { x: b.x, y: b.y }; pts[pts.length - 1] = { x: b.x - ux * 7, y: b.y - uy * 7 };
-      const key = isKey(e.from) && isKey(e.to);
+      const key = isMain(e);
       const ext = byId.get(e.from)?.classList.contains('is-ext') || byId.get(e.to)?.classList.contains('is-ext');
       const planned = byId.get(e.from)?.getAttribute('data-plan') === 'new' || byId.get(e.to)?.getAttribute('data-plan') === 'new';
       const path = document.createElementNS(SVGNS, 'path');
@@ -466,7 +482,7 @@
     // main-path edges on top
     for (const el of [...svg.querySelectorAll('.is-main')]) svg.appendChild(el);
     // Still wider than the column: shrink a little, then scroll rather than make text unreadable.
-    const k = Math.max(0.8, Math.min(1, room / gw));
+    const k = Math.max(0.7, Math.min(1, room / gw));
     m.stage.style.transform = k < 1 ? `scale(${k})` : '';
     m.stage.style.marginBottom = k < 1 ? `${-gh * (1 - k)}px` : '';
     m.stage.style.marginRight = k < 1 ? `${-gw * (1 - k)}px` : '';

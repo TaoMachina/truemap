@@ -188,8 +188,8 @@ code { font-family: var(--code); font-size: 0.9em; }
 .msg a:hover { text-decoration-color: var(--ink); }
 .msg strong { color: var(--ink); font-weight: 600; }
 /* a box named in an answer: hover or click lights it on the map */
-.msg a.ref { text-decoration: none; color: var(--ink); background: color-mix(in oklab, var(--mark) 55%, transparent); border-radius: 3px; padding: 0 2px; }
-.msg a.ref:hover, .msg li.lit a.ref { background: var(--mark); }
+.msg a.ref { text-decoration: none; color: var(--ink); font-weight: 500; border-bottom: 2px solid color-mix(in oklab, var(--mark) 85%, var(--ink) 15%); border-radius: 0; padding: 0 1px; transition: background-color 120ms ease; }
+.msg a.ref:hover, .msg li.lit a.ref { background: var(--mark); border-radius: 3px; }
 .msg li.has-ref { cursor: default; border-radius: 6px; }
 .msg-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
 .msg-notes + .msg-text { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -203,7 +203,7 @@ code { font-family: var(--code); font-size: 0.9em; }
 .working i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); animation: pulse 1.4s ease-in-out infinite; }
 
 .notice { margin: 0 12px 8px; padding: 9px 10px 8px 12px; border-radius: 10px; background: var(--surface); font-size: 12px; color: var(--muted); line-height: 1.45; }
-.notice b { display: block; color: var(--ink); font-weight: 500; font-size: 13px; margin-bottom: 1px; }
+.notice b { color: var(--ink); font-weight: 500; }
 .notice .after { margin: 8px 0 0; }
 .notice .cmd { display: flex; align-items: center; gap: 6px; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 3px 3px 3px 8px; }
 .notice .cmd code { flex: 1; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
