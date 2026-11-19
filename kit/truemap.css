@@ -153,6 +153,9 @@ html[style*="--tm-vw"] .tm-map, html[style*="--tm-vw"] .tm-blueprint { width: ca
 /* Labels: the main path's always show; any other wire's label shows when its box is hovered or its path is lit. */
 .tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-pencil); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 6px; stroke-linejoin: round; opacity: 0; transition: opacity .15s ease; }
 .tm-wire-label.is-key, .tm-wire-label.is-hot, .tm-wire-label.is-focus { opacity: 1; }
+.tm-wire-plate { fill: var(--tm-paper); opacity: 0; }
+.tm-wire-plate.is-key, .tm-wire-plate.is-hot, .tm-wire-plate.is-focus { opacity: 1; }
+html[data-tm-focusing] .tm-wire-plate:not(.is-focus) { opacity: 0; }
 /* A lit path (a flow, or the agent pointing): everything else steps back. */
 html[data-tm-focusing] .tm-node:not([data-tm-focus]), html[data-tm-focusing] .tm-step:not([data-tm-focus]) { opacity: .34; }
 html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus) { opacity: .16; }

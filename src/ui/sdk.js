@@ -68,11 +68,13 @@
   function markWires() {
     const ids = new Set(focusSet.map((e) => e.id).filter(Boolean));
     const hot = hotBox?.id;
-    for (const w of document.querySelectorAll('.tm-wire, .tm-wire-head, .tm-wire-label')) {
+    for (const w of document.querySelectorAll('.tm-wire, .tm-wire-head')) {
       const { from, to } = w.dataset;
       w.classList.toggle('is-focus', ids.has(from) && ids.has(to));
       w.classList.toggle('is-hot', !!hot && (from === hot || to === hot));
     }
+    // labels are placed afresh for what is now visible
+    window.truemapWires?.labels?.({ hot: hot || null, focus: [...ids] });
   }
   function applyFocus(items, note, who) {
     clearFocus(false);
@@ -99,16 +101,18 @@
   function boxInfo(el) {
     const txt = (sel) => clean(el.querySelector(sel)?.textContent, 300);
     const nameOf = (n) => clean(n.querySelector?.('.tm-node-title,b,strong,h3,h4')?.textContent || n.textContent, 60);
+    // Same label rules as the map: underscores are spaces, \_ is a real underscore.
+    const viaOf = (s) => s.replace(/\\_/g, '\u0001').replace(/_/g, ' ').replace(/\u0001/g, '_');
     const to = [];
     for (const spec of (el.getAttribute('data-to') || '').split(/[\s,]+/).filter(Boolean)) {
       const [id, ...lab] = spec.split(':'); const n = document.getElementById(id);
-      if (n) to.push({ id, label: nameOf(n), via: lab.join(':').replace(/_/g, ' ') });
+      if (n) to.push({ id, label: nameOf(n), via: viaOf(lab.join(':')) });
     }
     const from = [];
     if (el.id) {
       for (const n of document.querySelectorAll('[data-to]')) {
         const spec = n.getAttribute('data-to').split(/[\s,]+/).find((x) => x.split(':')[0] === el.id);
-        if (spec && n.id) from.push({ id: n.id, label: nameOf(n), via: spec.split(':').slice(1).join(':').replace(/_/g, ' ') });
+        if (spec && n.id) from.push({ id: n.id, label: nameOf(n), via: viaOf(spec.split(':').slice(1).join(':')) });
       }
     }
     const href = el.matches('a[href]') ? el.getAttribute('href') : (el.querySelector('a[href$=".html"], a[href*=".html#"]')?.getAttribute('href') || '');
@@ -214,9 +218,13 @@
       const live = focusSet.filter((el) => el.isConnected).map(extentOf);
       if (live.length) {
         const g = { l: Math.min(...live.map((x) => x.left)), t: Math.min(...live.map((x) => x.top)), r: Math.max(...live.map((x) => x.left + x.width)), b: Math.max(...live.map((x) => x.top + x.height)) };
+        // right of the group if there is room; otherwise above it (the page's own controls usually sit below
+        // a map); below it only when there is no room above.
         const fitsRight = g.r + 14 + w < scrollX + vw - 8;
+        const bh = b.offsetHeight || 90;
+        const above = g.t - bh - 12 > scrollY + 4;
         b.style.left = `${fitsRight ? g.r + 14 : Math.max(scrollX + 8, Math.min(g.l, scrollX + vw - w - 8))}px`;
-        b.style.top = `${fitsRight ? g.t : g.b + 12}px`;
+        b.style.top = `${fitsRight ? g.t : above ? g.t - bh - 12 : g.b + 12}px`;
       } else { b.style.left = `${scrollX + vw - 320}px`; b.style.top = `${scrollY + 16}px`; }
     }
     if (card?.target) ring(card.target, 'active');

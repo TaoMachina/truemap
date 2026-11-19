@@ -181,12 +181,18 @@
     const svg = document.createElementNS(SVGNS, 'svg');
     svg.setAttribute('class', 'tm-wires'); svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('width', w); svg.setAttribute('height', h); svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    const placed = []; const labelsBy = new Map();
+    const segsOf = new Map(); // plan -> its straight segments, for label placement
+    for (const p of plans) {
+      const pts = p.pts.map(([x, y]) => [x, typeof y === 'object' ? y.y : y]);
+      p.resolved = pts;
+      segsOf.set(p, pts.slice(1).map((q, i) => [pts[i][0], pts[i][1], q[0], q[1]]));
+    }
+    const isKey = (p) => p.e.src.classList.contains('is-key') && p.e.dst.classList.contains('is-key');
     for (const p of plans) {
       const { e } = p;
-      const key = e.src.classList.contains('is-key') && e.dst.classList.contains('is-key');
+      const key = isKey(p);
       const ext = e.dst.classList.contains('is-ext') || e.src.classList.contains('is-ext');
-      const pts = p.pts.map(([x, y]) => [x, typeof y === 'object' ? y.y : y]);
+      const pts = p.resolved;
       const path = document.createElementNS(SVGNS, 'path');
       path.setAttribute('d', ortho(pts)); path.setAttribute('class', `tm-wire${key ? ' is-key' : ''}${ext ? ' is-ext' : ''}`);
       const { tx, ty } = p;
@@ -196,32 +202,85 @@
       arrow.setAttribute('d', head); arrow.setAttribute('class', `tm-wire-head${key ? ' is-key' : ''}`);
       for (const el of [path, arrow]) { el.dataset.from = e.src.id; el.dataset.to = e.dst.id; }
       svg.appendChild(path); svg.appendChild(arrow);
-      // A label never leaves its own wire: it sits beside the stem where the wire leaves its box (on the
-      // left when the map edge is near); several labels from one box stack along the stem. Only main-path
-      // labels show by default; the rest appear when their box is hovered or their path is lit (kit CSS).
-      const used = labelsBy.get(e.src) || labelsBy.set(e.src, { texts: [], n: 0 }).get(e.src);
-      if (e.label && !used.texts.includes(e.label)) {
-        const lw = e.label.length * 6.4;
-        let x; let y; let anchor = 'start';
-        if (p.label.middle) { x = p.label.x; y = p.label.y; anchor = 'middle'; } else {
-          const sx = p.pts[0][0];
-          y = p.label.y + (p.head === 'up' ? -used.n : used.n) * 13;
-          if (sx + 6 + lw > w - 4) { x = sx - 6; anchor = 'end'; } else x = sx + 6;
-        }
-        const t = document.createElementNS(SVGNS, 'text');
-        t.setAttribute('class', `tm-wire-label${key ? ' is-key' : ''}`); t.setAttribute('x', x); t.setAttribute('y', y);
-        if (anchor !== 'start') t.setAttribute('text-anchor', anchor);
-        t.dataset.from = e.src.id; t.dataset.to = e.dst.id;
-        t.textContent = e.label; svg.appendChild(t);
-        used.n++; used.texts.push(e.label);
-      }
     }
-    // key wires on top, labels above every wire
+    // key wires on top
     [...svg.querySelectorAll('.tm-wire.is-key, .tm-wire-head.is-key')].forEach((el) => svg.appendChild(el));
-    [...svg.querySelectorAll('.tm-wire-label')].forEach((el) => svg.appendChild(el));
     map.insertBefore(svg, map.firstChild);
+    map.__tm = { plans, segsOf, rects, w, h, svg, isKey };
+    placeLabels(map, labelState);
     markScroll(map);
     return false;
+  }
+
+  // ---------- labels: placed for what is visible right now ----------
+  // Only some labels show at a time: the main path's by default; a hovered box's own wires; a lit path's wires.
+  // Each time that changes, the visible labels are placed afresh. A label goes on its own wire, at the first spot
+  // (walking from where the wire leaves its box) that touches no box, no other shown label and no wire that is
+  // drawn strongly at that moment. With no such spot the label is left off the map; the box's peek still lists it.
+  let labelState = {};
+  const segHits = ([x1, y1, x2, y2], b) => (x1 === x2
+    ? x1 > b.l - 2 && x1 < b.r + 2 && Math.max(y1, y2) > b.t && Math.min(y1, y2) < b.b
+    : y1 > b.t - 2 && y1 < b.b + 2 && Math.max(x1, x2) > b.l && Math.min(x1, x2) < b.r);
+  function placeLabels(map, state) {
+    const m = map.__tm; if (!m) return;
+    const { plans, segsOf, rects, w, h, svg, isKey } = m;
+    for (const el of svg.querySelectorAll('.tm-wire-label, .tm-wire-plate')) el.remove();
+    const hot = state.hot || null; const focus = state.focus && state.focus.size ? state.focus : null;
+    const isHot = (p) => !!hot && (p.e.src.id === hot || p.e.dst.id === hot);
+    const isFocus = (p) => !!focus && focus.has(p.e.src.id) && focus.has(p.e.dst.id);
+    const shown = (p) => (focus ? isFocus(p) || isHot(p) : isKey(p) || isHot(p));
+    // Wires a label must keep clear of: the ones drawn strongly right now. Faint wires pass under the label's
+    // paper plate, which interrupts them the way a map interrupts a road under a place name.
+    const strong = (p) => (focus ? isFocus(p) || isHot(p) : isKey(p) || isHot(p));
+    const order = focus ? [...plans.filter(isFocus), ...plans.filter((p) => !isFocus(p) && isHot(p))]
+      : [...plans.filter(isKey), ...plans.filter((p) => !isKey(p) && isHot(p))];
+    const placed = []; const used = new Map();
+    for (const p of order) {
+      const { e } = p;
+      const texts = used.get(e.src) || used.set(e.src, []).get(e.src);
+      if (!e.label || texts.includes(e.label)) continue;
+      const lw = e.label.length * 6.4;
+      const cands = [];
+      for (const [x1, y1, x2, y2] of segsOf.get(p)) {
+        if (x1 === x2) {
+          const lo = Math.min(y1, y2); const hi = Math.max(y1, y2);
+          for (let y = lo + 15; y <= hi - 1; y += 7) cands.push({ x: x1 + 6, y, anchor: 'start' }, { x: x1 - 6, y, anchor: 'end' });
+        } else {
+          const lo = Math.min(x1, x2); const hi = Math.max(x1, x2);
+          for (let x = lo + 6; x + lw <= hi - 2; x += 12) cands.push({ x, y: y1 - 5, anchor: 'start' }, { x, y: y1 + 14, anchor: 'start' });
+        }
+      }
+      const boxOf = (c) => { const l = c.anchor === 'end' ? c.x - lw : c.x; return { l, r: l + lw, t: c.y - 10, b: c.y + 3 }; };
+      const free = (c) => {
+        const b = boxOf(c);
+        if (b.l < 2 || b.r > w - 2 || b.t < 0 || b.b > h) return false;
+        if (rects.some((o) => b.l < o.r + 3 && b.r > o.l - 3 && b.t < o.b + 3 && b.b > o.t - 3)) return false;
+        if (placed.some((q) => b.l < q.r + 6 && b.r > q.l - 6 && b.t < q.b + 2 && b.b > q.t - 2)) return false;
+        for (const [q, segs] of segsOf) if (q !== p && strong(q) && segs.some((sg) => segHits(sg, b))) return false;
+        return true;
+      };
+      const c = cands.find(free);
+      if (!c) continue;
+      placed.push(boxOf(c));
+      const cls = `${isKey(p) ? ' is-key' : ''}${isHot(p) ? ' is-hot' : ''}${isFocus(p) ? ' is-focus' : ''}`;
+      const t = document.createElementNS(SVGNS, 'text');
+      t.setAttribute('class', `tm-wire-label${cls}`);
+      t.setAttribute('x', c.x); t.setAttribute('y', c.y);
+      if (c.anchor !== 'start') t.setAttribute('text-anchor', c.anchor);
+      t.dataset.from = e.src.id; t.dataset.to = e.dst.id;
+      t.textContent = e.label;
+      // the paper plate under the label: faint wires stop at its edge instead of running through the words
+      const bb = boxOf(c); const plate = document.createElementNS(SVGNS, 'rect');
+      plate.setAttribute('class', `tm-wire-plate${cls}`);
+      plate.setAttribute('x', bb.l - 3); plate.setAttribute('y', bb.t - 1); plate.setAttribute('width', bb.r - bb.l + 6); plate.setAttribute('height', bb.b - bb.t + 3); plate.setAttribute('rx', 3);
+      plate.dataset.from = e.src.id; plate.dataset.to = e.dst.id;
+      svg.appendChild(plate); svg.appendChild(t);
+      texts.push(e.label);
+    }
+  }
+  function labels(state = {}) {
+    labelState = { hot: state.hot || null, focus: state.focus ? new Set(state.focus) : null };
+    for (const map of document.querySelectorAll('.tm-map, .tm-blueprint')) placeLabels(map, labelState);
   }
 
   function drawWires() {
@@ -247,6 +306,7 @@
         el.classList.toggle('is-hot', !!hot && (el.dataset.from === hot.id || el.dataset.to === hot.id));
         el.classList.toggle('is-focus', ids.has(el.dataset.from) && ids.has(el.dataset.to));
       }
+      labels({ hot: hot?.id || null, focus: lit });
     };
     document.addEventListener('mousemove', (e) => {
       const box = e.target.closest?.('.tm-map .tm-node, .tm-blueprint .tm-node') || null;
@@ -265,5 +325,5 @@
     });
     window.truemapWires.mark = mark;
   }
-  window.truemapWires = { draw: drawWires, interact };
+  window.truemapWires = { draw: drawWires, interact, labels };
 })();
