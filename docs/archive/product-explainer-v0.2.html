@@ -1,0 +1,456 @@
+<!doctype html>
+<!-- Archived document (translated from the original Chinese). -->
+<html lang="en" data-theme="luxury">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Explainer · A Visual Control Layer Shared by Humans and Agents</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, h1, h2, h3, h4, li, td, th, .badge) { overflow-wrap: anywhere; }
+  :where(svg) { max-width: 100%; height: auto; }
+  html, body { background: var(--color-base-100); color: var(--color-base-content); }
+  body { font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; line-height: 1.7; }
+  .fig text { font-family: inherit; }
+  .muted { color: color-mix(in oklab, var(--color-base-content) 65%, transparent); }
+  .sec { scroll-margin-top: 1rem; }
+  .step-num { width: 2rem; height: 2rem; border-radius: 999px; display: inline-grid; place-items: center;
+    background: var(--color-primary); color: var(--color-primary-content); font-weight: 700; flex: none; }
+  .mock-node { border: 1.5px solid color-mix(in oklab, var(--color-base-content) 35%, transparent); border-radius: .6rem; padding: .35rem .6rem; font-size: .8rem; text-align: center; }
+  .mock-node.hot { border-color: var(--color-warning); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-warning) 25%, transparent); }
+  .opt { border: 1.5px solid color-mix(in oklab, var(--color-base-content) 20%, transparent); border-radius: .7rem; padding: .6rem .8rem; cursor: pointer; display: flex; gap: .7rem; align-items: flex-start; }
+  .opt:has(input:checked) { border-color: var(--color-primary); background: color-mix(in oklab, var(--color-primary) 10%, transparent); }
+  .queued { display: none; }
+  .queued.on { display: inline-flex; }
+</style>
+</head>
+<body>
+<main class="max-w-4xl mx-auto px-4 py-10 space-y-16">
+
+<!-- ========== Cover ========== -->
+<header class="space-y-5">
+  <div class="badge badge-soft badge-primary">Product explainer · Draft v0.2 · 2026-11-19 · Not started yet</div>
+  <h1 class="text-3xl md:text-4xl font-bold leading-tight">A "self-updating construction whiteboard" shared by humans and agents</h1>
+  <p class="text-lg">The project holds a set of HTML views inside the git repo. <b>Humans</b> check progress, click choices and circle comments on them; <b>agents</b> treat them as the task brief when writing code, then rewrite the views to match what was actually built; a <b>checker</b> makes sure the views and the code agree; and <b>the whole team</b> looks at the same whiteboard through git.</p>
+  <div class="alert alert-soft alert-info">
+    <span><b>Kid version:</b> You and a robot builder share one whiteboard. On it are a map of the city, the houses being built, and every decision made. You circle a spot and write "put a garden here," and the robot goes and builds it; when it is done, it redraws the whiteboard to the new look. A little inspector compares the whiteboard with the real city every day and lights up red wherever the drawing is wrong. Your friends look at this very same whiteboard too.</span>
+  </div>
+  <p class="text-sm muted">How to read: about 8 minutes from top to bottom. Where something is unclear, you can select text on the page and leave an annotation; the last section has a few decision cards that need your call.</p>
+</header>
+
+<!-- ========== 1. Today's problem ========== -->
+<section class="sec space-y-5" id="problem">
+  <h2 class="text-2xl font-bold">1. Today's problem: all you and the agent have is text</h2>
+  <p>Agents already write code quickly; the slow part is <b>the communication between you and them</b>. Both directions are text only: you type what you want into a terminal, and it replies with a big block of summary. But architecture, progress and trade-offs are structured things; forced into text, they are tiring for you to read and easy for the agent to misread.</p>
+
+  <figure class="card card-border bg-base-200">
+    <div class="card-body">
+      <svg class="fig" viewBox="0 0 760 300" role="img" aria-labelledby="f1t">
+        <title id="f1t">Today vs. later: a comparison of how we communicate</title>
+        <!-- Left: today -->
+        <g id="today">
+          <title>Today: text only</title>
+          <text x="190" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="currentColor">Today</text>
+          <rect x="30" y="60" width="90" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="75" y="94" text-anchor="middle" font-size="15" fill="currentColor">You</text>
+          <rect x="260" y="60" width="90" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="305" y="94" text-anchor="middle" font-size="15" fill="currentColor">agent</text>
+          <line x1="122" y1="78" x2="256" y2="78" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="190" y="70" text-anchor="middle" font-size="12" fill="currentColor" opacity=".75">Type a message</text>
+          <line x1="258" y1="102" x2="124" y2="102" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="190" y="124" text-anchor="middle" font-size="12" fill="currentColor" opacity=".75">Reply with a wall of text</text>
+          <rect x="260" y="190" width="90" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="305" y="224" text-anchor="middle" font-size="14" fill="currentColor">Code</text>
+          <line x1="305" y1="118" x2="305" y2="186" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="75" y="170" text-anchor="middle" font-size="13" fill="var(--color-error)">Tired of reading</text>
+          <text x="75" y="190" text-anchor="middle" font-size="13" fill="var(--color-error)">Can't recognize your own project</text>
+        </g>
+        <line x1="400" y1="40" x2="400" y2="280" stroke="currentColor" opacity=".2"/>
+        <!-- Right: later -->
+        <g id="future">
+          <title>Later: a shared whiteboard in the middle</title>
+          <text x="580" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="currentColor">Later</text>
+          <rect x="430" y="60" width="80" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="470" y="94" text-anchor="middle" font-size="15" fill="currentColor">You</text>
+          <rect x="535" y="50" width="100" height="76" rx="10" fill="color-mix(in oklab, var(--color-primary) 18%, transparent)" stroke="var(--color-primary)" stroke-width="2"/>
+          <text x="585" y="84" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">Whiteboard</text>
+          <text x="585" y="104" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">HTML views</text>
+          <rect x="660" y="60" width="80" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="700" y="94" text-anchor="middle" font-size="15" fill="currentColor">agent</text>
+          <line x1="512" y1="88" x2="531" y2="88" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <line x1="658" y1="88" x2="639" y2="88" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="470" y="140" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">Click, circle, view</text>
+          <text x="700" y="140" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">Read tasks, write back</text>
+          <rect x="660" y="190" width="80" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="700" y="224" text-anchor="middle" font-size="14" fill="currentColor">Code</text>
+          <line x1="700" y1="118" x2="700" y2="186" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+          <g id="checker">
+            <title>Checker: compares the whiteboard with the code</title>
+            <rect x="535" y="196" width="100" height="44" rx="22" fill="none" stroke="var(--color-success)" stroke-width="1.8"/>
+            <text x="585" y="223" text-anchor="middle" font-size="13" fill="currentColor">Checker ✓</text>
+            <line x1="585" y1="194" x2="585" y2="130" stroke="var(--color-success)" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <line x1="637" y1="218" x2="656" y2="218" stroke="var(--color-success)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          </g>
+        </g>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      </svg>
+      <figcaption class="text-sm muted">Left is today: the back-and-forth is all text. Right is later: a whiteboard that both sides can read and write sits in the middle, with a checker beside it making sure the whiteboard isn't lying.</figcaption>
+    </div>
+  </figure>
+</section>
+
+<!-- ========== 2. A day of use ========== -->
+<section class="sec space-y-6" id="day">
+  <h2 class="text-2xl font-bold">2. What it feels like to use: a day for one person</h2>
+  <p>First, the picture (a mock-up, not the real product):</p>
+
+  <div class="mockup-browser border border-base-content/15 bg-base-200">
+    <div class="mockup-browser-toolbar"><div class="input text-xs">localhost · My online store project</div></div>
+    <div class="grid md:grid-cols-[150px_minmax(0,1fr)_260px] gap-0 border-t border-base-content/10 text-sm">
+      <nav class="p-3 space-y-1 border-b md:border-b-0 md:border-r border-base-content/10">
+        <div class="font-semibold mb-2">Views</div>
+        <div class="px-2 py-1 rounded bg-primary text-primary-content">🗺 Architecture</div>
+        <div class="px-2 py-1 rounded">📋 Plan <span class="badge badge-xs">3</span></div>
+        <div class="px-2 py-1 rounded">⚖️ Decisions <span class="badge badge-xs badge-warning">2 pending</span></div>
+        <div class="px-2 py-1 rounded">🔁 Flows</div>
+        <div class="mt-4 text-xs muted">Checker</div>
+        <div class="text-xs"><span class="badge badge-xs badge-warning">1 stale</span></div>
+      </nav>
+      <div class="p-4 space-y-3 border-b md:border-b-0 md:border-r border-base-content/10">
+        <div class="font-semibold">System architecture</div>
+        <div class="grid grid-cols-3 gap-3 items-center">
+          <div class="mock-node">Frontend</div>
+          <div class="mock-node">Orders</div>
+          <div class="mock-node hot">Payments ⚠️</div>
+          <div class="mock-node">Users</div>
+          <div class="mock-node">Email</div>
+          <div class="mock-node">Database</div>
+        </div>
+        <div class="alert alert-soft alert-warning text-xs py-2"><span>⚠️ Payments module: the diagram says "calls Stripe," but yesterday the agent changed that call to PayPal in the code. <button class="link">Ask the agent to fix the view</button></span></div>
+        <div class="chat chat-start"><div class="chat-bubble text-xs">📌 Your note: split payments into two services here?</div></div>
+      </div>
+      <aside class="p-3 space-y-2">
+        <div class="font-semibold">Awaiting your decision</div>
+        <div class="card card-border bg-base-100"><div class="card-body p-3 gap-2">
+          <div class="text-xs font-semibold">How should a failed payment be retried?</div>
+          <div class="text-xs">○ A Retry immediately, 3 times</div>
+          <div class="text-xs text-primary">● B Exponential backoff (agent recommends)</div>
+          <div class="text-xs">○ C Don't retry, notify the user</div>
+          <div class="btn btn-xs btn-primary">Confirm</div>
+        </div></div>
+      </aside>
+    </div>
+  </div>
+
+  <ol class="space-y-4">
+    <li class="flex gap-3"><span class="step-num">1</span><div><b>First use:</b> you tell the agent "initialize this for me." It reads through the code, generates a small data file in the repo (recording which modules exist and which code each module maps to), and then generates three views: architecture, plan and decisions.</div></li>
+    <li class="flex gap-3"><span class="step-num">2</span><div><b>Open it in the morning:</b> one command opens the whiteboard in the browser, with no app to install and no login. Switch views on the left, read the architecture in the middle, and on the right are the questions the agent left for you overnight.</div></li>
+    <li class="flex gap-3"><span class="step-num">3</span><div><b>Answer with a click:</b> the agent asks "how should a failed payment be retried," and instead of writing a paragraph you click B and then "Confirm." The answer is also recorded automatically in the decisions view, attached under the payments module. Half a year later, when someone asks "why do we retry this way," the answer is right there.</div></li>
+    <li class="flex gap-3"><span class="step-num">4</span><div><b>Circle to make a request:</b> circle the payments module and write "split into two services." That note goes into an inbox, and the agent reads it first the next time it starts work.</div></li>
+    <li class="flex gap-3"><span class="step-num">5</span><div><b>When the agent finishes:</b> it changes the code and also redraws the whiteboard to the new look. The checker automatically compares them: is what the diagram says still in the code? Anything that doesn't match lights up yellow, and one click gets the agent to fix it.</div></li>
+  </ol>
+
+  <div class="card card-border bg-base-200"><div class="card-body">
+    <h3 class="font-bold">How a team uses it</h3>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>The whiteboard is just ordinary files in the repo, and <b>everyone shares it through git</b>. No server and no accounts needed.</li>
+      <li>In a PR, besides the code changes you can also see "what this PR did to the architecture and the plan."</li>
+      <li>Run the checker in CI: if the code changed but the whiteboard wasn't updated, the PR gets a warning.</li>
+      <li>When a new teammate joins, they open the whiteboard and see an always-current project map and a history of decisions.</li>
+    </ul>
+  </div></div>
+</section>
+
+<!-- ========== 3. Why HTML ========== -->
+<section class="sec space-y-5" id="html">
+  <h2 class="text-2xl font-bold">3. Why HTML: anything that can be clicked shouldn't make people type</h2>
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div class="card card-border bg-base-200"><div class="card-body p-4"><h3 class="font-semibold">⚡ Faster</h3><p class="text-sm">To answer the agent's question, one click is enough; no reading a paragraph and then writing one back.</p></div></div>
+    <div class="card card-border bg-base-200"><div class="card-body p-4"><h3 class="font-semibold">👀 Easier to grasp</h3><p class="text-sm">Options, trade-offs and recommendations sit side by side, so you can compare at a glance. Architecture and flows read much faster as diagrams than as text.</p></div></div>
+    <div class="card card-border bg-base-200"><div class="card-body p-4"><h3 class="font-semibold">😌 Less tiring</h3><p class="text-sm">Cards, color and white space are easier than a screen full of text. When you answer dozens of questions a day, the difference is obvious.</p></div></div>
+    <div class="card card-border bg-base-200"><div class="card-body p-4"><h3 class="font-semibold">🎯 Answers aren't misunderstood</h3><p class="text-sm">The option you click becomes a definite piece of data handed to the agent, so it doesn't have to guess what your paragraph meant.</p></div></div>
+  </div>
+  <p class="text-sm muted">HTML has three more advantages that text lacks: agents write it most fluently; every element on the page can be pointed at precisely, so your annotations don't land in the wrong place; and it is an ordinary file that can go into git, be shared, and be opened in any browser. The page you are reading is itself an example: after you click your answers to the decision cards in Section 7, they go straight back to the agent.</p>
+</section>
+
+<!-- ========== 4. Why now ========== -->
+<section class="sec space-y-5" id="why-now">
+  <h2 class="text-2xl font-bold">4. Why it failed before and can work now: "the reusable rocket"</h2>
+  <p>Documents, architecture diagrams and specs have always died, for two reasons:</p>
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div class="card card-border"><div class="card-body p-4">
+      <div class="badge badge-error badge-soft">Before</div>
+      <p class="text-sm"><b>Maintenance took human time</b>, so nobody maintained them, and they went stale before long.</p>
+      <p class="text-sm"><b>People rarely came back to look</b>, because it was only reference material, not a place to get work done. (CodeSee, a code-map product, shut down in 2024.)</p>
+    </div></div>
+    <div class="card card-border border-success/40"><div class="card-body p-4">
+      <div class="badge badge-success badge-soft">Now</div>
+      <p class="text-sm"><b>Maintenance cost drops to nearly zero</b>: the agent updates it as a side effect every time it finishes work, and people don't have to lift a finger.</p>
+      <p class="text-sm"><b>People come back every day</b>: the whiteboard is where you direct the agent and where you do your work, so you come naturally.</p>
+    </div></div>
+  </div>
+  <p>This is like the reusable rocket: rockets already existed, and what SpaceX changed was <b>the cost structure of launching</b>. A visual model of a project couldn't be made to work before, not because it was useless but because maintenance was too expensive. Now that maintenance has become cheap, it can work.</p>
+</section>
+
+<!-- ========== 5. What it is made of ========== -->
+<section class="sec space-y-5" id="parts">
+  <h2 class="text-2xl font-bold">5. The product is made of four things</h2>
+  <figure class="card card-border bg-base-200"><div class="card-body">
+    <svg class="fig" viewBox="0 0 760 330" role="img" aria-labelledby="f2t">
+      <title id="f2t">Product components: whiteboard files in the repo, plus a viewer, a skill and a checker</title>
+      <g id="repo">
+        <title>Your git repo</title>
+        <rect x="200" y="20" width="360" height="290" rx="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="380" y="46" text-anchor="middle" font-size="14" fill="currentColor" opacity=".8">Your git repo</text>
+      </g>
+      <g id="model">
+        <title>Data file: modules, decisions and tasks, each with anchors pointing to code</title>
+        <rect x="230" y="66" width="140" height="64" rx="10" fill="color-mix(in oklab, var(--color-primary) 18%, transparent)" stroke="var(--color-primary)" stroke-width="1.8"/>
+        <text x="300" y="94" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">Data file</text>
+        <text x="300" y="114" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">Single source of truth</text>
+      </g>
+      <g id="views">
+        <title>HTML views: architecture, plan, decisions...</title>
+        <rect x="390" y="66" width="140" height="64" rx="10" fill="none" stroke="var(--color-primary)" stroke-width="1.8"/>
+        <text x="460" y="94" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">HTML views</text>
+        <text x="460" y="114" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">Architecture · Plan · Decisions</text>
+      </g>
+      <line x1="372" y1="98" x2="386" y2="98" stroke="var(--color-primary)" stroke-width="1.5" marker-end="url(#ah2)"/>
+      <g id="inbox">
+        <title>Inbox: your clicks and annotations</title>
+        <rect x="390" y="150" width="140" height="50" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="460" y="181" text-anchor="middle" font-size="13" fill="currentColor">Inbox (your clicks)</text>
+      </g>
+      <g id="code">
+        <title>Your source code</title>
+        <rect x="230" y="230" width="300" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="380" y="263" text-anchor="middle" font-size="14" fill="currentColor">Source code</text>
+      </g>
+      <line x1="300" y1="132" x2="300" y2="226" stroke="var(--color-success)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah2)"/>
+      <text x="292" y="186" text-anchor="end" font-size="11" fill="var(--color-success)">Anchor</text>
+      <g id="viewer">
+        <title>viewer: opens the whiteboard in the browser</title>
+        <rect x="20" y="80" width="150" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="95" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">① viewer</text>
+        <text x="95" y="123" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">View and click in the browser</text>
+      </g>
+      <line x1="172" y1="108" x2="386" y2="170" stroke="currentColor" stroke-width="1.2" opacity=".6" marker-end="url(#ah2)"/>
+      <g id="skill">
+        <title>skill: teaches the agent how to read and write the whiteboard</title>
+        <rect x="590" y="80" width="150" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="665" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">② skill</text>
+        <text x="665" y="123" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">Teaches the agent to read/write</text>
+      </g>
+      <line x1="588" y1="108" x2="534" y2="100" stroke="currentColor" stroke-width="1.2" opacity=".6" marker-end="url(#ah2)"/>
+      <g id="check">
+        <title>Checker: deterministically compares the data file with the code</title>
+        <rect x="20" y="230" width="150" height="56" rx="28" fill="none" stroke="var(--color-success)" stroke-width="1.8"/>
+        <text x="95" y="254" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">③ Checker</text>
+        <text x="95" y="273" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">Runs locally / in CI</text>
+      </g>
+      <line x1="172" y1="258" x2="226" y2="258" stroke="var(--color-success)" stroke-width="1.5" marker-end="url(#ah2)"/>
+      <g id="hooks">
+        <title>Hooks: trigger the check automatically when the agent finishes</title>
+        <rect x="590" y="230" width="150" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="665" y="254" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">④ Hooks</text>
+        <text x="665" y="273" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">Auto-check after work</text>
+      </g>
+      <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+    </svg>
+  </div></figure>
+
+  <div class="overflow-x-auto rounded-box border border-base-content/10">
+    <table class="table">
+      <thead><tr><th>Component</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="font-semibold whitespace-nowrap">Data file</td><td>A small text file that records which modules, decisions and tasks the project has. Every item carries an <b>anchor</b> pointing to real code, for example "payments module = <code>src/pay/</code>, entry function is <code>charge()</code>." It is the single source of truth.</td></tr>
+        <tr><td class="font-semibold whitespace-nowrap">HTML views</td><td>Written by the agent, good-looking and interactive. Every element on the page is attached to an item in the data file, so when you click "Payments," payments lights up in every diagram at once.</td></tr>
+        <tr><td class="font-semibold whitespace-nowrap">① viewer</td><td>One command opens it in the browser and treats the several views as one workspace. Your clicks and annotations are written to the inbox. The interaction is modeled on lavish.</td></tr>
+        <tr><td class="font-semibold whitespace-nowrap">② skill</td><td>Teaches the agent to read the data file and the inbox before starting work, and to update the data file and the views when it finishes. Works with Claude Code, Codex and others.</td></tr>
+        <tr><td class="font-semibold whitespace-nowrap">③ Checker</td><td>Compares the data file with the code: are the anchors still there? Has the code under an anchor changed? <b>It doesn't use AI</b>, so results are stable and fast, and it can go into CI. AI is only used when fixing things.</td></tr>
+        <tr><td class="font-semibold whitespace-nowrap">④ Hooks</td><td>Runs the checker automatically every time the agent finishes work.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alert alert-soft"><span><b>The key technical idea: separate "facts" from "good looks."</b> Facts live in a small data file, with anchors, checkable, and merging normally in git. Good looks are left to HTML, which can be regenerated any time it goes stale. This solves the two problems that stop others: <b>there is no way to check whether HTML is stale</b>, and <b>HTML merges poorly in git</b>.</span></div>
+</section>
+
+<!-- ========== 6. How it differs from others ========== -->
+<section class="sec space-y-5" id="others">
+  <h2 class="text-2xl font-bold">6. How it differs from others</h2>
+  <p>Many people are heading in this direction, which is exactly a sign the direction is right. The closest to us is <b>Nimbalyst</b> (MIT, about 2.1k stars). I had a subagent read through its code: it does this very well, and in places it is more mature than our original idea.</p>
+
+  <div class="overflow-x-auto rounded-box border border-base-content/10">
+    <table class="table table-sm">
+      <thead><tr><th></th><th>Form</th><th>Where the data lives</th><th>How a team shares</th><th>Does it match the code?</th></tr></thead>
+      <tbody>
+        <tr><td class="font-semibold">Nimbalyst</td><td>Desktop app (like an IDE) that you have to move into</td><td>Local files; tasks live in its database</td><td>Through its own server (team plan $20/person/month, free during beta)</td><td>Partly: file-level stale warnings, code-snippet drift checks</td></tr>
+        <tr><td class="font-semibold">Cursor Projects</td><td>Only usable inside Cursor</td><td>Cursor cloud</td><td>Within a Cursor team</td><td>No</td></tr>
+        <tr><td class="font-semibold">Claude artifacts</td><td>claude.ai web page</td><td>Cloud</td><td>Within an organization</td><td>No</td></tr>
+        <tr><td class="font-semibold">spec-kit / Kiro</td><td>Markdown specs</td><td>git repo</td><td>git</td><td>Manual syncing; users complain they go stale quickly</td></tr>
+        <tr><td class="font-semibold">lavish</td><td>Browser, a single HTML file</td><td>Local</td><td>Not supported</td><td>Not applicable</td></tr>
+        <tr class="bg-primary/10"><td class="font-semibold">Us</td><td><b>A thin membrane</b>: used in the browser, started with one command, no switching editor or agent</td><td><b>Entirely in the git repo</b></td><td><b>git + PR, free</b></td><td><b>Anchored to symbols and routes; the checker can go into CI</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="card card-border"><div class="card-body p-4">
+      <h3 class="font-semibold">What Nimbalyst does better than we imagined (to learn from)</h3>
+      <ul class="list-disc pl-5 text-sm space-y-1">
+        <li>Documents can embed "decision blocks": 6 question types, multi-person voting, results written straight into the file, and the agent is woken once a decision is made.</li>
+        <li>A formal file-format spec: every item has a permanent ID, types are extensible, and there is an operation log.</li>
+        <li>It can extract "what the human said at the time" from Claude Code session records.</li>
+        <li>A full editor, multiple agents in parallel, and a mobile app.</li>
+      </ul>
+    </div></div>
+    <div class="card card-border border-primary/40"><div class="card-body p-4">
+      <h3 class="font-semibold">What it doesn't do and would find hard to change (our opportunity)</h3>
+      <ul class="list-disc pl-5 text-sm space-y-1">
+        <li>HTML views are not the main thing, and elements in a view aren't attached to data.</li>
+        <li>Anchors only go as far as "file and line number," not functions or routes.</li>
+        <li>No deterministic check that can go into CI.</li>
+        <li>Team collaboration has to go through its server, not just git and PRs. Its pricing model dictates this, so it is hard to change.</li>
+        <li>To use it, you first have to move into a new desktop app.</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="alert alert-soft alert-info"><span><b>The difference in one sentence:</b> Nimbalyst is a new home you move into; we are a transparent membrane laid over how you already work. You still use the terminal, you still use your existing agent, your team still uses git, and you just get a whiteboard that updates itself and doesn't lie. We could also be <b>compatible with the same file format</b>, so users on both sides can interoperate.</span></div>
+</section>
+
+<!-- ========== 7. Scope, risks ========== -->
+<section class="sec space-y-5" id="scope">
+  <h2 class="text-2xl font-bold">7. What the first version does, and the biggest risk</h2>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="card card-border"><div class="card-body p-4">
+      <h3 class="font-semibold text-success">The first version does</h3>
+      <ul class="list-disc pl-5 text-sm space-y-1">
+        <li>The data-file format, plus three views: architecture, plan, decisions</li>
+        <li>viewer: browsing, jumping, annotating, decision cards, changing task status</li>
+        <li>skill and hooks: support one agent first</li>
+        <li>Checker: start with file and function anchors for one language</li>
+        <li><b>Use this tool to develop this tool itself</b> (eat our own dog food)</li>
+      </ul>
+    </div></div>
+    <div class="card card-border"><div class="card-body p-4">
+      <h3 class="font-semibold text-error">The first version does not</h3>
+      <ul class="list-disc pl-5 text-sm space-y-1">
+        <li>A real-time multi-user collaboration server (teams use git for now)</li>
+        <li>Automatically inferred business flow diagrams (easy to get wrong, and once wrong users stop trusting it)</li>
+        <li>Its own chat agent</li>
+        <li>Drag-and-drop architecture editing</li>
+        <li>Cloud and accounts</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="alert alert-soft alert-warning"><span><b>The biggest risk is people, not technology:</b> will people actually direct the agent from the whiteboard rather than keep typing in the terminal? You only find out by using it yourself. <b>How to verify:</b> use it yourself for two weeks and record how many times you direct the agent on the whiteboard versus in the terminal. If fewer than 20% happen on the whiteboard, or you stop opening it yourself, stop and rethink.</span></div>
+</section>
+
+<!-- ========== 8. Decision cards ========== -->
+<section class="sec space-y-6" id="decide">
+  <h2 class="text-2xl font-bold">8. Things that need your call before starting</h2>
+  <p class="muted text-sm">After choosing on each card, click "Queue this answer," then click <b>Send to Agent</b> on the right side of lavish, and the answers will be sent to me together. You can skip anything you're unsure about, or write your thoughts in the extra-notes box.</p>
+
+  <form class="card card-border bg-base-200" data-lavish-question="understand" onsubmit="return queueAnswer(event,'understand','Do you understand the product now')">
+    <div class="card-body space-y-3">
+      <h3 class="font-semibold">Q0. Do you understand the product now?</h3>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="understand" value="Fully understand, ready to discuss kickoff"><span>Fully understand, ready to discuss kickoff</span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="understand" value="Mostly understand, a few questions"><span>Mostly understand, a few questions (write them below, or annotate directly on the page)</span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="understand" value="Don't quite understand yet, explain another way"><span>Don't quite understand yet, explain another way</span></label>
+      <textarea class="textarea w-full" name="note" placeholder="What is still unclear?"></textarea>
+      <div class="flex items-center gap-3"><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button><span class="badge badge-success queued">Queued ✓</span></div>
+    </div>
+  </form>
+
+  <form class="card card-border bg-base-200" data-lavish-question="nimbalyst" onsubmit="return queueAnswer(event,'nimbalyst','Relationship with Nimbalyst')">
+    <div class="card-body space-y-3">
+      <h3 class="font-semibold">Q1. What is our relationship with Nimbalyst?</h3>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="A Build our own lightweight core, with a file format compatible with Nimbalyst"><span><b>A. Build our own lightweight core, with a file format compatible with Nimbalyst</b> <span class="badge badge-soft badge-primary badge-sm">Recommended</span><br><span class="text-sm muted">We control our own direction, and users on both sides can interoperate. Moderate effort.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="B Build it as an extension of Nimbalyst"><span><b>B. Build it directly as a Nimbalyst extension</b><br><span class="text-sm muted">Fastest to start, but we would be tied to a desktop app, with direction set by someone else's two core developers.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="C Fully independent, no compatibility"><span><b>C. Fully independent, no compatibility</b><br><span class="text-sm muted">Most freedom, but we would miss out on a ready-made ecosystem.</span></span></label>
+      <textarea class="textarea w-full" name="note" placeholder="Additional notes (optional)"></textarea>
+      <div class="flex items-center gap-3"><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button><span class="badge badge-success queued">Queued ✓</span></div>
+    </div>
+  </form>
+
+  <form class="card card-border bg-base-200" data-lavish-question="viewer" onsubmit="return queueAnswer(event,'viewer','How to build the viewer')">
+    <div class="card-body space-y-3">
+      <h3 class="font-semibold">Q2. How should the viewer (the tool for looking at the whiteboard) be built?</h3>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="A Build our own browser viewer, with interaction modeled on lavish, reusing its code where possible (MIT allows it)"><span><b>A. Build our own browser viewer, with interaction modeled on lavish, reusing what we can</b> <span class="badge badge-soft badge-primary badge-sm">Recommended</span><br><span class="text-sm muted">lavish looks at one file at a time, while we need a workspace of "multiple views + a data file," so we have to build our own shell. lavish is MIT-licensed, so we can borrow its code with attribution.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="B For now, just open each view with lavish and skip the viewer"><span><b>B. For now, just open each view directly with lavish and skip the viewer</b><br><span class="text-sm muted">Quickest to start using ourselves, good for first validating whether "people are willing to direct from the whiteboard"; the downside is that views can't link to each other.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="C Build a desktop app"><span><b>C. Build a desktop app</b><br><span class="text-sm muted">The experience could be better, but it would turn into another Nimbalyst.</span></span></label>
+      <textarea class="textarea w-full" name="note" placeholder="Additional notes (optional)"></textarea>
+      <div class="flex items-center gap-3"><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button><span class="badge badge-success queued">Queued ✓</span></div>
+    </div>
+  </form>
+
+  <form class="card card-border bg-base-200" data-lavish-question="first-agent" onsubmit="return queueAnswer(event,'first-agent','Which agent the first version supports')">
+    <div class="card-body space-y-3">
+      <h3 class="font-semibold">Q3. Which agent should the first version support first?</h3>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="Claude Code"><span><b>Claude Code</b><br><span class="text-sm muted">Its hooks are the most complete, and both session start and end can be hooked; Codex doesn't currently run plugin hooks.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="Codex"><span><b>Codex</b></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="Support both at once"><span><b>Support both at once</b><br><span class="text-sm muted">A bit more work.</span></span></label>
+      <textarea class="textarea w-full" name="note" placeholder="Which do you mainly use day to day?"></textarea>
+      <div class="flex items-center gap-3"><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button><span class="badge badge-success queued">Queued ✓</span></div>
+    </div>
+  </form>
+
+  <form class="card card-border bg-base-200" data-lavish-question="first-lang" onsubmit="return queueAnswer(event,'first-lang','Language the checker supports in the first version')">
+    <div class="card-body space-y-3">
+      <h3 class="font-semibold">Q4. Which language should the checker support first?</h3>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="TypeScript / JavaScript"><span><b>TypeScript / JavaScript</b><br><span class="text-sm muted">The web projects where agents write the most code live here, such as Next.js and Express.</span></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="Python"><span><b>Python</b></span></label>
+      <label class="opt"><input type="radio" class="radio radio-primary radio-sm mt-1" name="choice" value="Decide based on our own projects"><span><b>Decide based on the projects we have on hand</b><br><span class="text-sm muted">Because the first user is ourselves.</span></span></label>
+      <textarea class="textarea w-full" name="note" placeholder="What tech stack are your projects on?"></textarea>
+      <div class="flex items-center gap-3"><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button><span class="badge badge-success queued">Queued ✓</span></div>
+    </div>
+  </form>
+
+  <div class="card card-border"><div class="card-body p-4 space-y-2">
+    <p class="text-sm">If you opened this file by double-clicking it (not through lavish), click the button below to copy all the answers, then paste them back into the chat:</p>
+    <div class="flex items-center gap-3"><button type="button" class="btn btn-sm" onclick="copyAll(this)">Copy all answers</button><span class="text-sm" id="copy-status" role="status" aria-live="polite"></span></div>
+  </div></div>
+</section>
+
+<footer class="text-sm muted border-t border-base-content/10 pt-6">Full text version: <code>docs/VISION.md</code> · Earlier proposals and review records: <code>docs/archive/</code> · Competitor data verified on 2026-11-19</footer>
+</main>
+
+<script>
+function readForm(form) {
+  const fd = new FormData(form);
+  return { choice: fd.get('choice') || fd.get('understand') || '', note: (fd.get('note') || '').trim() };
+}
+function queueAnswer(event, key, label) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const { choice, note } = readForm(form);
+  if (!choice && !note) return false;
+  const text = label + ': ' + (choice || '(not selected)') + (note ? '; notes: ' + note : '');
+  if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+    window.lavish.queuePrompt(text, { tag: 'choice', text, element: form, queueKey: key, data: { question: key, answer: choice, note } });
+    form.querySelector('.queued').classList.add('on');
+  } else {
+    form.querySelector('.queued').textContent = 'Not opened in lavish; use the copy button at the bottom of the page';
+    form.querySelector('.queued').classList.add('on');
+  }
+  return false;
+}
+async function copyAll(btn) {
+  const out = [];
+  document.querySelectorAll('form[data-lavish-question]').forEach((form) => {
+    const { choice, note } = readForm(form);
+    if (choice || note) out.push(form.querySelector('h3').textContent + '\n  ' + (choice || '(not selected)') + (note ? '\n  Notes: ' + note : ''));
+  });
+  const status = document.getElementById('copy-status');
+  if (!out.length) { status.textContent = 'No answers to copy yet.'; return; }
+  const text = out.join('\n\n');
+  try { await navigator.clipboard.writeText(text); status.textContent = 'Copied.'; }
+  catch { status.textContent = 'Clipboard unavailable; please copy manually:\n' + text; }
+}
+</script>
+</body>
+</html>

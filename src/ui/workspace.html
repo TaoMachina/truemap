@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>truemap</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='4' fill='none' stroke='%231d2733' stroke-width='2.5'/%3E%3Cpath d='M17 3h12v12z' fill='%232c5a8c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/__truemap/workspace.css">
+<script>window.TRUEMAP_TOKEN = "__TRUEMAP_TOKEN__"; window.TRUEMAP_CONTENT = "__TRUEMAP_CONTENT__";</script>
+</head>
+<body>
+<div class="app" id="app">
+
+  <main class="stage">
+    <header class="bar">
+      <div class="switcher">
+        <button class="page-btn" id="pageBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Pages (Ctrl+K)">
+          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="4"/><path d="M17 3h12v12z"/></svg>
+          <span class="page-name" id="pageTitle">truemap</span>
+          <span class="state-dot" id="titleDot" hidden></span>
+          <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="menu" id="menu" role="menu" hidden>
+          <div class="menu-head"><span id="project"></span><input id="filter" type="search" placeholder="Find a page" autocomplete="off" hidden></div>
+          <div class="menu-list" id="pages"></div>
+          <div class="menu-foot"><button class="text-btn" id="recheck" type="button">Check against code</button><span id="ver"></span></div>
+        </div>
+      </div>
+      <span class="path" id="pagePath"></span>
+      <span class="spacer"></span>
+      <button class="check-chip" id="checkChip" type="button" hidden></button>
+      <button class="icon-btn" id="toggleChat" type="button" aria-label="Show chat" title="Show chat" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-3.5 3v-3H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z"/></svg>
+        <span class="unread" id="unread" hidden></span>
+      </button>
+    </header>
+    <div class="frame-wrap">
+      <iframe id="frame" title="Page" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+      <section class="empty" id="empty" hidden>
+        <h1>No pages yet</h1>
+        <p>Ask the agent to read the code and draw the project’s blueprint. Then select anything on it to ask about it.</p>
+        <button class="primary" id="drawBlueprint" type="button">Ask the agent for a blueprint</button>
+      </section>
+    </div>
+  </main>
+
+  <aside class="chat" id="chat">
+    <header class="chat-head">
+      <span class="agent-pill" id="agent" data-state="offline"><i></i><span id="agentLabel">Agent not connected</span></span>
+      <button class="icon-btn quiet" id="closeChat" type="button" aria-label="Hide chat" title="Hide chat">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5l5 5-5 5"/></svg>
+      </button>
+    </header>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="progress" id="progress" hidden></div>
+    <div class="offline-hint" id="offlineHint" hidden></div>
+    <form class="composer" id="composer" autocomplete="off">
+      <div class="chips" id="chips"></div>
+      <div class="quick" id="quick" hidden></div>
+      <div class="input-row">
+        <textarea id="input" rows="1" aria-label="Message"></textarea>
+        <button class="send" id="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 16V4M5 9l5-5 5 5"/></svg>
+        </button>
+      </div>
+    </form>
+  </aside>
+
+</div>
+<script src="/__truemap/workspace.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "name": "truemap",
+  "version": "0.1.0",
+  "description": "Agents explain your project with living HTML pages that stay true to the code. Click, ask, and decide right on the page.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TaoMachina/truemap.git"
+  },
+  "homepage": "https://github.com/TaoMachina/truemap#readme",
+  "bugs": {
+    "url": "https://github.com/TaoMachina/truemap/issues"
+  },
+  "type": "module",
+  "bin": {
+    "truemap": "bin/truemap.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "kit/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "agent",
+    "claude-code",
+    "codex",
+    "html",
+    "architecture",
+    "visualization",
+    "skill"
+  ],
+  "license": "MIT"
+}
