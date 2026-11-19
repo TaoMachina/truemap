@@ -435,6 +435,7 @@
   function markFlow(fig) {
     const m = fig.__tm; if (!m) return;
     for (const b of m.stage.querySelectorAll('.tm-dg-step')) b.remove();
+    for (const l of m.stage.querySelectorAll('.tm-dg-label[data-step]')) l.removeAttribute('data-step');
     const active = m.tabs?.querySelector('[aria-selected="true"]');
     const ids = active ? active.getAttribute('data-path').split(/[\s,]+/).filter(Boolean) : [];
     fig.toggleAttribute('data-flow', ids.length > 0);
@@ -451,8 +452,9 @@
       if (!p) continue;
       const [from, to] = k.split('>');
       const lab = [...m.stage.querySelectorAll('.tm-dg-label')].find((l) => l.dataset.from === from && l.dataset.to === to);
+      // a line with a word carries its number inside the label, so the two can never cover each other
+      if (lab && !lab.classList.contains('is-dup')) { lab.setAttribute('data-step', String(n)); continue; }
       const s = document.createElement('span'); s.className = 'tm-dg-step'; s.textContent = String(n);
-      void lab;
       // the number sits on its own line, just before the arrowhead, so it can't be read as another line's
       const L = p.getTotalLength();
       const labs = [...m.stage.querySelectorAll('.tm-dg-label')].filter((l) => getComputedStyle(l).visibility !== 'hidden').map((l) => { const x = parseFloat(l.style.left); const y = parseFloat(l.style.top); return { l: x - l.offsetWidth / 2 - 3, r: x + l.offsetWidth / 2 + 3, t: y - l.offsetHeight / 2 - 3, b: y + l.offsetHeight / 2 + 3 }; });

@@ -114,17 +114,34 @@ export function srcOfBox(root, page, box, want = 'data-src') {
   return tag?.match(new RegExp(`\\s${want}=["']([^"']+)["']`, 'i'))?.[1] || null;
 }
 
+/** Plan entries that name boxes or groups the page doesn't have. */
+export function planWarnings(root, plan) {
+  let html = '';
+  try { html = readFileSync(join(root, FOLDER, plan.page), 'utf8'); } catch { return [`page not found: ${FOLDER}/${plan.page}`]; }
+  const has = (id) => new RegExp(`\\sid=["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`).test(html);
+  const hasSrc = (src) => html.includes(`data-src="${src}"`) || html.includes(`data-src='${src}'`);
+  const out = [];
+  for (const t of [...plan.touch, ...plan.remove]) if (!(has(t.box) || hasSrc(t.box))) out.push(`"${t.box}" is not a box id or data-src on ${plan.page}`);
+  const groups = [...html.matchAll(/<section\b[^>]*class=["'][^"']*\btm-group\b[^>]*>/gi)].map((m) => [m[0].match(/\sid=["']([^"']+)/)?.[1], m[0].match(/data-label=["']([^"']+)/)?.[1]].filter(Boolean).map((x) => x.toLowerCase()));
+  for (const a of plan.add) {
+    if (has(a.id)) out.push(`new box "${a.id}" already exists on the page`);
+    if (a.group && !groups.some((g) => g.includes(a.group.toLowerCase()))) out.push(`new box "${a.id}": group "${a.group}" is not on the page (it goes in the first group)`);
+    for (const spec of [...a.to.split(/[\s,]+/), ...a.from].filter(Boolean)) { const id = spec.split(':')[0]; if (id && !has(id)) out.push(`new box "${a.id}": "${id}" in to/from is not a box on the page`); }
+  }
+  return out;
+}
+
 /** Plan against what actually changed: planned and changed, planned but untouched, changed but not planned. */
 export function planCheck(root, plan, result) {
   if (!plan || !result?.boxes) return null;
-  // A planned item counts as built only when the box's own code changed; a change in a file attached
-  // with data-also (types, wiring) alone is shown, but does not count.
-  const own = new Set(result.boxes.filter((b) => b.files.some((x) => x.own)).map((b) => b.src));
-  const related = new Map(result.boxes.filter((b) => !own.has(b.src)).map((b) => [b.src, b.files.map((x) => x.path)]));
+  // Facts only: which planned boxes have changes in their files (own or data-also), and which files.
+  // Whether a change does what was planned is for the person to judge, beside the diff; a file-based
+  // "built" verdict is wrong both ways (a rename counts, work in an attached file doesn't).
+  const byBox = new Map(result.boxes.map((b) => [b.src, b.files.map((x) => x.path)]));
   const planned = [
     ...plan.touch.map((t) => ({ box: t.box, what: t.what, kind: 'change' })),
     ...plan.add.map((a) => ({ box: a.id, what: a.why, kind: 'new', name: a.name })),
-  ].map((p) => { const src = srcOfBox(root, plan.page, p.box); return { ...p, name: p.name || srcOfBox(root, plan.page, p.box, 'data-name') || p.box, src, changed: !!src && own.has(src), onlyRelated: (src && related.get(src)) || null }; });
+  ].map((p) => { const src = srcOfBox(root, plan.page, p.box); return { ...p, name: p.name || srcOfBox(root, plan.page, p.box, 'data-name') || p.box, src, changed: !!src && byBox.has(src), files: (src && byBox.get(src)) || [] }; });
   const plannedSrc = new Set(planned.map((p) => p.src).filter(Boolean));
   return { title: plan.title, planned, unplanned: result.boxes.filter((b) => !plannedSrc.has(b.src)).map((b) => b.src) };
 }

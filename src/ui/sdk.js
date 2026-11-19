@@ -598,7 +598,8 @@
       select(d.id ? document.getElementById(d.id) : null);
     } else if (d.type === 'plan') {
       // A plan drawn on the map: what it touches, adds (dashed, in its group) and removes.
-      for (const el of document.querySelectorAll('[data-plan-overlay]')) { el.removeAttribute('data-plan'); el.removeAttribute('data-plan-note'); el.removeAttribute('data-plan-overlay'); }
+      for (const el of document.querySelectorAll('[data-plan-overlay], [data-plan-revised]')) { el.removeAttribute('data-plan'); el.removeAttribute('data-plan-note'); el.removeAttribute('data-plan-overlay'); el.removeAttribute('data-plan-revised'); }
+      clearFocus();
       const p = d.plan;
       document.documentElement.toggleAttribute('data-tm-plan', !!p);
       const fig = document.querySelector('figure.tm-diagram');
@@ -610,6 +611,7 @@
         el.setAttribute('data-plan', kind); el.setAttribute('data-plan-overlay', ''); if (note) el.setAttribute('data-plan-note', note);
       };
       if (p) { for (const t of p.touch || []) markPlan(t.box, 'change', t.what); for (const r of p.remove || []) markPlan(r.box, 'remove', r.why); }
+      for (const id of p?.revised || []) findItems([id])[0]?.setAttribute('data-plan-revised', '');
       for (const b of document.querySelectorAll('.tm-node, .tm-step')) { if (!b.hasAttribute('tabindex') && !b.matches('a[href]')) b.setAttribute('tabindex', '0'); }
       markWires();
     } else if (d.type === 'changes') {

@@ -105,8 +105,8 @@ retry after a timeout can charge twice.</div>  <dl class="tm-kv"><dt>Attempts</d
 <div class="tm-links"><a class="tm-link" href="payments.html"><strong>Payments</strong>How money moves</a></div>
 
 PLAN FIRST (before a change that touches 3+ boxes or adds one)
-- Write the plan as JSON (any path, e.g. .truemap/plans/draft.json; truemap keeps its own copy) and show it on
-  the map; do not start building until the user approves:
+- Write the plan as JSON in a temporary file outside .truemap/ (truemap keeps the record in
+  .truemap/plans/<slug>.json) and show it on the map; do not start building until the user approves:
     {{CMD}} plan --file plan.json
   {
     "title": "Per-agent rate limits",
@@ -126,8 +126,8 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
   run `{{CMD}} plan --approve`.
 - Plans draw on a page with a <figure class="tm-diagram"> map; convert an older .tm-map page first.
 - When it is built: put the new boxes on the page for real, with the same id as in the plan's "add" and a data-src
-  on their own new file; a planned box counts as built only when its own code (data-src) changed, not a data-also
-  file. Run `{{CMD}} plan --done`. It
+  on their own new file. `changes` only says which planned boxes have changes in their files; compare each planned
+  item with its diff yourself and say plainly what is done, partly done or not built. Run `{{CMD}} plan --done`. It
   warns about planned boxes with no changes: tell the user which parts are not built, and why.
 - Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 

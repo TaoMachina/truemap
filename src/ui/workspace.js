@@ -276,6 +276,7 @@
       }
       if (e.ask) el.appendChild(askCard(e));
       if (live && !panelOpen()) { state.unread = true; renderBadge(); }
+      if (live && panelEl.classList.contains('inspecting')) $('inspBack').classList.add('news');
     } else {
       el.className = 'msg user'; el.dataset.id = e.id;
       let body = '';
@@ -363,7 +364,7 @@
   const inspecting = () => panelEl.classList.contains('inspecting');
   function closeInspector() {
     if (!inspecting()) return;
-    panelEl.classList.remove('inspecting'); inspBody.innerHTML = ''; inspSeq++; app.classList.remove('wide-panel');
+    panelEl.classList.remove('inspecting'); inspBody.innerHTML = ''; inspSeq++; app.classList.remove('wide-panel'); $('inspBack').classList.remove('news'); scrollChat();
     toFrame({ type: 'select', id: null });
     if (panelWasClosed) { panelWasClosed = false; setPanel(false, false); }
   }
@@ -510,8 +511,8 @@
     html += `<p class="ch-sum">${r.files ? `${plural(r.files, 'file')} changed ${delta(r.add, r.del)}` : 'Nothing changed.'}${r.base.at ? ` Measured from ${esc(timeOf(r.base.at))}.` : ''}</p>`;
     if (r.plan) {
       const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
-      html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes changed${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} changed outside the plan` : ''}.</p>`;
-      if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> ${p.onlyRelated ? 'planned, only attached files changed' : 'planned, no changes yet'}${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
+      html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes have changes${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} outside the plan` : ''}. Open a box to check its diff against what was planned.</p>`;
+      if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> planned, no changes in its files${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
       html += '</div>';
     }
     const planned = new Set((r.plan?.planned || []).map((p) => p.src).filter(Boolean));
@@ -522,7 +523,8 @@
         const name = ch.names.get(b.src) || b.src.split('#')[1] || b.src.split('/').pop();
         const other = here ? '' : `, on ${titleOf(state.pages.find((p) => p.page === b.pages[0]) || { page: b.pages[0] })}`;
         const offPlan = r.plan && !planned.has(b.src) ? '<span class="off-plan">not in the plan</span>' : '';
-        html += `<button type="button" class="ch-row" data-src="${esc(b.src)}" data-page="${esc(here ? state.page : b.pages[0])}"><b>${esc(name)}${offPlan}</b>${delta(b.add, b.del)}<small>${esc(b.files.map((f) => f.path).join(', ') + other)}</small></button>`;
+        const want = r.plan?.planned.find((p) => p.src === b.src)?.what;
+        html += `<button type="button" class="ch-row" data-src="${esc(b.src)}" data-page="${esc(here ? state.page : b.pages[0])}"><b>${esc(name)}${offPlan}</b>${delta(b.add, b.del)}<small>${esc(b.files.map((f) => f.path).join(', ') + other)}</small>${want ? `<span class="ch-want">Planned: ${esc(want)}</span>` : ''}</button>`;
       }
     }
     if (r.unmapped.length) {
@@ -554,7 +556,7 @@
   }
   $('changes').addEventListener('change', (e) => {
     if (e.target.id !== 'chBase') return;
-    ch.base = e.target.value; store.set('truemap.base', ch.base); ch.data = null; renderChanges(); loadChanges();
+    ch.base = e.target.value; ch.userBase = true; store.set('truemap.base', ch.base); ch.data = null; renderChanges(); loadChanges();
   });
   $('changes').addEventListener('click', (e) => {
     const row = e.target.closest('.ch-row');
@@ -580,8 +582,8 @@
     if (!showingChanges() || !ch.data?.plan) return '';
     const p = ch.data.plan.planned.find((x) => (x.src && x.src === box.src) || x.box === box.id);
     if (!p) return '';
-    if (p.changed) return p.what ? `<div class="insp-planned"><b>Planned:</b> ${esc(p.what)}<span>Check the diff below against it.</span></div>` : '';
-    return `<div class="insp-state">Planned, not built yet${p.what ? `: ${esc(p.what)}` : ''}${p.onlyRelated ? `<br>Only attached files changed (${esc(p.onlyRelated.join(', '))}), not the box's own code.` : ''}</div>`;
+    if (p.changed) return `<div class="insp-planned"><b>Planned:</b> ${esc(p.what || 'a change here')}<span>Does the diff below do this? truemap only knows that these files changed.</span></div>`;
+    return `<div class="insp-state">Planned, no changes in its files yet${p.what ? `: ${esc(p.what)}` : ''}</div>`;
   }
   // The inspector shows what changed in a box while you review changes.
   function changeSection(box) {
@@ -849,6 +851,7 @@
   function setConn(c) {
     if (state.conn === c) return;
     state.conn = c; app.dataset.conn = c;
+    if (c === 'closed') { projList = []; renderProjects(); }
     renderHeader();
     renderAgent();
   }
@@ -912,7 +915,7 @@
       } else if (d.type === 'changes-base') {
         loadChanges();
       } else if (d.type === 'view') {
-        if (d.view === 'changes') { if (d.base) { ch.base = d.base; ch.data = null; } setPanel(true); setTab('changes'); }
+        if (d.view === 'changes') { if (d.base && d.base !== 'auto' && !ch.userBase) { ch.base = d.base; ch.data = null; } setPanel(true); setTab('changes'); }
       } else if (d.type === 'closing') {
         es.close(); setConn('closed');
       }

@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+process.env.TRUEMAP_STATE_DIR ||= (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'truemap-state-'));
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -105,4 +106,18 @@ test('deleted tracked file is broken; unicode letters count as word characters',
 test('markOk refuses paths outside .truemap', () => {
   const dir = repo();
   assert.equal(markOk(dir, '../src/pay.ts'), false);
+});
+
+test('editing the page does not clear drift on a box whose code changed', () => {
+  const dir = repo();
+  writeFileSync(join(dir, '.truemap', 'index.html'), '<div data-src="src/pay.ts#chargeCard"></div>');
+  commit(dir, 'init', '2026-01-01T00:00:00Z');
+  assert.equal(checkAll(dir).results[0].anchors[0].state, 'ok'); // fingerprint taken
+  writeFileSync(join(dir, 'src', 'pay.ts'), 'export function chargeCard(x) {}\n');
+  assert.equal(checkAll(dir).results[0].anchors[0].state, 'changed');
+  writeFileSync(join(dir, '.truemap', 'index.html'), '<div data-src="src/pay.ts#chargeCard"></div><div data-src="src/"></div>');
+  const r = checkAll(dir).results[0];
+  assert.equal(r.anchors.find((a) => a.src === 'src/pay.ts#chargeCard').state, 'changed', 'a newer page must not hide it');
+  markOk(dir, 'index.html');
+  assert.equal(checkAll(dir).results[0].anchors.find((a) => a.src === 'src/pay.ts#chargeCard').state, 'ok');
 });

@@ -7,7 +7,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync,
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
-import { cleanPlan, currentPlan, planCheck, planMessage, readPlan, savePlan, srcOfBox } from './plan.js';
+import { cleanPlan, currentPlan, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox } from './plan.js';
 import { checkAll, listPages } from './check.js';
 import { exportPage, kitCss } from './export.js';
 import { snippet } from './snippet.js';
@@ -532,10 +532,15 @@ const server = createServer(async (req, res) => {
       const prev = readPlan(root, p2.slug);
       p2.revision = prev && prev.status !== 'done' ? (prev.revision || 1) + 1 : 1;
       p2.status = 'review'; p2.at = new Date().toISOString();
+      if (prev && prev.status !== 'done') {
+        const was = new Map(prev.touch.map((t) => [t.box, t.what]));
+        const wasAdd = new Map(prev.add.map((a) => [a.id, JSON.stringify(a)]));
+        p2.revised = [...p2.touch.filter((t) => was.get(t.box) !== t.what).map((t) => t.box), ...p2.add.filter((a) => wasAdd.get(a.id) !== JSON.stringify(a)).map((a) => a.id)];
+      }
       setPlan(p2);
       remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: p2.at, agent: agentName, text: planMessage(p2, p2.revision > 1 ? prev : null, (box) => srcOfBox(root, p2.page, box, 'data-name') || box), plan: p2.slug });
       broadcast({ type: 'navigate', page: p2.page, pages: safePages() });
-      return sendJson(res, 200, { ok: true, slug: p2.slug, revision: p2.revision, page: p2.page, browsers: clients.size });
+      return sendJson(res, 200, { ok: true, slug: p2.slug, revision: p2.revision, page: p2.page, browsers: clients.size, warnings: planWarnings(root, p2) });
     }
     if (p === '/api/agent/progress' && req.method === 'POST') {
       const b = await readBody(req);

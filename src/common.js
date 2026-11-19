@@ -77,6 +77,7 @@ export function serversDir() { return stateSubdir('servers'); }
 export function serverStatePath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.json`); }
 export function serverLockPath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.lock`); }
 export function historyPath(root) { return join(stateSubdir('history'), `${rootKey(root)}.jsonl`); }
+export function verifiedPath(root) { return join(stateSubdir('verified'), `${rootKey(root)}.json`); }
 export function snapshotsPath(root) { return join(stateSubdir('snapshots'), `${rootKey(root)}.json`); }
 
 export function readJson(file) {

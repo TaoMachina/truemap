@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+process.env.TRUEMAP_STATE_DIR ||= (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'truemap-state-'));
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -85,8 +86,9 @@ test('planCheck: planned and changed, planned but untouched, changed outside the
   const { root } = repo();
   const plan = clean({ title: 'T', page: 'index.html', touch: [{ box: 'runs', what: 'a' }, { box: 'all', what: 'b' }], add: [{ id: 'lim', name: 'Limits' }] });
   const r = planCheck(root, plan, { boxes: [{ src: 'server/routing.ts#Runs', files: [{ path: 'server/routing.ts', own: true }] }, { src: 'server/', files: [{ path: 'server/types.ts', own: false }] }, { src: 'x.ts', files: [{ path: 'x.ts', own: true }] }] });
-  assert.deepEqual(r.planned.map((p) => [p.box, p.changed]), [['runs', true], ['all', false], ['lim', false]]);
-  assert.deepEqual(r.planned[1].onlyRelated, ['server/types.ts']); // only an attached file changed: not built
+  // facts, not a verdict: which planned boxes have changes in their files, and which files
+  assert.deepEqual(r.planned.map((p) => [p.box, p.changed]), [['runs', true], ['all', true], ['lim', false]]);
+  assert.deepEqual(r.planned[1].files, ['server/types.ts']);
   assert.deepEqual(r.unplanned, ['x.ts']);
   const prev = clean({ title: 'T', touch: [{ box: 'runs', what: 'a' }], steps: ['one'] });
   const msg = planMessage({ ...plan, revision: 2 }, prev);

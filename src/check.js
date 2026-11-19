@@ -6,7 +6,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { FOLDER, gitExe } from './common.js';
+import { createHash } from 'node:crypto';
+import { FOLDER, gitExe, verifiedPath } from './common.js';
 
 const META_RE = /<meta\s+name=["']truemap-verified["']\s+content=["']([^"']*)["']\s*\/?>/i;
 const ANCHOR_RE = /\bdata-src\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
@@ -102,7 +103,9 @@ export function createContext(root) {
       if (entry[0] === 'R' || entry[0] === 'C') i++;
     }
   }
-  return { root, gitRepo, files, dirty, head, contents: new Map(), times: new Map() };
+  let records = {};
+  try { records = JSON.parse(readFileSync(verifiedPath(root), 'utf8')); } catch { records = {}; }
+  return { root, gitRepo, files, dirty, head, contents: new Map(), times: new Map(), records, recordsDirty: false, prints: new Map() };
 }
 
 function onDisk(root, p) { try { statSync(join(root, p)); return true; } catch { return false; } }
@@ -177,6 +180,31 @@ function changeTime(ctx, p) {
   return t;
 }
 
+// What an anchor's code looks like now: a hash of the file, or of a folder's file list with sizes and times.
+// Drift is judged per anchor against the fingerprint taken when the box was last known to match, so editing
+// the page (to add one box) does not quietly clear drift on the others.
+function fingerprint(ctx, p) {
+  const clean = p.replace(/\/+$/, '');
+  if (ctx.prints.has(clean)) return ctx.prints.get(clean);
+  const h = createHash('sha1');
+  const full = join(ctx.root, clean);
+  try {
+    const st = statSync(full);
+    if (!st.isDirectory()) h.update(st.size > MAX_SCAN_BYTES ? `${st.size}:${st.mtimeMs}` : readFileSync(full));
+    else {
+      const list = ctx.files ? [...ctx.files].filter((x) => x.startsWith(`${clean}/`)).sort() : [];
+      for (const x of list) { try { const t = statSync(join(ctx.root, x)); h.update(`${x}\0${t.size}\0${Math.floor(t.mtimeMs)}\n`); } catch { /* gone */ } }
+    }
+  } catch { h.update('missing'); }
+  const out = h.digest('hex').slice(0, 16);
+  ctx.prints.set(clean, out);
+  return out;
+}
+function saveRecords(ctx) {
+  if (!ctx.recordsDirty) return;
+  try { writeFileSync(verifiedPath(ctx.root), JSON.stringify(ctx.records)); ctx.recordsDirty = false; } catch { /* ignore */ }
+}
+
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 /** True/false, or null when the file is too large to scan (then we don't call it broken). */
@@ -215,10 +243,18 @@ export function checkPage(ctx, page) {
     if (name && !isDir && hasWholeWord(ctx, path, name) === false) {
       return { src, path, name, state: 'broken', reason: `"${name}" no longer appears in ${path}` };
     }
+    const key = `${page}|${src}`;
+    const fp = fingerprint(ctx, path);
+    const rec = ctx.records[key];
+    if (rec !== undefined) {
+      return rec === fp ? { src, path, name, state: 'ok', reason: '' } : { src, path, name, state: 'changed', reason: `${path} changed since this box was last checked` };
+    }
+    // No fingerprint yet: fall back to times (code newer than the page), then remember the code as it is.
     const t = changeTime(ctx, path.replace(/\/+$/, ''));
     if (t !== null && pageTime && t > pageTime) {
       return { src, path, name, state: 'changed', reason: `${path} changed after this page was last updated` };
     }
+    ctx.records[key] = fp; ctx.recordsDirty = true;
     return { src, path, name, state: 'ok', reason: '' };
   });
   const counts = { ok: 0, changed: 0, broken: 0 };
@@ -292,7 +328,9 @@ export function checkWires(html) {
 export function checkAll(root, pages) {
   const ctx = createContext(root);
   const list = pages ?? listPages(root).map((p) => p.page);
-  return { gitRepo: ctx.gitRepo, results: list.map((p) => checkPage(ctx, p)) };
+  const results = list.map((p) => checkPage(ctx, p));
+  saveRecords(ctx);
+  return { gitRepo: ctx.gitRepo, results };
 }
 
 /** Stamps the page as reviewed now, which clears its "changed" marks. */
@@ -307,5 +345,9 @@ export function markOk(root, page) {
   else if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => `${m}\n${tag}`);
   else html = `${tag}\n${html}`;
   writeFileSync(file, html);
+  // every box on the page matches its code as it is now
+  const ctx = createContext(root);
+  for (const src of extractAnchors(html)) { const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
+  ctx.recordsDirty = true; saveRecords(ctx);
   return true;
 }

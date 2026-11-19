@@ -354,13 +354,14 @@ async function cmdChanges(root, args, opts) {
   }
   if (r.plan) {
     const missing = r.plan.planned.filter((p) => !p.changed);
-    out(`plan: ${q(r.plan.title)}  # ${r.plan.planned.length - missing.length} of ${r.plan.planned.length} planned boxes changed`);
-    for (const p of missing) out(`  - planned but not changed: ${q(p.name || p.box)}${p.src ? '' : '   # no data-src on the page yet'}  # ${q(p.what || '')}`);
+    out(`plan: ${q(r.plan.title)}  # ${r.plan.planned.length - missing.length} of ${r.plan.planned.length} planned boxes have changes (that is not proof they are done)`);
+    for (const p of r.plan.planned.filter((x) => x.changed)) out(`  - planned, has changes: ${q(p.name || p.box)}  files: ${p.files.map(q).join(', ')}  # planned: ${q(p.what || '')}`);
+    for (const p of missing) out(`  - planned, no changes: ${q(p.name || p.box)}${p.src ? '' : '   # no data-src on the page yet'}  # planned: ${q(p.what || '')}`);
     for (const u of r.plan.unplanned) out(`  - changed but not in the plan: ${q(u)}`);
   }
   out(`browser: ${r.browsers ? 'the Changes view is open' : `no tab is open; run \`${CMD}\` to open the map`}`);
   const steps = [];
-  if (r.plan?.planned.some((p) => !p.changed)) steps.push('Some planned boxes have no changes: say plainly which parts of the plan are not built yet (or why they were not needed).');
+  if (r.plan) steps.push('Compare each planned item with its diff yourself and tell the user plainly which parts are done, partly done or not built. The counts above only say where files changed.');
   if (r.files) steps.push('Tell the user in 1-3 lines what you changed and where, by box. They review it on the map: changed boxes show their lines; clicking one shows the diff.');
   if (r.unmapped.length) steps.push('Files that are not on the map: if they matter (a new module, a new route), add a box for them to the page.');
   steps.push(agentLoopHint());
@@ -377,7 +378,7 @@ async function cmdPlan(root, args, opts) {
     out(`plan: ${q(r.body.plan)}`);
     const missing = (r.body.check?.planned || []).filter((p) => !p.changed);
     if (missing.length) {
-      out('warning: some planned boxes have no changes   # tell the user which parts of the plan are not built');
+      out('warning: some planned boxes have no changes in their files   # tell the user which parts of the plan are not built');
       for (const p of missing) out(`  - ${q(p.name || p.box)}  # ${q(p.what || '')}`);
     }
     block('next_step', opts.approve
@@ -406,6 +407,8 @@ async function cmdPlan(root, args, opts) {
     return;
   }
   out('status: plan_shown');
+  for (const w of r.body.warnings || []) out(`warning: ${w}`);
+  if ((r.body.warnings || []).length) out('# fix the plan and run plan --file again: entries that name nothing are not drawn');
   out(`plan: ${q(r.body.slug)}  # ${FOLDER}/plans/${r.body.slug}.json, revision ${r.body.revision}`);
   out(`page: ${q(r.body.page)}`);
   out(`url: ${url}`);
