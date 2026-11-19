@@ -6,7 +6,7 @@
 
 Your coding agent explains the project as HTML pages in your repo: a blueprint of the whole system, a page per module, the options when it needs your call. You read them in the browser, click any box to comment on it, and the agent answers right next to the page. Every box is pinned to real code, so when the code moves on, the map tells you.
 
-![The truemap workspace: a project blueprint with wires, a comment pinned to a box, and the agent's answer in the conversation panel](docs/images/workspace.png)
+![The truemap workspace: the agent answers a question and lights up the two boxes it is talking about, with a note beside them](docs/images/workspace.png)
 
 ## Why
 
