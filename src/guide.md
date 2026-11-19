@@ -47,9 +47,10 @@ Pages are working documents for engineers, read next to the code. They are not l
 - Colors come only from the kit tokens. Status colors mean status, never decoration.
 - Monospace only for real code: paths, symbols, commands.
 - Boxes: 2-4 word titles taken from the code, one path line, at most one short sentence. At most 4 boxes per
-  layer, 15 per map. More: split it – overview here, detail on the module's own page.
+  layer and 12 per map. More: split it – overview here, detail on the module's own page.
 - Readability comes from few crossings: order boxes in each layer so wires run straight down, put a box under
-  the box that calls it, and prefer wires between neighbouring layers.
+  the box that calls it, and prefer wires between neighbouring layers. Real loops (a callback, a reply going
+  back up) are fine: draw them, truemap routes them.
 - Label every wire with what travels on it (data-to="runs:postUserMessage"), unless the label would only repeat
   the target's name. The legend explains every line style and mark you used.
 
@@ -82,7 +83,8 @@ PAGE SKELETON
 KIT COMPONENTS
 Map (layered structure with wires – the heart of index.html). You declare structure; truemap does the geometry.
 Give boxes an id; data-to lists the ids they call or feed, separated by spaces, each with an optional wire label
-after a colon (underscores become spaces): data-to="store:writes runs:postUserMessage". `check` reports ids
+after a colon (underscores become spaces; the label is everything after the first colon, so it may contain
+colons): data-to="store:writes runs:postUserMessage db:node:sqlite". `check` reports ids
 that don't exist. Never position boxes or draw wires yourself on a map.
   <div class="tm-map">
     <div class="tm-layer"><div class="tm-layer-label">HTTP routes</div><div class="tm-layer-nodes">
@@ -105,8 +107,10 @@ that don't exist. Never position boxes or draw wires yourself on a map.
   stream) or sideways. A wire between two .is-key boxes is drawn blue.
   Node modifiers: is-key (the main path), is-ext (outside this codebase: services, hosted APIs, databases and
   files you talk to, dashed), is-new (just added), is-risk.
-  Legend: <i></i> main path, <i class="is-wire"></i> wire, <i class="is-ext"></i> outside the code, <i class="is-mark"></i> pinned to code.
-Flow (a real sequence; add is-vertical for top-to-bottom):
+  Legend: <i></i> the blue main path (wires between .is-key boxes), <i class="is-wire"></i> other wires,
+  <i class="is-ext"></i> outside the code, <i class="is-mark"></i> pinned to code. Include only the styles the map uses.
+  Boxes outside the codebase (is-ext) have no data-src.
+Flow (a real sequence; add is-vertical for top-to-bottom). A step may carry one short sentence in .tm-node-desc:
   <div class="tm-flow"><div class="tm-step" data-src="src/cart.ts#checkout"><b>Checkout</b><span class="tm-node-sub">checkout()</span></div><div class="tm-step">…</div></div>
 Page index (on the blueprint):
   <div class="tm-links"><a class="tm-link" href="payments.html"><strong>Payments</strong>How money moves and what happens on failure</a></div>

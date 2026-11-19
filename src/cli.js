@@ -167,7 +167,7 @@ async function cmdOpen(root, args, opts = {}) {
     await call(state, 'POST', '/api/agent/navigate', { page, agent: detectAgent(), ...(opts.annotate !== undefined ? { annotate: opts.annotate } : {}) });
     browser = 'reused the open tab';
   } else if (process.env.TRUEMAP_NO_OPEN || opts.noOpen) {
-    browser = 'not opened (--no-open); give the user the url';
+    browser = 'not opened (--no-open or TRUEMAP_NO_OPEN); give the user the url';
   } else {
     openBrowser(url);
     browser = 'opened in the default browser (if no window appeared, give the user the url)';
@@ -349,7 +349,7 @@ function cmdOutline(root) {
   out('tree:   # folder, files, approx lines, biggest files');
   for (const d of o.dirs) out(`  - ${q(d.path)}  files=${d.files} lines=${d.lines}  ${d.top.join(', ')}`);
   if (o.entries.length) out(`likely_entry_points: ${o.entries.map(q).join(', ')}`);
-  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: one layer per role (entry points, modules, storage, external), 5-12 boxes, data-to wires along the main path, data-src on every box. Run \`${CMD} guide\` for the kit if you have not.`);
+  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: one layer per role (entry points, modules, storage, external), 5-12 boxes, data-to wires with labels, data-src on every box that stands for code. Run \`${CMD} guide\` for the kit if you have not.`);
 }
 
 function cmdGuide() {

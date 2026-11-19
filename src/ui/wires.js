@@ -64,6 +64,7 @@
       }
       for (const l of [...outOf.values(), ...into.values()]) l.sort((p, q) => p.b.cx - q.b.cx || p.a.cx - q.a.cx);
       const rects = [...map.querySelectorAll('.tm-node, .tm-step')].map((n) => ({ n, ...rel(n.getBoundingClientRect()) }));
+      const labelsBy = new Map(); const placed = [];
       for (const e of edges) {
           const { src, dst, a, b } = e;
           const key = src.classList.contains('is-key') && dst.classList.contains('is-key');
@@ -98,12 +99,23 @@
             // the label sits by the box the wire leaves, so it is clear which wire it names
             mid = { x: sx - 2, y: sy + 10 };
           } else if (b.b <= a.t + 2) { // above
-            const sx = a.cx; const sy = a.t; const tx = b.cx; const ty = b.b + 6;
-            const my = sy - Math.max(12, Math.min(22, (sy - ty) / 2));
-            const dir = tx > sx ? 1 : -1;
-            d = Math.abs(tx - sx) < 2 ? `M${sx},${sy} V${ty}` : `M${sx},${sy} V${my + r} Q${sx},${my} ${sx + dir * r},${my} H${tx - dir * r} Q${tx},${my} ${tx},${my - r} V${ty}`;
+            // Upward wires (a callback, a reply) leave from the top-right and arrive at the bottom-right third,
+            // away from the middle where downward wires run, and go round boxes in between like downward ones.
+            const sx = a.r - 26; const sy = a.t; const tx = b.r - 26; const ty = b.b + 6;
+            const blockers = rects.filter((o) => o.n !== src && o.n !== dst && o.t > b.b + 1 && o.b < a.t - 1);
+            let pts;
+            if (!blockers.length) {
+              const my = sy - Math.max(12, Math.min(22, (sy - ty) / 2));
+              pts = [[sx, sy], [sx, my], [tx, my], [tx, ty]];
+            } else {
+              const free = (x) => !blockers.some((o) => x > o.l - 7 && x < o.r + 7);
+              const cands = [sx, tx, ...blockers.flatMap((o) => [o.l - 13, o.r + 13])].filter(free);
+              const x = cands.sort((p, q) => Math.abs(p - sx) + Math.abs(p - tx) - Math.abs(q - sx) - Math.abs(q - tx))[0] ?? sx;
+              pts = [[sx, sy], [sx, sy - 12], [x, sy - 12], [x, b.b + 18], [tx, b.b + 18], [tx, ty]];
+            }
+            d = ortho(pts, r);
             head = `M${tx - 4.5},${ty + 1} L${tx + 4.5},${ty + 1} L${tx},${ty - 6} Z`;
-            mid = { x: tx, y: (my + ty) / 2 };
+            mid = { x: sx - 2, y: sy - 18 };
           } else if (between(map, src, dst, a, b)) { // same row, boxes in between: arc over the top of the row
             const sx = a.cx + (b.cx > a.cx ? 18 : -18); const tx = b.cx + (b.cx > a.cx ? -18 : 18);
             const top = Math.min(a.t, b.t) - 16 - (overTop.get(src) || 0); overTop.set(src, (overTop.get(src) || 0) + 6);
@@ -117,7 +129,7 @@
             const sy = a.cy; const ty = b.cy; const mx = (sx + tx) / 2;
             d = Math.abs(ty - sy) < 2 ? `M${sx},${sy} H${tx}` : `M${sx},${sy} H${mx} V${ty} H${tx}`;
             head = right ? `M${tx - 1},${ty - 4.5} L${tx - 1},${ty + 4.5} L${tx + 6},${ty} Z` : `M${tx + 1},${ty - 4.5} L${tx + 1},${ty + 4.5} L${tx - 6},${ty} Z`;
-            mid = { x: mx, y: ty - 6 };
+            mid = { x: mx, y: Math.min(a.t, b.t) - 10, middle: true }; // in the gap above the row, not between boxes
           }
           const path = document.createElementNS(SVGNS, 'path');
           path.setAttribute('d', d); path.setAttribute('class', `tm-wire${key ? ' is-key' : ''}${ext ? ' is-ext' : ''}`);
@@ -125,10 +137,21 @@
           arrow.setAttribute('d', head); arrow.setAttribute('class', `tm-wire-head${key ? ' is-key' : ''}`);
           svg.appendChild(path);
           svg.appendChild(arrow);
-          if (e.label) {
+          // One label per text per source box; different labels from the same box sit side by side.
+          const used = labelsBy.get(src) || labelsBy.set(src, { texts: [], x: null }).get(src);
+          if (e.label && !used.texts.includes(e.label)) {
             const t = document.createElementNS(SVGNS, 'text');
-            t.setAttribute('class', 'tm-wire-label'); t.setAttribute('x', mid.x + 8); t.setAttribute('y', mid.y + 4);
+            const w = e.label.length * 6.4; const y = mid.y + 4;
+            let x = mid.middle ? mid.x - w / 2 : Math.max(mid.x + 8, used.x ?? -Infinity);
+            // never on top of another label: slide right until clear
+            const hits = (lx) => placed.some((p) => lx < p.r + 8 && lx + w > p.l - 8 && Math.abs(p.y - y) < 12)
+              || rects.some((o) => lx < o.r && lx + w > o.l && y > o.t && y - 10 < o.b);
+            for (let i = 0; i < 40 && hits(x); i++) x += 12;
+            t.setAttribute('class', 'tm-wire-label'); t.setAttribute('x', x); t.setAttribute('y', y);
             t.textContent = e.label; svg.appendChild(t);
+            placed.push({ l: x, r: x + w, y });
+            if (!mid.middle) used.x = x + w + 12;
+            used.texts.push(e.label);
           }
       }
       // key wires on top, labels above every wire
