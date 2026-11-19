@@ -431,7 +431,8 @@ const content = createServer((req, res) => {
   const p = new URL(req.url, `http://127.0.0.1:${contentPort}`).pathname;
   try {
     if (p === '/__truemap/sdk.js') {
-      const js = readFileSync(join(UI_DIR, 'wires.js'), 'utf8') + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
+      const js = [join(KIT_DIR, 'vendor', 'dagre.min.js'), join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
+        + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);
     }

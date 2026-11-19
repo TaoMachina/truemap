@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>truemap</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Cpath d=%27M10 2.2 15.6 17.6 10 14.4 4.4 17.6z%27 fill=%27%23fff%27 stroke=%27%2317202b%27 stroke-width=%271.5%27 stroke-linejoin=%27round%27/%3E%3Cpath d=%27M10 2.2V14.4L4.4 17.6z%27 fill=%27%232453c4%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Cpath d=%27M10 2.2 15.6 17.6 10 14.4 4.4 17.6z%27 fill=%27%23fff%27 stroke=%27%2317202b%27 stroke-width=%271.5%27 stroke-linejoin=%27round%27/%3E%3Cpath d=%27M10 2.2V14.4L4.4 17.6z%27 fill=%27%23141413%27/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/__truemap/workspace.css">
 <script>window.TRUEMAP_TOKEN = "__TRUEMAP_TOKEN__"; window.TRUEMAP_CONTENT = "__TRUEMAP_CONTENT__";</script>
 </head>
@@ -31,12 +31,8 @@
         <div class="menu-foot"><button class="text-btn" id="recheck" type="button">Check pages against the code</button><span id="ver"></span></div>
       </div>
     </div>
-    <span class="path" id="pagePath"></span>
     <span class="spacer"></span>
     <button class="check" id="checkChip" type="button" hidden><i aria-hidden="true"></i><span id="checkText"></span></button>
-    <button class="annotate" id="annotate" type="button" role="switch" aria-checked="false" title="Annotate (A)">
-      <span>Annotate</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
-    </button>
     <button class="icon-btn" id="togglePanel" type="button" aria-pressed="true" aria-controls="panel" title="Hide conversation">
       <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2"/><path d="M12.25 3.75v12.5"/><path class="panel-fill" d="M12.25 4.5h4.25v11h-4.25z"/></svg>
       <span class="unread" id="unread" hidden></span>
@@ -56,7 +52,6 @@
 
   <main class="stage">
     <iframe id="frame" title="Page" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
-    <div class="peek" id="peek" role="dialog" aria-label="What this box is" hidden></div>
     <section class="empty" id="empty" hidden>
       <svg class="empty-mark" viewBox="0 0 20 20" aria-hidden="true"><path class="mark-line" d="M10 2.2 15.6 17.6 10 14.4 4.4 17.6z"/><path class="mark-fill" d="M10 2.2V14.4L4.4 17.6z"/></svg>
       <h1>No map of this project yet</h1>
@@ -66,6 +61,11 @@
   </main>
 
   <aside class="panel" id="panel" aria-label="Conversation">
+    <section class="inspector" id="inspector" aria-label="What this box is">
+      <div class="insp-head"><button class="insp-back" id="inspBack" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>Conversation</button></div>
+      <div class="insp-body" id="inspBody"></div>
+    </section>
+    <div class="convo">
     <div class="panel-head">
       <span class="agent-state" id="agent" data-state="offline"><i aria-hidden="true"></i><span id="agentLabel">No agent listening</span></span>
       <span class="elapsed" id="elapsed" hidden></span>
@@ -77,12 +77,10 @@
       <div class="about" id="about" hidden></div>
       <div class="box">
         <textarea id="input" rows="1" aria-label="Message"></textarea>
-        <div class="box-foot">
-          <span class="box-hint" id="boxHint">Enter to send</span>
-          <button class="send" id="send" type="submit">Send</button>
-        </div>
+        <button class="send" id="send" type="submit">Send</button>
       </div>
     </form>
+    </div>
   </aside>
 
 </div>

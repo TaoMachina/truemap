@@ -24,18 +24,18 @@
   const style = document.createElement('style');
   style.textContent = `
     [data-tm-mark="changed"] { outline: 2px dashed var(--tm-changed, #a2690a) !important; outline-offset: 3px; }
-    [data-tm-mark="broken"] { outline: 2px dashed var(--tm-broken, #b03a2e) !important; outline-offset: 3px; }
+    [data-tm-mark="broken"] { outline: 2px dashed var(--tm-broken, #c0392b) !important; outline-offset: 3px; }
     svg [data-tm-mark] { outline: none !important; }
     html[data-tm-annotate] body { cursor: default; }
     html[data-tm-annotate] [data-tm-hover] { cursor: pointer; }
     html[data-tm-annotate] a, html[data-tm-annotate] label { cursor: pointer; }
-    @keyframes tm-flash { 0%,100% { outline-color: transparent } 35% { outline-color: var(--tm-route, #2453c4) } }
-    [data-tm-flash] { outline: 2px solid var(--tm-route, #2453c4) !important; outline-offset: 4px; animation: tm-flash 1.1s ease 2; }
+    @keyframes tm-flash { 0%,100% { outline-color: transparent } 35% { outline-color: var(--tm-route, #141413) } }
+    [data-tm-flash] { outline: 2px solid var(--tm-route, #141413) !important; outline-offset: 4px; animation: tm-flash 1.1s ease 2; }
     @media (prefers-reduced-motion: reduce) { [data-tm-flash] { animation: none; } }
-    ::highlight(tm-note) { background-color: color-mix(in oklab, var(--tm-route, #2453c4) 20%, transparent); }
+    ::highlight(tm-note) { background-color: color-mix(in oklab, var(--tm-route, #141413) 20%, transparent); }
     /* Every box can be opened: click shows its code and connections. */
     .tm-node, .tm-step, [data-src] { cursor: pointer; }
-    .tm-node:focus-visible, .tm-step:focus-visible { outline: 2px solid var(--tm-route, #2453c4); outline-offset: 3px; }
+    .tm-node:focus-visible, .tm-step:focus-visible { outline: 2px solid var(--tm-route, #141413); outline-offset: 3px; }
     /* The agent points at the map: everything else steps back. */
     html[data-tm-focusing] .tm-node:not([data-tm-focus]), html[data-tm-focusing] .tm-step:not([data-tm-focus]) { opacity: .34; }
     html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus) { opacity: .16; }
@@ -45,7 +45,7 @@
   `;
   (document.head || document.documentElement).appendChild(style);
 
-  const drawWires = () => { window.truemapWires?.draw(); markWires(); };
+  const drawWires = () => { window.truemapDiagram?.draw(); window.truemapWires?.draw(); markWires(); };
   let wireTimer = null;
   const scheduleWires = () => { clearTimeout(wireTimer); wireTimer = setTimeout(() => { drawWires(); placePins(); }, 40); };
 
@@ -73,10 +73,13 @@
       w.classList.toggle('is-focus', ids.has(from) && ids.has(to));
       w.classList.toggle('is-hot', !!hot && (from === hot || to === hot));
     }
+    for (const w of document.querySelectorAll('.tm-dg-edge, .tm-dg-head, .tm-dg-label')) {
+      w.classList.toggle('is-focus', ids.has(w.dataset.from) && ids.has(w.dataset.to));
+    }
     // labels are placed afresh for what is now visible
     window.truemapWires?.labels?.({ hot: hot || null, focus: [...ids] });
   }
-  function applyFocus(items, note, who) {
+  function applyFocus(items, note, who, scroll = 'center') {
     clearFocus(false);
     for (const btn of document.querySelectorAll('[data-tm-flow]')) btn.setAttribute('aria-pressed', 'false');
     focusSet = findItems(items);
@@ -84,7 +87,7 @@
     if (focusSet.length) {
       document.documentElement.setAttribute('data-tm-focusing', '');
       for (const el of focusSet) el.setAttribute('data-tm-focus', '');
-      focusSet[0].scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      if (scroll) focusSet[0].scrollIntoView({ block: scroll, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     } else if (focusNote) window.scrollTo({ top: 0 });
     // the page scrolls smoothly to the group: place the note again once it has settled
     markWires(); paintRings(); setTimeout(paintRings, 350); setTimeout(paintRings, 900);
@@ -101,7 +104,7 @@
   const boxSel = '.tm-node, .tm-step, .tm-card[data-src], [data-src]';
   function boxInfo(el) {
     const txt = (sel) => clean(el.querySelector(sel)?.textContent, 300);
-    const nameOf = (n) => clean(n.querySelector?.('.tm-node-title,b,strong,h3,h4')?.textContent || n.textContent, 60);
+    const nameOf = (n) => clean(n.getAttribute('data-name') || n.querySelector?.('.tm-node-title,b,strong,h3,h4')?.textContent || n.textContent, 60);
     // Same label rules as the map: underscores are spaces, \_ is a real underscore.
     const viaOf = (s) => s.replace(/\\_/g, '\u0001').replace(/_/g, ' ').replace(/\u0001/g, '_');
     const to = [];
@@ -117,13 +120,23 @@
       }
     }
     const href = el.matches('a[href]') ? el.getAttribute('href') : (el.querySelector('a[href$=".html"], a[href*=".html#"]')?.getAttribute('href') || '');
+    const det = el.querySelector(':scope > .tm-detail');
+    const detail = det ? [...det.querySelectorAll(':scope > p:not(.tm-why), :scope > ul > li, :scope > ol > li')].slice(0, 14).map((n) => ({ t: n.tagName === 'LI' ? 'li' : 'p', text: clean(n.textContent, 500) })) : [];
     return {
-      id: el.id || '', label: labelOf(el), sub: txt('.tm-node-sub'), desc: txt('.tm-node-desc') || (el.matches('.tm-node,.tm-step') ? '' : clean(el.innerText, 300)),
+      id: el.id || '', label: clean(el.getAttribute('data-name'), 60) || labelOf(el), tag: clean(el.getAttribute('data-tag'), 60), plan: el.getAttribute('data-plan') || '', detail,
+      sub: txt('.tm-node-sub'), desc: det ? '' : txt('.tm-node-desc') || (el.matches('.tm-node,.tm-step') ? '' : clean(el.innerText, 300)),
       src: el.closest('[data-src]')?.getAttribute('data-src') || '', href: /^[\w./-]+\.html?(#[\w-]*)?$/i.test(href) ? href : '',
-      ext: el.classList.contains('is-ext'), to, from, mark: el.getAttribute('data-tm-mark') || '', why: clean(el.getAttribute('data-why'), 600),
+      ext: el.classList.contains('is-ext'), to, from, mark: el.getAttribute('data-tm-mark') || '', why: clean(el.getAttribute('data-why') || det?.querySelector('.tm-why')?.textContent, 600),
     };
   }
+  let selected = null;
+  function select(el) {
+    if (selected === el) return;
+    selected?.removeAttribute('data-tm-selected');
+    selected = el || null; selected?.setAttribute('data-tm-selected', '');
+  }
   function peek(el) {
+    select(el);
     const r = el.getBoundingClientRect();
     post({ type: 'peek', page: pagePath(), box: boxInfo(el), rect: { l: r.left, t: r.top, r: r.right, b: r.bottom }, sy: scrollY });
   }
@@ -205,7 +218,7 @@
       rings.appendChild(d);
     };
     for (const n of notes.values()) if (n.el && n.el !== card?.target) ring(n.el, 'noted');
-    for (const el of focusSet) ring(el, 'agent');
+    for (const el of focusSet) if (!el.closest('.tm-diagram')) ring(el, 'agent'); // diagram boxes get the highlighter instead
     if (focusNote) {
       mount();
       const b = document.createElement('div'); b.className = 'bubble'; b.setAttribute('role', 'note');
@@ -246,46 +259,46 @@
   shadow.innerHTML = `<style>
     :host { all: initial; }
     * { box-sizing: border-box; }
-    .card { position: absolute; width: 340px; background: #fff; color: #17202b; border: 1px solid #c2c8c1; border-radius: 10px;
-      box-shadow: 0 12px 32px -12px rgba(23,32,43,.28); font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; padding: 12px; }
+    .card { position: absolute; width: 340px; background: #fff; color: #141413; border: 1px solid #d2d2cb; border-radius: 10px;
+      box-shadow: 0 12px 32px -12px rgba(20,20,19,.28); font: 14px/1.45 "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; padding: 12px; }
     .what { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0 2px 8px; }
     .what b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .what code { font: 11.5px "IBM Plex Mono", ui-monospace, Consolas, monospace; color: #8a939e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-    textarea { width: 100%; min-height: 72px; max-height: 220px; resize: none; font: inherit; color: inherit; background: #f6f7f4; border: 1px solid #dde1db; border-radius: 7px; padding: 9px 10px; outline: none; }
-    textarea:focus { border-color: #2453c4; background: #fff; }
+    .what code { font: 11.5px "Commit Mono", ui-monospace, Consolas, monospace; color: #9a9a92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+    textarea { width: 100%; min-height: 72px; max-height: 220px; resize: none; font: inherit; color: inherit; background: #fafaf9; border: 1px solid #e6e6e1; border-radius: 7px; padding: 9px 10px; outline: none; }
+    textarea:focus { border-color: #141413; background: #fff; }
     .suggest { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 2px 0; }
-    .suggest button { all: unset; cursor: pointer; font-size: 12.5px; color: #2453c4; }
+    .suggest button { all: unset; cursor: pointer; font-size: 12.5px; color: #141413; }
     .suggest button:hover { text-decoration: underline; text-underline-offset: 3px; }
     .foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-    .hint { flex: 1; font-size: 11.5px; color: #8a939e; line-height: 1.3; }
-    .btn { all: unset; cursor: pointer; font: 500 13px/1 "IBM Plex Sans", system-ui, sans-serif; padding: 8px 11px; border-radius: 6px; color: #5b6573; }
-    .btn:hover { background: #eef0ec; color: #17202b; }
-    .btn.primary { background: #2453c4; color: #fff; }
-    .btn.primary:hover { background: #1b3f96; }
-    .btn.danger { color: #b03a2e; }
-    .btn:focus-visible { outline: 2px solid #2453c4; outline-offset: 2px; }
-    .ring { position: absolute; border: 1.5px solid #2453c4; border-radius: 8px; pointer-events: none; }
+    .hint { flex: 1; font-size: 11.5px; color: #9a9a92; line-height: 1.3; }
+    .btn { all: unset; cursor: pointer; font: 500 13px/1 "Instrument Sans", system-ui, sans-serif; padding: 8px 11px; border-radius: 6px; color: #6c6c65; }
+    .btn:hover { background: #f2f2ef; color: #141413; }
+    .btn.primary { background: #141413; color: #fff; }
+    .btn.primary:hover { background: #3a3a36; }
+    .btn.danger { color: #c0392b; }
+    .btn:focus-visible { outline: 2px solid #141413; outline-offset: 2px; }
+    .ring { position: absolute; border: 1.5px solid #141413; border-radius: 8px; pointer-events: none; }
     .ring.active { border-width: 2px; }
-    .ring.agent { border: 2px solid #2453c4; border-radius: 9px; }
-    .bubble { position: absolute; width: 300px; background: #17202b; color: #f6f7f4; border-radius: 10px; padding: 10px 30px 11px 12px; box-shadow: 0 14px 34px -14px rgba(23,32,43,.5); font: 13.5px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: auto; }
-    .bubble-who { font-size: 11.5px; font-weight: 600; color: #9fb7ff; margin-bottom: 3px; }
+    .ring.agent { border: 2px solid #141413; border-radius: 9px; }
+    .bubble { position: absolute; width: 300px; background: #141413; color: #fafaf9; border-radius: 10px; padding: 10px 30px 11px 12px; box-shadow: 0 14px 34px -14px rgba(20,20,19,.5); font: 13.5px/1.5 "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: auto; }
+    .bubble-who { font-size: 11.5px; font-weight: 600; color: #ffe27a; margin-bottom: 3px; }
     .bubble-text { white-space: pre-wrap; }
-    .bubble-x { all: unset; position: absolute; top: 6px; right: 8px; cursor: pointer; color: #9ba4af; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+    .bubble-x { all: unset; position: absolute; top: 6px; right: 8px; cursor: pointer; color: #a0a098; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
     .bubble-x:hover { color: #fff; background: rgba(255,255,255,.1); }
-    .ring.noted { border-color: rgba(36, 83, 196, .5); }
-    @media (prefers-color-scheme: dark) { .ring { border-color: #7ea3ff; } .ring.noted { border-color: rgba(126, 163, 255, .55); } }
-    .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #2453c4; color: #fff;
-      font: 600 11px/20px "IBM Plex Mono", ui-monospace, Consolas, monospace; text-align: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(23,32,43,.25); }
-    .select-btn { position: absolute; all: unset; position: absolute; cursor: pointer; background: #17202b; color: #fff; font: 500 12.5px/1 "IBM Plex Sans", system-ui, sans-serif; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px -8px rgba(23,32,43,.5); }
-    .select-btn:hover { background: #2453c4; }
+    .ring.noted { border-color: rgba(20, 20, 19, .35); }
+    @media (prefers-color-scheme: dark) { .ring { border-color: #f2f2ee; } .ring.noted { border-color: rgba(242, 242, 238, .45); } }
+    .pin { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #141413; color: #fff;
+      font: 600 11px/20px "Commit Mono", ui-monospace, Consolas, monospace; text-align: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(20,20,19,.25); }
+    .select-btn { position: absolute; all: unset; position: absolute; cursor: pointer; background: #141413; color: #fff; font: 500 12.5px/1 "Instrument Sans", system-ui, sans-serif; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px -8px rgba(20,20,19,.5); }
+    .select-btn:hover { background: #141413; }
     @media (prefers-color-scheme: dark) {
-      .card { background: #191d23; color: #edf0f3; border-color: #3d4651; box-shadow: 0 12px 32px -12px rgba(0,0,0,.6); }
-      textarea { background: #121519; border-color: #2a3039; }
-      textarea:focus { background: #121519; border-color: #7ea3ff; }
-      .suggest button { color: #7ea3ff; }
-      .btn { color: #9ba4af; } .btn:hover { background: #1f242b; color: #edf0f3; }
-      .btn.primary { background: #2453c4; color: #fff; }
-      .pin { border-color: #121519; }
+      .card { background: #1b1b1a; color: #f2f2ee; border-color: #44443f; box-shadow: 0 12px 32px -12px rgba(0,0,0,.6); }
+      textarea { background: #161615; border-color: #2f2f2c; }
+      textarea:focus { background: #161615; border-color: #f2f2ee; }
+      .suggest button { color: #f2f2ee; }
+      .btn { color: #a0a098; } .btn:hover { background: #252523; color: #f2f2ee; }
+      .btn.primary { background: #f2f2ee; color: #141413; }
+      .pin { border-color: #161615; }
     }
   </style><div id="rings"></div><div id="pins"></div><div id="slot"></div>`;
   const pinsEl = shadow.getElementById('pins');
@@ -455,11 +468,16 @@
       return;
     }
     if (!annotating) {
-      // Reading mode: a box opens its peek (code, connections, page). Real links and controls inside work as usual.
+      // A box opens the inspector (what it is, its code, its connections). Real links and controls inside work as usual.
       const box = t.closest(boxSel);
-      const inner = t.closest('a[href],button,input,select,textarea,label,summary,.tm-ask');
-      if (!box || (inner && inner !== box && box.contains(inner))) return;
+      const inner = t.closest('a[href],button,input,select,textarea,label,summary,.tm-ask,[role=tab]');
       if (String(getSelection?.() || '').trim().length > 1) return;
+      if (!box) {
+        // Empty space: back to the plain map.
+        if (!inner) { if (focusSet.length || focusNote) { clearFocus(); post({ type: 'focus-cleared' }); } if (selected) { select(null); post({ type: 'deselect' }); } }
+        return;
+      }
+      if (inner && inner !== box && box.contains(inner)) return;
       e.preventDefault(); e.stopPropagation();
       peek(box);
       return;
@@ -484,20 +502,15 @@
   });
   document.addEventListener('selectionchange', () => { if (!String(getSelection() || '').trim()) hideSelectBtn(); });
 
-  // The workspace's own popovers (the peek) close when the user presses anywhere in the page or hits Escape.
-  document.addEventListener('mousedown', () => post({ type: 'press' }), true);
+  // Escape anywhere in the page closes the inspector and the workspace's menus.
   document.addEventListener('mouseup', (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); post({ type: 'nav', dir: e.button === 3 ? 'back' : 'forward' }); } }, true);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') post({ type: 'press' });
+    if (e.key === 'Escape') { select(null); post({ type: 'press' }); }
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); post({ type: 'nav', dir: e.key === 'ArrowLeft' ? 'back' : 'forward' }); return; }
     const typing = e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]');
     if (e.key === 'Escape' && card) { closeCard(); return; }
     if (e.key === 'Escape' && (focusSet.length || focusNote)) { clearFocus(); post({ type: 'focus-cleared' }); return; }
     if ((e.key === 'Enter' || e.key === ' ') && !annotating && e.target instanceof Element && e.target.matches?.('.tm-node, .tm-step') && !typing) { e.preventDefault(); peek(e.target); return; }
-    if (e.key === 'Escape' && annotating && !typing && !e.defaultPrevented && !e.composedPath().includes(host)) { post({ type: 'annotate-off' }); return; }
-    if (!typing && !e.composedPath().includes(host) && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a') {
-      post({ type: 'toggle-annotate' });
-    }
   });
 
   // ---------- decisions: <form class="tm-ask" data-tm-ask="question"> ----------
@@ -558,7 +571,12 @@
     } else if (d.type === 'scroll') {
       window.scrollTo(0, d.y || 0);
     } else if (d.type === 'focus') {
-      applyFocus(d.items, d.note, d.who);
+      applyFocus(d.items, d.note, d.who, d.scroll === undefined ? 'center' : d.scroll);
+    } else if (d.type === 'select') {
+      select(d.id ? document.getElementById(d.id) : null);
+    } else if (d.type === 'open-box') {
+      const el = document.getElementById(d.id);
+      if (el) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); peek(el); }
     } else if (d.type === 'clear-focus') {
       clearFocus();
     } else if (d.type === 'highlight') {
@@ -576,6 +594,7 @@
   // Rings follow their element when anything scrolls, including a map scrolling sideways.
   document.addEventListener('scroll', () => { if (rings && (hovered || card || notes.size)) { placePins(); } }, { capture: true, passive: true });
 
+  window.truemapDiagram?.interact();
   const ready = () => {
     drawWires();
     // Boxes are reachable from the keyboard too.

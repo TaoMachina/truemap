@@ -20,7 +20,7 @@
   const state = {
     pages: [], check: { results: [] }, page: null, history: [], pending: new Set(), scroll: {},
     notes: [], agent: { state: 'offline', name: '', since: 0 }, progress: '', cmd: 'npx -y truemap-cli',
-    annotate: false, annotateTouched: false, conn: 'live', frameFocusAt: 0,
+    conn: 'live', frameFocusAt: 0,
   };
 
   const store = {
@@ -97,16 +97,6 @@
   setPanel(narrow() ? false : store.get('truemap.panel') !== 'closed', false);
   $('togglePanel').onclick = () => { const open = !panelOpen(); setPanel(open); if (open) input.focus(); };
 
-  // ---------- annotate ----------
-  function setAnnotate(on, { touched = false } = {}) {
-    state.annotate = !!on;
-    if (touched) { state.annotateTouched = true; store.set('truemap.annotate', on ? 'on' : 'off'); }
-    $('annotate').setAttribute('aria-checked', String(state.annotate));
-    toFrame({ type: 'annotate', on: state.annotate });
-  }
-  state.annotate = store.get('truemap.annotate') === 'on';
-  $('annotate').setAttribute('aria-checked', String(state.annotate));
-  $('annotate').onclick = () => setAnnotate(!state.annotate, { touched: true });
 
   // ---------- page switcher ----------
   const resultFor = (page) => state.check.results?.find((r) => r.page === page);
@@ -140,14 +130,11 @@
     const typing = e.target.closest?.('input,textarea,select,[contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); menu.hidden ? openMenu() : closeMenu(); }
     else if (e.key === 'Escape' && !menu.hidden) { closeMenu(); $('pageBtn').focus(); }
-    else if (e.key === 'Escape' && !typing && state.annotate && $('moreMenu').hidden) setAnnotate(false, { touched: true });
     else if (!menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       const items = [...menu.querySelectorAll('.page-item')]; if (!items.length) return;
       e.preventDefault();
       const i = items.indexOf(document.activeElement);
       items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
-    } else if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a' && menu.hidden) {
-      setAnnotate(!state.annotate, { touched: true });
     }
   });
   $('recheck').onclick = () => { api('/api/check'); closeMenu(); };
@@ -195,7 +182,6 @@
     const showHome = !!home && !!state.page && state.page !== 'index.html';
     $('crumbHome').hidden = !showHome; $('crumbSep').hidden = !showHome;
     if (showHome) { $('crumbHome').textContent = titleOf(home); $('crumbHome').title = `Back to ${titleOf(home)}`; }
-    $('pagePath').textContent = state.page ? `.truemap/${state.page}` : '';
     document.title = p ? `${titleOf(p)} – truemap` : 'truemap';
     const r = resultFor(state.page); const st = stateOf(r);
     const chip = $('checkChip');
@@ -204,7 +190,9 @@
     const { changed, broken } = r.counts;
     chip.dataset.state = st || 'ok';
     $('checkText').textContent = broken ? S.broken(broken) + (changed ? `, ${S.changed(changed)}` : '') : changed ? S.changed(changed) : S.ok;
-    chip.title = st ? 'Ask the agent to update this page' : `${r.counts.ok} boxes checked against the code`;
+    chip.title = st ? 'Ask the agent to update this page' : `${S.ok}: ${r.counts.ok} boxes checked`;
+    if (!st) $('checkText').textContent = '';
+    chip.setAttribute('aria-label', st ? $('checkText').textContent : S.ok);
   }
   function sendMarks() {
     const r = resultFor(state.page);
@@ -233,7 +221,7 @@
   }
   const reloadFrame = () => { if (state.page) frame.src = pageUrl(state.page, true); };
 
-  // ---------- notes (comments collected in annotate mode) ----------
+  // ---------- notes: comments on boxes or text, sent together ----------
   const notesForPage = () => state.notes.filter((n) => n.page === state.page);
   function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector, rect }) => ({ id, kind, label, src, text, selector, rect })) }); }
   // Unsent comments survive a reload of this tab.
@@ -257,7 +245,7 @@
 
   // ---------- conversation ----------
   function whoLine(role, at, name) {
-    const el = document.createElement('div'); el.className = 'who';
+    const el = document.createElement('div'); el.className = role === 'agent' ? 'who' : 'who you';
     el.innerHTML = `<b>${esc(role === 'agent' ? (AGENTS[name] || name || agentName()) : S.you)}</b><span>${timeOf(at)}</span>`;
     return el;
   }
@@ -265,10 +253,7 @@
   function renderAll() {
     msgsEl.innerHTML = ''; lastRole = null;
     if (!state.history.length) {
-      msgsEl.innerHTML = `<div class="intro"><h2>Ask about anything on the page</h2><ol>
-        <li>Turn on <b>Annotate</b> (or press <kbd>A</kbd>), then click a box or select text to comment on it.</li>
-        <li>Add as many comments as you like. They go out together, each with the code it points to.</li>
-        <li>Or just type a question below.</li></ol></div>`;
+      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is and comment on it; comments go out together, each with the code it points to.</p></div>`;
     }
     for (const e of state.history) appendEntry(e, false);
     renderWorking();
@@ -281,6 +266,7 @@
     if (e.role === 'agent') {
       el.className = 'msg agent';
       el.innerHTML = e.ask && e.text.trim() === e.ask.question.trim() ? '' : md(e.text);
+      for (const li of el.querySelectorAll('li')) if (li.querySelector('a.ref')) li.classList.add('has-ref');
       if (e.focus?.length) {
         el.insertAdjacentHTML('beforeend', `<p><a href="#" class="ref" data-focus="${esc(e.focus.join(','))}">Show on the map</a></p>`);
         if (live) pointAt(e.focus, '', AGENTS[e.agent] || agentName());
@@ -310,9 +296,23 @@
     if (scroll) scrollChat();
   }
   const scrollChat = () => { msgsEl.scrollTop = msgsEl.scrollHeight; };
+  let hoverLit = null;
+  msgsEl.addEventListener('mouseover', (e) => {
+    const host = e.target.closest('li.has-ref, a.ref');
+    const ids = host ? [...new Set([...(host.matches('a.ref') ? [host] : host.querySelectorAll('a.ref'))].flatMap((r) => r.dataset.focus.split(',')).filter(Boolean))] : null;
+    const key = ids ? ids.join(',') : null;
+    if (key === hoverLit || (!key && (hoverLit === '__pinned' || !hoverLit))) return;
+    msgsEl.querySelector('li.lit')?.classList.remove('lit');
+    hoverLit = key;
+    if (ids) { if (host.matches('li')) host.classList.add('lit'); toFrame({ type: 'focus', items: ids, note: '', who: '', scroll: 'nearest' }); }
+    else toFrame({ type: 'clear-focus' });
+  });
+  msgsEl.addEventListener('mouseleave', () => { if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); } });
   msgsEl.addEventListener('click', (e) => {
     const ref = e.target.closest('[data-focus]');
-    if (ref) { e.preventDefault(); pointAt(ref.dataset.focus.split(',').filter(Boolean), '', ''); return; }
+    if (ref) { e.preventDefault(); hoverLit = '__pinned'; pointAt(ref.dataset.focus.split(',').filter(Boolean), '', ''); return; }
+    const step = e.target.closest('li.has-ref');
+    if (step) { hoverLit = '__pinned'; pointAt([...step.querySelectorAll('a.ref')].flatMap((r) => r.dataset.focus.split(',')).filter(Boolean), '', ''); return; }
     const opt = e.target.closest('.ask-opt');
     if (opt && !opt.disabled) { e.preventDefault(); answerAsk(opt); return; }
     const a = e.target.closest('a[data-page]');
@@ -345,9 +345,8 @@
     send('', { kind: 'answer', noNotes: true, context: [], answer: { question: box.dataset.q, choice: btn.querySelector('b').textContent, note: '' } });
   }
 
-  // ---------- peek: what a box is, in the code ----------
-  const peekEl = $('peek');
-  const closePeek = () => { peekEl.hidden = true; peekEl.innerHTML = ''; peekAnchor = null; };
+  // ---------- inspector: what a box is. It takes the panel's place until you go back. ----------
+  const panelEl = $('panel'); const inspBody = $('inspBody');
   const pageHref = (href) => {
     const [file, id] = href.split('#');
     const base = state.page && state.page.includes('/') ? state.page.replace(/[^/]+$/, '') : '';
@@ -355,60 +354,89 @@
     for (const p of parts) { if (p === '..') outp.pop(); else if (p && p !== '.') outp.push(p); }
     return { page: outp.join('/'), id };
   };
-  let peekSeq = 0; let peekAnchor = null;
-  async function openPeek(box, rect, sy = 0) {
-    const seq = ++peekSeq;
-    const stage = document.querySelector('.stage').getBoundingClientRect();
-    const rel = (list, label) => (list.length ? `<div class="peek-rel"><span>${label}</span>${list.map((c) => `<button type="button" class="ref" data-focus="${esc(c.id)}">${esc(c.label)}${c.via ? ` <i>${esc(c.via)}</i>` : ''}</button>`).join('')}</div>` : '');
-    const page = box.href ? pageHref(box.href) : null;
-    const pageTitle = page && state.pages.find((p) => p.page === page.page);
-    peekEl.innerHTML = `
-      <div class="peek-head"><div class="peek-title"><b>${esc(box.label)}</b>${box.src ? `<code>${esc(box.src)}</code>` : (box.ext ? '<span>Outside this code</span>' : '')}</div><button class="peek-x" type="button" aria-label="Close">×</button></div>
-      ${box.mark ? `<div class="peek-mark ${esc(box.mark)}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
-      ${box.desc ? `<p class="peek-desc">${esc(box.desc)}</p>` : ''}
-      ${box.why ? `<p class="peek-why"><b>Why it is built this way.</b> ${esc(box.why)}</p>` : ''}
-      ${box.src ? '<div class="peek-code"><div class="peek-loading">Reading the code…</div></div>' : ''}
-      ${rel(box.to, 'Calls')}${rel(box.from, 'Called by')}
-      <div class="peek-actions">
-        ${pageTitle ? `<button type="button" class="primary" data-act="open">Open ${esc(titleOf(pageTitle))}</button>` : ''}
-        <button type="button" data-act="ask">Ask about this</button>
-        ${box.id && (box.to.length || box.from.length) ? '<button type="button" data-act="links">Show its connections</button>' : ''}
-      </div>`;
-    peekEl.hidden = false;
-    // place it beside the box, inside the stage
-    const W = Math.min(400, stage.width - 24); peekEl.style.width = `${W}px`;
-    const H = () => peekEl.offsetHeight;
-    let left = rect.r + 12; let top = rect.t;
-    if (left + W > stage.width - 12) left = rect.l - W - 12;
-    if (left < 12) { left = Math.max(12, Math.min(rect.l, stage.width - W - 12)); top = rect.b + 10; }
-    const place = (dy = 0) => { peekEl.style.left = `${left}px`; peekEl.style.top = `${Math.max(12, Math.min(top - dy, stage.height - H() - 12))}px`; };
-    place();
-    // When the page scrolls, the panel moves with its box (and closes once the box has left the view).
-    peekAnchor = { sy, rect, place, stageH: stage.height };
-    peekEl.querySelector('.peek-x').onclick = closePeek;
-    peekEl.onclick = (ev) => {
-      const act = ev.target.closest('[data-act]')?.dataset.act;
-      const ref = ev.target.closest('[data-focus]');
-      if (ref) { pointAt([box.id, ref.dataset.focus].filter(Boolean), '', ''); return; }
-      if (act === 'open') { closePeek(); if (page.id) state.pendingFocus = { type: 'focus', items: [page.id] }; go(page.page); }
-      else if (act === 'ask') { state.about = { kind: 'element', label: box.label, src: box.src, excerpt: box.desc }; renderAbout(); closePeek(); setPanel(true); input.focus(); }
-      else if (act === 'links') { closePeek(); pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', ''); }
-    };
-    if (box.src) {
-      let sn = {};
-      try { sn = await fetch(`/api/snippet?src=${encodeURIComponent(box.src)}&t=${encodeURIComponent(TOKEN)}`).then((r) => r.json()); } catch { sn = { error: 'could not read the code' }; }
-      const code = peekEl.querySelector('.peek-code'); if (seq !== peekSeq || !code || peekEl.hidden) return; // a newer peek won
-      if (sn.kind === 'folder') code.innerHTML = `<div class="peek-loading">A folder: ${esc(sn.path)}</div>`;
-      else if (sn.error) code.innerHTML = `<div class="peek-loading">${esc(sn.error)}</div>`;
-      else if (sn.missing) code.innerHTML = `<div class="peek-loading broken">“${esc(sn.name)}” no longer appears in ${esc(sn.path)}. The code moved on; ask the agent to update this box.</div>`;
-      else {
-        code.innerHTML = `<div class="peek-codehead">${esc(sn.path)}, line ${sn.line}${sn.lastChange ? `, changed ${esc(sn.lastChange)}` : ''}</div><pre>${sn.lines.map((l, i) => `<span class="${sn.start + i === sn.line ? 'hit' : ''}"><i>${sn.start + i}</i>${esc(l) || ' '}</span>`).join('')}</pre>`;
-        place();
-      }
+  const PLAN = { new: 'New in this plan', change: 'Changes in this plan', remove: 'Removed in this plan' };
+  let inspSeq = 0; let panelWasClosed = false;
+  const inspecting = () => panelEl.classList.contains('inspecting');
+  function closeInspector() {
+    if (!inspecting()) return;
+    panelEl.classList.remove('inspecting'); inspBody.innerHTML = ''; inspSeq++;
+    toFrame({ type: 'select', id: null });
+    if (panelWasClosed) { panelWasClosed = false; setPanel(false, false); }
+  }
+  $('inspBack').onclick = () => closeInspector();
+  const absPath = (rel) => { const sep = String(state.root).includes('\\') ? '\\' : '/'; return [state.root, ...rel.split('/')].join(sep); };
+  async function loadCode(box, holder, seq) {
+    let sn = {};
+    try { sn = await fetch(`/api/snippet?src=${encodeURIComponent(box.src)}&t=${encodeURIComponent(TOKEN)}`).then((r) => r.json()); } catch { sn = { error: 'Could not read the code' }; }
+    if (seq !== inspSeq) return; // another box was opened meanwhile
+    if (sn.kind === 'folder') holder.innerHTML = `<div class="code-note">A folder: ${esc(sn.path)}</div>`;
+    else if (sn.error) holder.innerHTML = `<div class="code-note">${esc(sn.error)}</div>`;
+    else if (sn.missing) holder.innerHTML = `<div class="code-note broken">“${esc(sn.name)}” no longer appears in ${esc(sn.path)}. The code moved on; ask the agent to update this box.</div>`;
+    else {
+      holder.innerHTML = `<div class="code-meta">Line ${sn.line}${sn.lastChange ? `, changed ${esc(sn.lastChange)}` : ''}</div><pre>${sn.lines.map((l, i) => `<span class="${sn.start + i === sn.line ? 'hit' : ''}"><i>${sn.start + i}</i>${esc(l) || ' '}</span>`).join('')}</pre>`;
+      const ed = inspBody.querySelector('.open-ed');
+      if (ed) { ed.href = `vscode://file/${absPath(sn.path).replace(/\\/g, '/')}:${sn.line}`; ed.hidden = false; }
+      const hit = holder.querySelector('.hit'); const pre = holder.querySelector('pre');
+      if (hit && pre) pre.scrollTop = Math.max(0, hit.offsetTop - pre.offsetTop - 44);
+      holder.closest('.insp-code')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }
-  document.addEventListener('mousedown', (e) => { if (!peekEl.hidden && !e.target.closest('#peek')) closePeek(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !peekEl.hidden) { closePeek(); e.stopPropagation(); } }, true);
+  function openInspector(box) {
+    const seq = ++inspSeq;
+    if (!panelOpen()) { panelWasClosed = true; setPanel(true, false); }
+    panelEl.classList.add('inspecting');
+    toFrame({ type: 'select', id: box.id || null, src: box.src || '' });
+    const chips = (list) => list.map((c) => `<button type="button" class="chip" data-box="${esc(c.id)}">${esc(c.label)}${c.via ? `<i>${esc(c.via)}</i>` : ''}</button>`).join('');
+    const page = box.href ? pageHref(box.href) : null;
+    const pageT = page && state.pages.find((p) => p.page === page.page);
+    let detail = ''; let list = false;
+    for (const d of box.detail || []) {
+      if (d.t === 'li' && !list) { detail += '<ul>'; list = true; }
+      if (d.t !== 'li' && list) { detail += '</ul>'; list = false; }
+      detail += d.t === 'li' ? `<li>${esc(d.text)}</li>` : `<p>${esc(d.text)}</p>`;
+    }
+    if (list) detail += '</ul>';
+    if (!detail && box.desc) detail = `<p>${esc(box.desc)}</p>`;
+    const rel = box.to.length || box.from.length;
+    inspBody.innerHTML = `
+      <div class="insp-name"><h2>${esc(box.label)}</h2>${box.tag ? `<code>${esc(box.tag)}</code>` : ''}</div>
+      ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>` : ''}
+      ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
+      <form class="insp-comment"><textarea rows="1" aria-label="Comment"></textarea><button type="submit" disabled>Add</button></form>
+      ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
+      ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
+      ${rel ? `<div class="insp-rel">${box.to.length ? `<span>Calls</span><div>${chips(box.to)}</div>` : ''}${box.from.length ? `<span>Called by</span><div>${chips(box.from)}</div>` : ''}</div>` : ''}
+      ${box.src ? `<details class="insp-code"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>Code <code>${esc(box.src.split('#')[0])}</code><a class="open-ed" hidden>Open in VS Code</a></summary><div class="code-box"><div class="code-note">Reading the code…</div></div></details>`
+        : box.ext ? '<div class="insp-why">Outside this code base.</div>' : ''}
+      ${pageT || rel ? `<div class="insp-actions">${pageT ? `<button type="button" data-act="open">Open ${esc(titleOf(pageT))}</button>` : ''}${rel ? '<button type="button" data-act="links">Light up its connections</button>' : ''}</div>` : ''}`;
+    inspBody.scrollTop = 0;
+    const form = inspBody.querySelector('.insp-comment'); const ta = form.querySelector('textarea'); const add = form.querySelector('button');
+    ta.placeholder = `Comment on ${box.label}, or ask about it`;
+    ta.addEventListener('input', () => { add.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); form.requestSubmit(); } });
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const text = ta.value.trim(); if (!text) return;
+      state.notes.push({ id: `n${Date.now().toString(36)}`, page: state.page, kind: 'element', label: box.label, src: box.src || '', excerpt: (box.detail?.[0]?.text || box.desc || '').slice(0, 400), text, selector: box.id ? `#${CSS.escape(box.id)}` : '', rect: null });
+      renderNotes(); syncFrameNotes();
+      panelWasClosed = false; closeInspector(); input.focus();
+    };
+    const code = inspBody.querySelector('.insp-code');
+    if (code) code.addEventListener('toggle', () => { if (code.open && !code.dataset.loaded) { code.dataset.loaded = '1'; loadCode(box, code.querySelector('.code-box'), seq); } });
+    inspBody.querySelector('.open-ed')?.addEventListener('click', (e) => e.stopPropagation());
+    inspBody.onclick = (ev) => {
+      const chip = ev.target.closest('[data-box]');
+      if (chip) { toFrame({ type: 'open-box', id: chip.dataset.box }); return; }
+      const act = ev.target.closest('[data-act]')?.dataset.act;
+      if (act === 'open') { closeInspector(); if (page.id) state.pendingFocus = { type: 'focus', items: [page.id] }; go(page.page); }
+      else if (act === 'links') pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', '');
+    };
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !inspecting() || !menu.hidden || !$('moreMenu').hidden) return;
+    if (e.target.closest?.('.insp-comment') && e.target.value) return;
+    closeInspector(); toFrame({ type: 'clear-focus' }); e.stopPropagation();
+  }, true);
 
   // "Ask about this": the box goes along with the next message.
   function renderAbout() {
@@ -461,9 +489,9 @@
     if (s === 'closed') {
       html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen this page, ask your agent to run:${cmdBox(state.cmd + page)}`;
     } else if (s === 'offline') {
-      html = `<b>Your messages will wait here</b>To get answers, ask your agent in its terminal session to run:${listen}`;
+      html = `<b>No agent is listening</b>Messages wait here. To get answers, ask your agent to run${listen}`;
     } else if (s === 'idle') {
-      html = `<b>Your messages will wait here</b>To continue, ask ${esc(agentName())} in the terminal to run:${listen}`;
+      html = `<b>${esc(agentName())} stopped listening</b>Messages wait here. To continue, ask it to run${listen}`;
     } else if (s === 'working' && isStale()) {
       html = `<b>No reply for ${Math.round(STALE_MS / 60000)} minutes</b>${esc(agentName())} may have stopped, or be waiting for you in the terminal. Check there, or ask it to run:${listen}<p class="after">If it no longer knows your last comments, send them again.</p>`;
     }
@@ -528,27 +556,21 @@
   window.addEventListener('message', (e) => {
     if (e.source !== frame.contentWindow || e.origin !== CONTENT || !e.data || !e.data.__truemap) return;
     const d = e.data;
-    if (d.type === 'press') {
-      closePeek();
+    if (d.type === 'press' || d.type === 'deselect') {
+      closeInspector();
     } else if (d.type === 'nav') {
       navigate(d.dir);
     } else if (d.type === 'peek') {
-      if (d.box && d.rect) openPeek(d.box, d.rect, Number(d.sy) || 0);
+      if (d.box) openInspector(d.box);
     } else if (d.type === 'loaded') {
       if (d.page && d.page !== state.page) setCurrent(d.page);
-      closePeek();
+      closeInspector();
       if (state.pendingFocus) { const pf = state.pendingFocus; state.pendingFocus = null; setTimeout(() => toFrame({ type: 'focus', note: '', who: agentName(), ...pf }), 60); }
       renderHeader(); sendMarks();
-      if (!state.annotateTouched && typeof d.annotate === 'boolean') state.annotate = d.annotate;
-      setAnnotate(state.annotate);
       syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
     } else if (d.type === 'scroll') {
       state.scroll[d.page] = d.y;
-      if (!peekEl.hidden && peekAnchor) {
-        const dy = d.y - peekAnchor.sy;
-        if (peekAnchor.rect.b - dy < 0 || peekAnchor.rect.t - dy > peekAnchor.stageH) closePeek(); else peekAnchor.place(dy);
-      }
     } else if (d.type === 'note' || d.type === 'note-update') {
       const n = d.note || {};
       const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || ''), rect: n.rect && typeof n.rect === 'object' ? { left: +n.rect.left || 0, top: +n.rect.top || 0, right: +n.rect.right || 0, bottom: +n.rect.bottom || 0 } : null };
@@ -559,10 +581,6 @@
       else if (!panelOpen() && !narrow()) setPanel(true, false);
     } else if (d.type === 'note-remove') {
       state.notes = state.notes.filter((x) => x.id !== d.id); renderNotes(); syncFrameNotes();
-    } else if (d.type === 'toggle-annotate') {
-      setAnnotate(!state.annotate, { touched: true });
-    } else if (d.type === 'annotate-off') {
-      setAnnotate(false, { touched: true });
     } else if (d.type === 'answer') {
       const fromUser = d.trusted === true && userIsInFrame();
       send('', {
@@ -580,7 +598,6 @@
   function setConn(c) {
     if (state.conn === c) return;
     state.conn = c; app.dataset.conn = c;
-    $('annotate').disabled = c === 'closed';
     renderHeader();
     renderAgent();
   }
@@ -601,7 +618,6 @@
         state.pending = new Set(d.pending || []);
         if (d.cmd) state.cmd = d.cmd;
         state.root = String(d.root || '');
-        if (typeof d.annotate === 'boolean') { state.annotate = d.annotate; state.annotateTouched = true; $('annotate').setAttribute('aria-checked', String(d.annotate)); }
         $('ver').textContent = `truemap ${d.version}`;
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';
         state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
@@ -629,9 +645,7 @@
         state.check = d.check || { results: [] }; renderHeader(); sendMarks(); if (!menu.hidden) renderMenu();
       } else if (d.type === 'navigate') {
         if (d.pages) state.pages = d.pages;
-        if (typeof d.annotate === 'boolean') { state.annotate = d.annotate; state.annotateTouched = true; }
         if (d.page && state.pages.some((p) => p.page === d.page)) go(d.page, { force: true });
-        else setAnnotate(state.annotate);
         renderHeader();
       } else if (d.type === 'show') {
         if (d.clear) toFrame({ type: 'clear-focus' });

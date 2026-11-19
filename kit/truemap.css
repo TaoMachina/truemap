@@ -1,58 +1,61 @@
 /* truemap page kit. truemap serves this file to every page in .truemap/ (assets/truemap.css).
    To match a project's own look, put token overrides in .truemap/assets/theme.css – truemap appends it here. */
 
-@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/ibm-plex-sans-latin-500-normal.woff2") format("woff2"); }
-@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-display: swap; src: url("/__truemap/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); }
-@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 500; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap; src: url("/__truemap/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Commit Mono"; font-weight: 400; font-display: swap; src: url("/__truemap/fonts/commit-mono-latin-400-normal.woff2") format("woff2"); }
 
+/* One fixed system. Neutrals and ink carry structure; --tm-accent (ink unless the project has its own
+   colour) marks the primary action; a highlighter marks what the agent points at; status colours mean
+   status only. */
 :root {
-  --tm-paper: #f6f7f4;          /* page background */
+  --tm-paper: #ffffff;          /* page background */
   --tm-sheet: #ffffff;          /* boxes on the map */
-  --tm-wash: #eef0ec;           /* quiet fills */
-  --tm-ink: #17202b;            /* titles */
-  --tm-text: #2a3441;           /* body text */
-  --tm-graphite: #5b6573;       /* secondary text */
-  --tm-pencil: #8a939e;         /* paths, hints */
-  --tm-rule: #dde1db;
-  --tm-rule-strong: #c2c8c1;
-  --tm-route: #2453c4;          /* the one emphasis: the key path, links, decisions */
-  --tm-route-ink: #1b3f96;
-  --tm-route-wash: #e9eefb;
-  --tm-action: #2453c4;         /* filled buttons */
-  --tm-changed: #a2690a;
-  --tm-changed-wash: #fbf2e0;
-  --tm-broken: #b03a2e;
-  --tm-broken-wash: #fbeae7;
-  --tm-fine: #2c7550;
-  --tm-fine-wash: #e5f1e9;
-  --tm-radius: 6px;
-  --tm-font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --tm-code: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --tm-wash: #f2f2ef;           /* quiet fills, groups */
+  --tm-ink: #141413;            /* titles, the main path, selection */
+  --tm-text: #2b2b28;           /* body text */
+  --tm-graphite: #6c6c65;       /* secondary text */
+  --tm-pencil: #9a9a92;         /* hints */
+  --tm-rule: #e6e6e1;
+  --tm-rule-strong: #d2d2cb;
+  --tm-accent: #141413;         /* the primary action; the project's own colour when truemap finds one */
+  --tm-mark: #ffe27a;           /* the agent points here */
+  --tm-route: var(--tm-ink);    /* v0.4 name for the key path and links */
+  --tm-route-ink: var(--tm-ink);
+  --tm-route-wash: #f2f2ef;
+  --tm-action: var(--tm-accent);
+  --tm-changed: #a35f00;
+  --tm-changed-wash: #fbf1df;
+  --tm-broken: #c0392b;
+  --tm-broken-wash: #fbe9e6;
+  --tm-fine: #2f7a4f;
+  --tm-fine-wash: #e6f1ea;
+  --tm-radius: 8px;
+  --tm-font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --tm-code: "Commit Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --tm-paper: #121519;
-    --tm-sheet: #191d23;
-    --tm-wash: #1f242b;
-    --tm-ink: #edf0f3;
-    --tm-text: #d0d6dd;
-    --tm-graphite: #9ba4af;
-    --tm-pencil: #707a86;
-    --tm-rule: #2a3039;
-    --tm-rule-strong: #3d4651;
-    --tm-route: #7ea3ff;
-    --tm-route-ink: #a9c0ff;
-    --tm-route-wash: #1b2440;
-    --tm-action: #3a66d6;
-    --tm-changed: #d9a54a;
+    --tm-paper: #161615;
+    --tm-sheet: #161615;
+    --tm-wash: #222220;
+    --tm-ink: #f2f2ee;
+    --tm-text: #dadad4;
+    --tm-graphite: #a0a098;
+    --tm-pencil: #75756e;
+    --tm-rule: #2f2f2c;
+    --tm-rule-strong: #44443f;
+    --tm-accent: #f2f2ee;
+    --tm-mark: #6b5a12;
+    --tm-route-wash: #222220;
+    --tm-changed: #e0a548;
     --tm-changed-wash: #2c2414;
-    --tm-broken: #ec8170;
+    --tm-broken: #ef8574;
     --tm-broken-wash: #321b18;
-    --tm-fine: #73bd95;
+    --tm-fine: #7cc49c;
     --tm-fine-wash: #16271e;
   }
 }
@@ -65,7 +68,7 @@ body {
   overflow-x: clip;
   background: var(--tm-paper);
   color: var(--tm-text);
-  font: 16px/1.62 var(--tm-font);
+  font: 15px/1.6 var(--tm-font);
   font-feature-settings: "kern", "liga";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -77,7 +80,7 @@ strong, b { color: var(--tm-ink); font-weight: 600; }
 a { color: var(--tm-route); text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--tm-route) 40%, transparent); }
 a:hover { text-decoration-color: var(--tm-route); }
 :focus-visible { outline: 2px solid var(--tm-route); outline-offset: 2px; }
-::selection { background: var(--tm-route-wash); color: var(--tm-ink); }
+::selection { background: var(--tm-mark); color: var(--tm-ink); }
 h1, h2, h3, h4 { color: var(--tm-ink); font-weight: 600; text-wrap: balance; }
 ul, ol { padding-left: 1.3em; max-width: 68ch; }
 li { margin: 0.2em 0; }
@@ -90,14 +93,14 @@ hr { border: 0; border-top: 1px solid var(--tm-rule); margin: 40px 0; }
 .tm-crumb, .tm-eyebrow { font-size: 13.5px; color: var(--tm-graphite); margin: 0 0 14px; }
 .tm-crumb a { color: var(--tm-graphite); text-decoration-color: var(--tm-rule-strong); }
 .tm-crumb a:hover { color: var(--tm-route); }
-.tm-title { font-size: 36px; line-height: 1.15; letter-spacing: -0.018em; margin: 0 0 14px; max-width: 22ch; }
-.tm-lede { font-size: 18.5px; line-height: 1.55; color: var(--tm-graphite); margin: 0; max-width: 60ch; }
+.tm-title { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 12px; max-width: 24ch; }
+.tm-lede { font-size: 17px; line-height: 1.55; color: var(--tm-graphite); margin: 0; max-width: 60ch; }
 .tm-lede strong { color: var(--tm-text); font-weight: 500; }
 
 .tm-section { margin-top: 64px; }
-.tm-section > h2, .tm-h2 { font-size: 22px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 8px; }
+.tm-section > h2, .tm-h2 { font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 8px; }
 .tm-section > h2 + p { color: var(--tm-graphite); }
-.tm-section h3 { font-size: 16.5px; line-height: 1.35; margin: 32px 0 8px; }
+.tm-section h3 { font-size: 15px; line-height: 1.35; margin: 32px 0 8px; }
 .tm-section > :last-child { margin-bottom: 0; }
 .tm-muted { color: var(--tm-graphite); }
 .tm-small { font-size: 13.5px; }
@@ -307,3 +310,68 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
   body { background: #fff; }
   .tm-page { padding: 0; }
 }
+
+/* ===================== diagrams (v0.5): small nodes in groups, laid out left to right ===================== */
+.tm-diagram {
+  --dg-bg: var(--tm-paper); --dg-surface: var(--tm-wash); --dg-line: var(--tm-rule); --dg-line-strong: var(--tm-rule-strong);
+  --dg-muted: var(--tm-graphite); --dg-text: var(--tm-text); --dg-ink: var(--tm-ink); --dg-mark: var(--tm-mark);
+  --dg-font: var(--tm-font); --dg-code: var(--tm-code);
+  position: relative; margin: 28px 0 8px; font-family: var(--dg-font);
+  overflow-x: hidden; overflow-y: hidden; padding: 0 0 8px;
+}
+.tm-dg-stage { position: relative; transform-origin: 0 0; }
+.tm-diagram.is-wide { overflow-x: auto; }
+.tm-dg-edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; z-index: 1; }
+.tm-dg-group { position: absolute; z-index: 0; background: var(--dg-surface); border-radius: 12px; }
+.tm-dg-glabel { position: absolute; top: 8px; left: 12px; line-height: 16px; font-size: 12px; font-weight: 500; color: var(--dg-muted); white-space: nowrap; }
+.tm-diagram .tm-node {
+  position: absolute; z-index: 2; display: block; box-sizing: border-box; max-width: 190px; min-width: 0; flex: none;
+  padding: 8px 12px 9px; background: var(--dg-bg); color: var(--dg-ink);
+  border: 1px solid var(--dg-line-strong); border-radius: 8px; box-shadow: none; text-decoration: none; cursor: pointer;
+  transition: border-color .12s ease, color .12s ease;
+}
+.tm-diagram .tm-node::after { display: none; }
+.tm-diagram .tm-node:hover { border-color: var(--dg-ink); }
+.tm-dg-face { display: grid; gap: 1px; }
+.tm-dg-name { font-size: 13.5px; font-weight: 500; line-height: 1.3; white-space: nowrap; }
+.tm-dg-tag { font-family: var(--dg-code); font-size: 11px; line-height: 1.35; color: var(--dg-muted); white-space: nowrap; }
+.tm-diagram .tm-node.is-ext { background: var(--dg-bg); border-style: dashed; border-color: var(--dg-line-strong); }
+.tm-diagram .tm-node.is-ext .tm-dg-name { color: var(--dg-muted); }
+.tm-diagram .tm-detail { display: none; }
+.tm-dg-edge { fill: none; stroke: var(--dg-line-strong); stroke-width: 1.25; }
+.tm-dg-edge.is-main { stroke: var(--dg-ink); stroke-width: 1.6; }
+.tm-dg-edge.is-ext { stroke-dasharray: 3 4; }
+.tm-dg-head { fill: var(--dg-line-strong); }
+.tm-dg-head.is-main { fill: var(--dg-ink); }
+.tm-dg-edge.is-hot, .tm-dg-edge.is-flow { stroke: var(--dg-ink); stroke-width: 1.75; }
+.tm-dg-head.is-hot, .tm-dg-head.is-flow { fill: var(--dg-ink); }
+.tm-dg-label { position: absolute; z-index: 3; transform: translate(-50%, -50%); font: 400 11px/1.3 var(--dg-code); color: var(--dg-muted); background: var(--dg-bg); padding: 1px 4px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
+.tm-dg-group ~ .tm-dg-label { background: var(--dg-bg); }
+.tm-dg-label.is-hot, .tm-dg-label.is-flow { color: var(--dg-ink); }
+.tm-dg-label.is-dup:not(.is-hot):not(.is-flow):not(.is-focus) { visibility: hidden; }
+/* the agent (or an answer) points at boxes: they get the highlighter, the rest go quiet without fading */
+html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) { opacity: 1; border-color: var(--dg-line); }
+html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) .tm-dg-name, html[data-tm-focusing] .tm-diagram .tm-node:not([data-tm-focus]) .tm-dg-tag { color: var(--dg-line-strong); }
+html[data-tm-focusing] .tm-dg-edge:not(.is-focus) { stroke: var(--dg-line); }
+html[data-tm-focusing] .tm-dg-head:not(.is-focus) { fill: var(--dg-line); }
+html[data-tm-focusing] .tm-dg-label:not(.is-focus) { color: var(--dg-line-strong); }
+.tm-dg-edge.is-focus { stroke: var(--dg-ink); stroke-width: 1.75; }
+.tm-dg-head.is-focus { fill: var(--dg-ink); }
+.tm-dg-label.is-focus { color: var(--dg-ink); }
+/* the box whose inspector is open */
+.tm-diagram .tm-node[data-tm-selected] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
+.tm-dg-probe { position: absolute; visibility: hidden; transform: none; }
+/* flows: tabs, a one-line note, numbered steps */
+.tm-dg-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; }
+.tm-dg-tab { font: 500 13px/1 var(--dg-font); color: var(--dg-muted); background: none; border: 0; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+.tm-dg-tab:hover { color: var(--dg-ink); background: var(--dg-surface); }
+.tm-dg-tab[aria-selected="true"] { color: var(--dg-bg); background: var(--dg-ink); }
+.tm-dg-note { margin: -4px 0 10px; font-size: 14px; color: var(--dg-text); max-width: 72ch; }
+.tm-diagram[data-flow] .tm-node:not([data-in-flow]) .tm-dg-name, .tm-diagram[data-flow] .tm-node:not([data-in-flow]) .tm-dg-tag { color: var(--dg-line-strong); }
+.tm-diagram[data-flow] .tm-node[data-in-flow] { border-color: var(--dg-ink); }
+.tm-diagram[data-flow] .tm-dg-edge:not(.is-flow) { stroke: var(--dg-line); }
+.tm-diagram[data-flow] .tm-dg-head:not(.is-flow) { fill: var(--dg-line); }
+.tm-diagram[data-flow] .tm-dg-label:not(.is-flow) { color: var(--dg-line-strong); }
+.tm-dg-step { position: absolute; z-index: 4; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--dg-ink); color: var(--dg-bg); font: 600 10.5px/18px var(--dg-font); text-align: center; }
+/* the agent points here: a highlighter, not a colour code */
+.tm-diagram .tm-node[data-tm-focus] { background: var(--dg-mark); border-color: var(--dg-ink); }
