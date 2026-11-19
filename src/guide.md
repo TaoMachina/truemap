@@ -3,8 +3,10 @@ truemap guide – how to write pages, plans, and show your changes
 WHAT TRUEMAP IS FOR
 - The user reviews what you PLAN and what you CHANGED on a map of their system that stays true to the code.
   The map (.truemap/index.html) is the base; plans and changes are drawn on top of it.
-- Use a page when the answer has 3+ interacting parts (architecture, a flow, a data model). For small questions
-  answer in the terminal only. Always also give a 1-3 line answer in the terminal.
+- When the user asks you to explain something (how it works, walk me through, I don't get it, make it clear,
+  in any language), draw a draft and open it, even for one function or one file. No map is needed first, and
+  don't build the whole map unless asked. Short factual questions (which file, which flag, yes or no) get a
+  terminal answer only. Always also give a 1-3 line answer in the terminal.
 - Before writing a new page, look in .truemap/ – updating an existing page beats creating a new one.
 
 THE FIRST BLUEPRINT (be fast)
@@ -154,7 +156,8 @@ DRAFTS (the everyday way to explain)
   interactive bit, even an <iframe> of the running dev server. Pick what makes this one thing clear.
 - Link boxes on the map from a draft as <a href="../index.html#runs">Runs</a>: the map opens with that box lit.
 - Drafts are kept; don't delete them. A draft worth keeping for good can move to .truemap/ as a page.
-- Simple questions still get a short chat answer; a draft is for 3+ moving parts, a flow, a design or a choice.
+- A request to explain gets a draft, even for a single point: one function can be a short page with its inputs,
+  what it does step by step, and its edge cases. Short factual questions still get a short chat answer.
 
 POINTING AT THE MAP
 - While you explain, light up what you are talking about:

@@ -4,7 +4,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, 
 import { request as httpRequest } from 'node:http';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
-  FOLDER, IS_WIN, PKG_DIR, VERSION, detectAgent, findRoot, folderPath, logUsage, readJson,
+  FOLDER, IS_WIN, PKG_DIR, VERSION, buildId, detectAgent, findRoot, folderPath, logUsage, readJson,
   samePath, serverLockPath, serverStatePath,
 } from './common.js';
 import { checkAll, listPages, markOk, pageInFolder } from './check.js';
@@ -58,9 +58,10 @@ async function liveState(root) {
 
 async function ensureServer(root) {
   let state = await liveState(root);
-  if (state && state.version !== VERSION) {
-    try { await call(state, 'POST', '/api/agent/shutdown', {}, { timeoutMs: 1500 }); } catch { /* ignore */ }
-    await sleep(200);
+  if (state && (state.version !== VERSION || (state.build && state.build !== buildId()) || !state.build)) {
+    // Older code: restart on the same address; the open tab reconnects and reloads itself.
+    try { await call(state, 'POST', '/api/agent/shutdown', { restart: true }, { timeoutMs: 1500 }); } catch { /* ignore */ }
+    for (let i = 0; i < 30; i++) { await sleep(100); try { process.kill(state.pid, 0); } catch { break; } }
     state = null;
   }
   if (state) return state;
@@ -445,6 +446,7 @@ async function cmdPlan(root, args, opts) {
 
 // A draft: a free-form page that explains one thing, numbered so the drafts read as a record.
 function cmdDraft(root, args, opts) {
+  const hasMap = existsSync(join(root, FOLDER, 'index.html'));
   const name = args.join(' ').trim();
   if (!name) throw new Error('draft needs a name: truemap draft "how a message is routed"');
   ensureFolder(root);
@@ -465,7 +467,7 @@ function cmdDraft(root, args, opts) {
 </head>
 <body><main class="tm-page">
   <header class="tm-header">
-    <nav class="tm-crumb"><a href="../index.html">Map</a> / Draft ${n}</nav>
+    <nav class="tm-crumb">${hasMap ? '<a href="../index.html">Map</a> / ' : ''}Draft ${n}</nav>
     <h1 class="tm-title">${esc(title)}</h1>
     <p class="tm-lede">One or two sentences: what this draft explains or proposes.</p>
   </header>
@@ -479,7 +481,7 @@ function cmdDraft(root, args, opts) {
   out('status: draft_created');
   out(`draft: ${q(file)}   # .truemap/${file}`);
   block('next_step', [
-    `Write the draft: replace the placeholder sections in .truemap/${file}. Free form: any mix of short text, a <figure class="tm-diagram"> (data-plan="new" draws a proposed box dashed), steps, a comparison table, a small interactive bit, or an <iframe> of the running dev server. Link boxes on the map as <a href="../index.html#runs">Runs</a>.`,
+    `Write the draft: replace the placeholder sections in .truemap/${file}. Free form: any mix of short text, a <figure class="tm-diagram"> (data-plan="new" draws a proposed box dashed), steps, a comparison table, a small interactive bit, or an <iframe> of the running dev server.${hasMap ? ' Link boxes on the map as <a href="../index.html#runs">Runs</a>.' : ' No map is needed for this.'}`,
     `Then show it: \`${CMD} ${file}\` (the user's tab switches to it and it is added to their drafts), and answer in one or two lines with \`${CMD} reply "…" --listen\` pointing to it.`,
   ].join('\n'));
 }

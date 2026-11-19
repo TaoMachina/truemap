@@ -1,6 +1,6 @@
 ---
 name: truemap
-description: Review what you plan and what you changed on a living map of the codebase that stays true to the code. Use before a change that touches 3+ parts or adds one (show the plan, wait for approval), after editing code (show what changed, by box), when explaining architecture, a module or a flow, when asked "how does X work" or "show me the project", and whenever a .truemap/ folder exists and you are about to explain something it may already cover. Not for one-line answers.
+description: Explain code on a page that opens in the user's browser instead of answering only in the terminal. Use this whenever the user asks you to explain, walk through or make clear any code, in any language ("how does X work", "explain X to me", "I don't get X"), even a single function or file; no project map is needed. Also use it before a change that touches 3+ parts (show the plan, wait for approval), after editing code (show what changed), and when asked to show the project. Skip it only for short factual answers (which file, which flag, yes or no).
 allowed-tools: Bash(npx -y truemap-cli:*), Bash(npx truemap-cli:*), Bash(truemap:*)
 license: MIT
 ---
@@ -16,7 +16,7 @@ Current instructions live in the CLI – this file stays short so it never goes 
 - `npx -y truemap-cli guide` – how to write maps, plans and anchors
 
 Flow:
-- Explaining something (how X works, "I don't get this", an idea): `npx -y truemap-cli draft "<name>"`, write the page, open it; keep the chat answer short.
+- Explaining something, big or small (how X works, "explain this function", "I don't get this", an idea): `npx -y truemap-cli draft "<name>"`, write the page, open it with `npx -y truemap-cli drafts/<file>`; keep the chat answer to a line or two. No map is needed first, and don't build one unless asked.
 - The project map: `.truemap/index.html`; update it when the structure changes, run `npx -y truemap-cli <page>`, then follow the `next_step` it prints.
 - Before a larger change: `npx -y truemap-cli plan --file plan.json`, wait for the approval.
 - After editing code: `npx -y truemap-cli changes`.

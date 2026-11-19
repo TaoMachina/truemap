@@ -1,7 +1,7 @@
 // Shared helpers: repo root, state files, version, safe executable lookup.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +74,17 @@ export function rootKey(root) {
 }
 
 export function serversDir() { return stateSubdir('servers'); }
+/** The code a server runs: the version plus the newest edit to truemap's own files (catches local builds). */
+export function buildId() {
+  let newest = 0;
+  for (const dir of ['src', 'src/ui', 'kit']) {
+    let names = []; try { names = readdirSync(join(PKG_DIR, dir)); } catch { /* not there */ }
+    for (const n of names) { try { const st = statSync(join(PKG_DIR, dir, n)); if (st.isFile()) newest = Math.max(newest, st.mtimeMs); } catch { /* gone */ } }
+  }
+  return `${VERSION}+${Math.round(newest)}`;
+}
+/** A project keeps the same ports and token across restarts, so an open tab and a bookmark keep working. */
+export function addrPath(root) { return join(stateSubdir('addr'), `${rootKey(root)}.json`); }
 export function serverStatePath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.json`); }
 export function serverLockPath(root) { return join(stateSubdir('servers'), `${rootKey(root)}.lock`); }
 export function historyPath(root) { return join(stateSubdir('history'), `${rootKey(root)}.jsonl`); }

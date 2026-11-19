@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { themeable } from './theme.js';
-import { FOLDER, PKG_DIR, VERSION, appendPrivate, stateHome, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
+import { FOLDER, PKG_DIR, VERSION, addrPath, appendPrivate, buildId, stateHome, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
 import { cleanPlan, currentPlan, parseReport, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox, stepCheck } from './plan.js';
 import { checkAll, listPages } from './check.js';
@@ -15,7 +15,9 @@ import { snippet } from './snippet.js';
 
 const root = resolve(process.argv[2] || process.cwd());
 const folder = join(root, FOLDER);
-const token = randomBytes(18).toString('base64url');
+const BUILD = buildId();
+const lastAddr = (() => { try { return JSON.parse(readFileSync(addrPath(root), 'utf8')) || {}; } catch { return {}; } })();
+const token = typeof lastAddr.token === 'string' && /^[\w-]{24,}$/.test(lastAddr.token) ? lastAddr.token : randomBytes(18).toString('base64url');
 const statePath = serverStatePath(root);
 const IDLE_MS = Number(process.env.TRUEMAP_IDLE_MS || 30 * 60 * 1000);
 const CLOSE_GRACE_MS = Number(process.env.TRUEMAP_CLOSE_GRACE_MS || 10_000);
@@ -155,8 +157,8 @@ function touchIdle() {
   }, IDLE_MS);
 }
 
-function shutdown() {
-  broadcast({ type: 'closing' });
+function shutdown(restart = false) {
+  broadcast({ type: 'closing', restart });
   try {
     const s = JSON.parse(readFileSync(statePath, 'utf8'));
     if (s.pid === process.pid) rmSync(statePath, { force: true });
@@ -401,7 +403,7 @@ const server = createServer(async (req, res) => {
       scheduleChecks();
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       res.write(`data: ${JSON.stringify({
-        type: 'hello', version: VERSION, root, cmd: CMD, agent: agentInfo(), pages: safePages(), check: lastCheck,
+        type: 'hello', version: VERSION, build: BUILD, root, cmd: CMD, agent: agentInfo(), pages: safePages(), check: lastCheck,
         history, current: currentPage, pending: queue.map((m) => m.id), plan: plan && plan.status !== 'done' ? plan : null, ...(annotateWish !== undefined ? { annotate: annotateWish } : {}),
       })}\n\n`);
       annotateWish = undefined;
@@ -636,8 +638,9 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
     if (p === '/api/agent/shutdown' && req.method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
       sendJson(res, 200, { ok: true });
-      setTimeout(shutdown, 50);
+      setTimeout(() => shutdown(!!b.restart), 50);
       return;
     }
     return sendText(res, 404, 'not found');
@@ -672,16 +675,26 @@ const content = createServer((req, res) => {
   }
 });
 
-server.listen(Number(process.env.TRUEMAP_PORT || 0), '127.0.0.1', () => {
-  port = server.address().port;
-  content.listen(0, '127.0.0.1', () => {
-    contentPort = content.address().port;
-    writePrivate(statePath, JSON.stringify({ pid: process.pid, port, contentPort, token, version: VERSION, root, startedAt: new Date().toISOString() }));
-    startWatching();
-    scheduleChecks();
-    touchIdle();
+// The last ports again when they are free, otherwise any.
+function listenOn(srv, want) {
+  return new Promise((ok, fail) => {
+    const attempt = (p) => {
+      const onErr = (e) => { if (p && (e.code === 'EADDRINUSE' || e.code === 'EACCES')) attempt(0); else fail(e); };
+      srv.once('error', onErr);
+      srv.listen(p, '127.0.0.1', () => { srv.off('error', onErr); ok(srv.address().port); });
+    };
+    attempt(want);
   });
-});
+}
+(async () => {
+  port = await listenOn(server, Number(process.env.TRUEMAP_PORT || lastAddr.port || 0));
+  contentPort = await listenOn(content, Number(lastAddr.contentPort || 0));
+  writePrivate(addrPath(root), JSON.stringify({ port, contentPort, token }));
+  writePrivate(statePath, JSON.stringify({ pid: process.pid, port, contentPort, token, version: VERSION, build: BUILD, root, startedAt: new Date().toISOString() }));
+  startWatching();
+  scheduleChecks();
+  touchIdle();
+})().catch((e) => { console.error(e); process.exit(1); });
 
 // Code changes outside .truemap aren't watched (too noisy); re-check while someone is looking.
 setInterval(() => { if (clients.size > 0) scheduleChecks(); }, 30_000).unref();

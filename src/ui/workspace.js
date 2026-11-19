@@ -932,6 +932,7 @@
 
   // ---------- live events from the server ----------
   let closedTimer = null;
+  let loadedBuild = null;
   function setConn(c) {
     if (state.conn === c) return;
     state.conn = c; app.dataset.conn = c;
@@ -951,6 +952,8 @@
       let d; try { d = JSON.parse(ev.data); } catch { return; }
       if (d.type === 'hello') {
         greeted = true; clearTimeout(guard); clearTimeout(closedTimer); closedTimer = null;
+        if (d.build && loadedBuild && d.build !== loadedBuild) { es.close(); location.reload(); return; }
+        loadedBuild = d.build || loadedBuild;
         setConn('live');
         state.pages = d.pages || []; state.check = d.check || { results: [] }; state.history = d.history || [];
         state.pending = new Set(d.pending || []);
@@ -1000,7 +1003,8 @@
       } else if (d.type === 'view') {
         if (d.view === 'changes') { setPanel(true); scrollChat(); }
       } else if (d.type === 'closing') {
-        es.close(); setConn('closed');
+        es.close();
+        if (d.restart) setTimeout(connect, 700); else setConn('closed');
       }
     };
   }
