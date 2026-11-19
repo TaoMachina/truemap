@@ -349,7 +349,7 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 .tm-dg-group ~ .tm-dg-label { background: var(--dg-bg); }
 .tm-dg-label.is-hot, .tm-dg-label.is-flow { color: var(--dg-ink); }
 /* at rest only the main path says its verbs; a hovered or selected box, a lit path or a flow shows the rest */
-.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-flow):not(.is-focus), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
 .tm-dg-edge.is-sel { stroke: var(--dg-ink); stroke-width: 1.75; }
 .tm-dg-head.is-sel { fill: var(--dg-ink); }
 .tm-dg-label.is-sel { color: var(--dg-ink); }
@@ -377,7 +377,7 @@ html[data-tm-changes] .tm-node[data-tm-change]:not(.tm-diagram .tm-node) { outli
 .tm-diagram .tm-node[data-plan="new"] { border: 1.5px dashed var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="change"] { border-color: var(--dg-ink); box-shadow: 0 0 0 1px var(--dg-ink); }
 .tm-diagram .tm-node[data-plan="remove"] .tm-dg-name { text-decoration: line-through; }
-.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 11px/15px var(--dg-font); padding: 0 7px; border-radius: 8px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
+.tm-diagram .tm-node[data-plan]:not([data-tm-delta])::after { display: block; position: absolute; top: -9px; right: -8px; font: 500 12px/17px var(--dg-font); padding: 0 8px; border-radius: 9px; background: var(--dg-bg); color: var(--dg-ink); border: 1px solid var(--dg-ink); white-space: nowrap; pointer-events: none; }
 .tm-diagram .tm-node[data-plan="new"]:not([data-tm-delta])::after { content: "Plan: new"; }
 .tm-diagram .tm-node[data-plan="change"]:not([data-tm-delta])::after { content: "Plan: edit"; }
 .tm-diagram .tm-node[data-plan="change"][data-plan-revised]:not([data-tm-delta])::after { content: "Plan: edit, revised"; background: var(--dg-mark); }

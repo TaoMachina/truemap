@@ -242,7 +242,7 @@
     });
     const count = state.notes.length;
     const reviewing = state.plan?.status === 'review' && state.plan.page === state.page;
-    $('send').textContent = planRequest || (reviewing && count) ? `Request changes${count ? ` (${count})` : ''}` : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
+    $('send').textContent = planRequest ? 'Send request' : reviewing && count ? 'Send' : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
     const rq = planBar.querySelector('[data-pb="request"]');
     if (rq) { rq.textContent = count && reviewing ? `Request changes (${count})` : 'Request changes'; rq.classList.toggle('primary', !!(count && reviewing)); planBar.querySelector('[data-pb="approve"]')?.classList.toggle('primary', !(count && reviewing)); }
     $('send').classList.toggle('quiet', !!(reviewing && count));
@@ -565,7 +565,7 @@
       if (!l && !rows.length) continue;
       const cls = l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : '';
       const n = cls === 'del' ? oldN++ : newN++; if (cls === '') oldN++;
-      rows.push(`<span class="${cls}"><i>${n}</i>${esc(l.slice(1)) || ' '}</span>`);
+      rows.push(`<span class="${cls}"><i>${n}</i><em>${cls === 'add' ? '+' : cls === 'del' ? '−' : ' '}</em>${esc(l.slice(1)) || ' '}</span>`);
     }
     return rows.length ? `<pre>${rows.join('')}</pre>` : '<div class="code-note">No text changes (binary or mode only).</div>';
   }

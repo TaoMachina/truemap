@@ -118,7 +118,7 @@
     // the label above the boxes.
     const gutter = Math.max(72, ...m.groups.map((gr) => (gr.el.firstChild?.offsetWidth || 0) + 30));
     const GAP = lr ? Math.max(60, Math.min(170, labelW + 48)) : (labelW ? 58 : 40);
-    const HEAD = 0; const BANDPAD = lr ? 12 : 12; const GAPB = lr ? 14 : (labelW ? 18 : 12);
+    const HEAD = 0; const BANDPAD = lr ? 12 : 12; const GAPB = lr ? 14 : (labelW ? 10 : 8);
     const MX = lr ? 34 : gutter; const MY = lr ? 6 : 4;
     const gOf = nodes.map((n) => { const k = m.groups.findIndex((gr) => gr.id === n.dataset.group); return k < 0 ? m.groups.length : k; });
     const E = edges.map((e) => ({ e, a: idx.get(e.back ? e.to : e.from), b: idx.get(e.back ? e.from : e.to) }));
@@ -248,7 +248,7 @@
       if (x.same) { if (!adjacent(x)) turning[rank[x.a]] += 1; continue; }
       for (let k = 0; k + 1 < x.chain.length; k++) if (Math.abs((x.chain[k].x ?? 0) - (x.chain[k + 1].x ?? 0)) > 2) turning[x.chain[k].row] += 1;
     }
-    const roomFor = (r, base) => Math.min(lr ? 200 : 130, Math.max(base, 24 + turning[r] * 11));
+    const roomFor = (r, base) => Math.min(lr ? 200 : 110, Math.max(base, 18 + turning[r] * 9));
     for (let r = 0; r < R; r++) {
       const b = bandOf(r);
       if (b.from === r) y += HEAD;
@@ -456,7 +456,9 @@
     const bundleSize = new Map();
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; bundleSize.set(k, (bundleSize.get(k) || 0) + 1); }
     for (const { e, path, key, dup } of placed) {
-      const t = document.createElement('span'); t.className = `tm-dg-label${key ? ' is-main' : ''}${dup ? ' is-dup' : ''}`; t.textContent = e.label;
+      const t = document.createElement('span'); t.className = `tm-dg-label${key ? ' is-main' : ''}${dup ? ' is-dup' : ''}`;
+      const many = bundleSize.get(`${e.from}|${e.label}`) || 1;
+      t.textContent = !dup && many > 1 ? `${e.label} ×${many}` : e.label;
       t.dataset.from = e.from; t.dataset.to = e.to;
       m.stage.appendChild(t);
       const w = t.offsetWidth; const h = t.offsetHeight; const L = path.getTotalLength();
@@ -482,7 +484,7 @@
     // main-path edges on top
     for (const el of [...svg.querySelectorAll('.is-main')]) svg.appendChild(el);
     // Still wider than the column: shrink a little, then scroll rather than make text unreadable.
-    const k = Math.max(0.7, Math.min(1, room / gw));
+    const k = Math.max(0.7, Math.min(1, (room - 16) / gw));
     m.stage.style.transform = k < 1 ? `scale(${k})` : '';
     m.stage.style.marginBottom = k < 1 ? `${-gh * (1 - k)}px` : '';
     m.stage.style.marginRight = k < 1 ? `${-gw * (1 - k)}px` : '';
