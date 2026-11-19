@@ -394,11 +394,18 @@ async function cmdPlan(root, args, opts) {
   if (r.status !== 200) throw new Error(`plan rejected: ${r.body?.error || r.status}`);
   const url = `http://127.0.0.1:${state.port}/?t=${state.token}#page=${encodeURIComponent(r.body.page)}`;
   if (!r.body.browsers && !process.env.TRUEMAP_NO_OPEN && !opts.noOpen) openBrowser(url);
+  let drawable = true;
+  try { drawable = /class=["'][^"']*\btm-diagram\b/.test(readFileSync(join(folderPath(root), r.body.page), 'utf8')); } catch { /* the server already checked the page */ }
+  if (!drawable) {
+    out('status: plan_not_drawn');
+    out(`page: ${q(r.body.page)}  # an older .tm-map page: the plan shows in the conversation as text, not on the map`);
+    block('next_step', [
+      `Convert ${r.body.page} to the current map first: rewrite its <div class="tm-map"> as <figure class="tm-diagram">: each .tm-layer becomes a <section class="tm-group" data-label="…">, each box keeps its id, data-src and data-to and gets data-name / data-tag (see \`${CMD} guide\`, THE MAP). Run \`${CMD} check ${r.body.page}\`.`,
+      `Then run \`${CMD} plan --file <plan.json>\` again. Until then the user can only approve from the text.`,
+    ].join('\n'));
+    return;
+  }
   out('status: plan_shown');
-  try {
-    const html = readFileSync(join(folderPath(root), r.body.page), 'utf8');
-    if (!/class=["'][^"']*\btm-diagram\b/.test(html)) out(`warning: ${r.body.page} has no <figure class="tm-diagram"> map (an older .tm-map page), so the plan cannot be drawn on it. Convert the page's map to the current format first (\`${CMD} guide\`, THE MAP), or set "page" to a page that has one.`);
-  } catch { /* the server already checked the page */ }
   out(`plan: ${q(r.body.slug)}  # ${FOLDER}/plans/${r.body.slug}.json, revision ${r.body.revision}`);
   out(`page: ${q(r.body.page)}`);
   out(`url: ${url}`);

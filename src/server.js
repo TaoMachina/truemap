@@ -451,7 +451,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         version: VERSION, pid: process.pid, root, name: basename(root), clients: clients.size, agent: agentState, agentName, queued: queue.length, current: currentPage,
         plan: plan && plan.status !== 'done' ? { title: plan.title, status: plan.status } : null,
-        unread: !clients.size && lastReplyAt > lastSeenAt, asking: !clients.size && asking(),
+        unread: !clients.size && lastReplyAt > lastSeenAt, asking: asking(),
       });
     }
     if (p === '/api/agent/listen' && req.method === 'POST') {

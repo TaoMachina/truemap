@@ -81,15 +81,23 @@ function revisionDiff(prev, plan, nameOf = (b) => b) {
   for (const [k, v] of b) if (!a.has(k)) out.push(`+ ${k.split(':')[0] === 'add' ? 'new box' : k.split(':')[0]} ${v}`);
   for (const [k, v] of a) if (!b.has(k)) out.push(`− no longer ${k.split(':')[0] === 'add' ? 'adds' : k.split(':')[0] === 'touch' ? 'touches' : 'removes'} ${v}`);
   const what = (p) => new Map(p.touch.map((t) => [t.box, t.what]));
-  for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${nameOf(box)}: ${w}`);
-  const changedSteps = plan.steps.filter((st, i) => prev.steps[i] !== st).length + Math.max(0, prev.steps.length - plan.steps.length);
-  if (changedSteps) out.push(`~ ${changedSteps} step${changedSteps > 1 ? 's' : ''} changed`);
+  for (const [box, w] of what(plan)) if (what(prev).has(box) && what(prev).get(box) !== w) out.push(`~ ${nameOf(box)}: was "${what(prev).get(box)}", now "${w}"`);
+  const n = Math.max(prev.steps.length, plan.steps.length);
+  for (let i = 0; i < n; i++) {
+    if (prev.steps[i] === plan.steps[i]) continue;
+    if (prev.steps[i] === undefined) out.push(`+ step ${i + 1}: ${plan.steps[i]}`);
+    else if (plan.steps[i] === undefined) out.push(`− step ${i + 1}: ${prev.steps[i]}`);
+    else out.push(`~ step ${i + 1}: was "${prev.steps[i]}", now "${plan.steps[i]}"`);
+  }
   return out;
 }
 
 export function planMessage(plan, prev = null, nameOf) {
   const lines = [`**${plan.revision > 1 ? 'Revised plan' : 'Plan'}: ${plan.title}**`];
   if (plan.summary) lines.push(plan.summary);
+  const nm = nameOf || ((b) => b);
+  const what = [...plan.touch.map((t) => `- [${nm(t.box)}](#${t.box}): ${t.what || 'changes'}`), ...plan.add.map((a) => `- New [${a.name}](#${a.id}): ${a.why || ''}`), ...plan.remove.map((r) => `- Remove ${nm(r.box)}: ${r.why || ''}`)];
+  if (what.length) lines.push('', ...what);
   const diff = revisionDiff(prev, plan, nameOf);
   if (prev) lines.push('', diff.length ? `Changed since the last revision:\n${diff.map((d) => `- ${d}`).join('\n')}` : 'Nothing changed in the boxes or steps since the last revision.');
   if (plan.steps.length) { lines.push(''); plan.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`)); }
@@ -109,11 +117,14 @@ export function srcOfBox(root, page, box, want = 'data-src') {
 /** Plan against what actually changed: planned and changed, planned but untouched, changed but not planned. */
 export function planCheck(root, plan, result) {
   if (!plan || !result?.boxes) return null;
-  const changed = new Set(result.boxes.map((b) => b.src));
+  // A planned item counts as built only when the box's own code changed; a change in a file attached
+  // with data-also (types, wiring) alone is shown, but does not count.
+  const own = new Set(result.boxes.filter((b) => b.files.some((x) => x.own)).map((b) => b.src));
+  const related = new Map(result.boxes.filter((b) => !own.has(b.src)).map((b) => [b.src, b.files.map((x) => x.path)]));
   const planned = [
     ...plan.touch.map((t) => ({ box: t.box, what: t.what, kind: 'change' })),
     ...plan.add.map((a) => ({ box: a.id, what: a.why, kind: 'new', name: a.name })),
-  ].map((p) => { const src = srcOfBox(root, plan.page, p.box); return { ...p, name: p.name || srcOfBox(root, plan.page, p.box, 'data-name') || p.box, src, changed: !!src && changed.has(src) }; });
+  ].map((p) => { const src = srcOfBox(root, plan.page, p.box); return { ...p, name: p.name || srcOfBox(root, plan.page, p.box, 'data-name') || p.box, src, changed: !!src && own.has(src), onlyRelated: (src && related.get(src)) || null }; });
   const plannedSrc = new Set(planned.map((p) => p.src).filter(Boolean));
   return { title: plan.title, planned, unplanned: result.boxes.filter((b) => !plannedSrc.has(b.src)).map((b) => b.src) };
 }

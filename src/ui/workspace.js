@@ -241,7 +241,8 @@
       list.appendChild(li);
     });
     const count = state.notes.length;
-    $('send').textContent = planRequest ? 'Send request' : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
+    const reviewing = state.plan?.status === 'review' && state.plan.page === state.page;
+    $('send').textContent = planRequest || (reviewing && count) ? `Request changes${count ? ` (${count})` : ''}` : count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
     if (!planRequest) input.placeholder = count ? S.placeholderNotes : S.placeholder;
   }
 
@@ -333,7 +334,8 @@
 
   // ---------- choices the agent asks for (only when it is blocked on a real trade-off) ----------
   function askCard(e) {
-    const answered = state.history.find((h) => h.kind === 'answer' && h.answer?.question === e.ask.question && h.at > e.at);
+    const answered = state.history.find((h) => h.kind === 'answer' && h.answer?.question === e.ask.question && h.at > e.at)
+      || state.history.some((h) => h.role === 'agent' && h.ask && h.at > e.at); // a later question replaced this one
     const box = document.createElement('div'); box.className = 'ask';
     box.innerHTML = `<div class="ask-q">${esc(e.ask.question)}</div>` + e.ask.options.map((o, i) =>
       `<button type="button" class="ask-opt${answered?.answer?.choice === o.label ? ' chosen' : ''}" data-i="${i}" ${answered ? 'disabled' : ''}><b>${esc(o.label)}</b>${o.why ? `<span>${esc(o.why)}</span>` : ''}</button>`).join('');
@@ -509,7 +511,7 @@
     if (r.plan) {
       const done = r.plan.planned.filter((p) => p.changed).length; const missing = r.plan.planned.filter((p) => !p.changed);
       html += `<div class="ch-plan"><div class="ch-h">Plan: ${esc(r.plan.title)}</div><p class="ch-sum">${done} of ${r.plan.planned.length} planned boxes changed${r.plan.unplanned.length ? `, ${plural(r.plan.unplanned.length, 'box')} changed outside the plan` : ''}.</p>`;
-      if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> planned, no changes yet${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
+      if (missing.length) html += `<ul class="ch-missing">${missing.map((p) => `<li><b>${esc(p.name || ch.names.get(p.src) || p.box)}</b> ${p.onlyRelated ? 'planned, only attached files changed' : 'planned, no changes yet'}${p.what ? `<small>${esc(p.what)}</small>` : ''}</li>`).join('')}</ul>`;
       html += '</div>';
     }
     const planned = new Set((r.plan?.planned || []).map((p) => p.src).filter(Boolean));
@@ -576,8 +578,10 @@
   });
   function unbuiltNote(box) {
     if (!showingChanges() || !ch.data?.plan) return '';
-    const p = ch.data.plan.planned.find((x) => !x.changed && ((x.src && x.src === box.src) || x.box === box.id));
-    return p ? `<div class="insp-state">Planned, not built yet${p.what ? `: ${esc(p.what)}` : ''}</div>` : '';
+    const p = ch.data.plan.planned.find((x) => (x.src && x.src === box.src) || x.box === box.id);
+    if (!p) return '';
+    if (p.changed) return p.what ? `<div class="insp-planned"><b>Planned:</b> ${esc(p.what)}<span>Check the diff below against it.</span></div>` : '';
+    return `<div class="insp-state">Planned, not built yet${p.what ? `: ${esc(p.what)}` : ''}${p.onlyRelated ? `<br>Only attached files changed (${esc(p.onlyRelated.join(', '))}), not the box's own code.` : ''}</div>`;
   }
   // The inspector shows what changed in a box while you review changes.
   function changeSection(box) {
@@ -619,7 +623,9 @@
     const here = p.page === state.page;
     const old = here && state.planUnsupported;
     let html = `<div class="pb-text"><b>Plan</b><span class="pb-title">${esc(p.title)}</span><span class="pb-meta">${old ? 'not drawn: this page uses the old map format' : `${esc(counts)}${p.revision > 1 && p.status === 'review' ? ', revised' : ''}`}</span></div>`;
-    if (p.status === 'review') {
+    if (p.status === 'review' && old) {
+      html += `<div class="pb-acts"><span class="pb-wait">Read it in the conversation; the agent converts the map first.</span><button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve as text</button></div>`;
+    } else if (p.status === 'review') {
       html += `<div class="pb-acts">${here ? '' : '<button type="button" class="pb-btn" data-pb="open">Show on the map</button>'}<button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve</button></div>`;
     } else if (p.status === 'revise') {
       html += `<div class="pb-acts"><span class="pb-wait">Waiting for the revised plan</span></div>`;
@@ -638,7 +644,7 @@
     else if (act === 'request') { setPanel(true); setTab('convo'); setRequest(true); }
     else if (act === 'approve') {
       // comments written before approving still go to the agent, first
-      if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t); }
+      if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { approving: true }); }
       await api('/api/plan', { action: 'approve' });
     }
   });
@@ -746,7 +752,8 @@
     const about = !extra.context && !extra.answer && state.about;
     if (about) context = [...context, { kind: 'element', label: about.label, src: about.src, excerpt: about.excerpt || '', page: state.page }];
     if (!text && !context.length && !extra.answer) return;
-    if (planRequest && !extra.answer) { extra = { ...extra, plan: 'request' }; setRequest(false); }
+    const reviewingPlan = state.plan?.status === 'review' && state.plan.page === state.page && state.notes.length && !extra.noNotes;
+    if ((planRequest || reviewingPlan) && !extra.answer && !extra.approving) { extra = { ...extra, plan: 'request' }; setRequest(false); }
     const r = await api('/api/send', { text, context, page: state.page, ...extra });
     if (r.id && !r.delivered) { state.pending.add(r.id); markPending(r.id, true); }
     if (withNotes && notes.length && r.id) { state.notes = []; renderNotes(); syncFrameNotes(); }
@@ -900,7 +907,8 @@
         else pointAt(d.focus || [], d.note || '', AGENTS[d.agent] || agentName(), d.page);
       } else if (d.type === 'plan') {
         if (hoverLit && hoverLit !== '__pinned') { hoverLit = null; msgsEl.querySelector('li.lit')?.classList.remove('lit'); toFrame({ type: 'clear-focus' }); }
-        state.plan = d.plan || null; renderPlan(); sendPlan();
+        $('litPill').hidden = true; toFrame({ type: 'clear-focus' });
+        state.plan = d.plan || null; renderPlan(); sendPlan(); renderNotes();
       } else if (d.type === 'changes-base') {
         loadChanges();
       } else if (d.type === 'view') {

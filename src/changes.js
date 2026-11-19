@@ -92,7 +92,7 @@ export function attribute(root, files) {
     try { html = readFileSync(join(root, FOLDER, page), 'utf8'); } catch { continue; }
     for (const src of extractAnchors(html)) {
       const { path } = parseAnchor(src);
-      if (path) anchors.push({ page, src, path });
+      if (path) anchors.push({ page, src, path, own: true });
     }
     // data-also="server/db.ts server/hub.ts": more files a box owns (its migration, its wiring)
     for (const m of html.matchAll(/<[^>]*\sdata-src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
@@ -109,7 +109,7 @@ export function attribute(root, files) {
     for (const h of hits) {
       if (!boxes.has(h.src)) boxes.set(h.src, { src: h.src, pages: new Set(), files: [] });
       const b = boxes.get(h.src); b.pages.add(h.page);
-      if (!b.files.some((x) => x.path === f.path)) b.files.push({ ...f, shared: srcs.length - 1 });
+      if (!b.files.some((x) => x.path === f.path)) b.files.push({ ...f, shared: srcs.length - 1, own: !!h.own || hits.some((x) => x.src === h.src && x.own) });
     }
   }
   const sum = (list, k) => list.reduce((n, f) => n + (f[k] || 0), 0);

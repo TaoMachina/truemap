@@ -125,7 +125,9 @@ PLAN FIRST (before a change that touches 3+ boxes or adds one)
   (then revise and run `plan --file` again with the same title). If the user says "go" in the terminal instead,
   run `{{CMD}} plan --approve`.
 - Plans draw on a page with a <figure class="tm-diagram"> map; convert an older .tm-map page first.
-- When it is built: put the new boxes on the page for real (with data-src), run `{{CMD}} plan --done`. It
+- When it is built: put the new boxes on the page for real, with the same id as in the plan's "add" and a data-src
+  on their own new file; a planned box counts as built only when its own code (data-src) changed, not a data-also
+  file. Run `{{CMD}} plan --done`. It
   warns about planned boxes with no changes: tell the user which parts are not built, and why.
 - Commit .truemap/ with the code (the maps and the plans are part of the project's record).
 
@@ -147,6 +149,7 @@ COMMENTS
   numbered, each with the box's data-src. Read that code, then answer every one.
 
 ASKING THE USER TO DECIDE (rarely)
+- ask waits for the answer like listen (Claude Code: run it with run_in_background); it replaces a running listen.
 - Only when blocked on a choice that is hard to undo or that the user must own (an architecture direction, a data
   model, a security boundary, a dependency, a cost). Otherwise decide, say what you assumed in one line, go on.
     {{CMD}} ask "Retry declined cards?" --option "Fail at once | declines never recover" --option "Keep retrying | about 600 ms per decline"

@@ -84,8 +84,9 @@ test('planCheck: planned and changed, planned but untouched, changed outside the
   const { planCheck, planMessage, cleanPlan: clean } = await import('../src/plan.js');
   const { root } = repo();
   const plan = clean({ title: 'T', page: 'index.html', touch: [{ box: 'runs', what: 'a' }, { box: 'all', what: 'b' }], add: [{ id: 'lim', name: 'Limits' }] });
-  const r = planCheck(root, plan, { boxes: [{ src: 'server/routing.ts#Runs' }, { src: 'x.ts' }] });
+  const r = planCheck(root, plan, { boxes: [{ src: 'server/routing.ts#Runs', files: [{ path: 'server/routing.ts', own: true }] }, { src: 'server/', files: [{ path: 'server/types.ts', own: false }] }, { src: 'x.ts', files: [{ path: 'x.ts', own: true }] }] });
   assert.deepEqual(r.planned.map((p) => [p.box, p.changed]), [['runs', true], ['all', false], ['lim', false]]);
+  assert.deepEqual(r.planned[1].onlyRelated, ['server/types.ts']); // only an attached file changed: not built
   assert.deepEqual(r.unplanned, ['x.ts']);
   const prev = clean({ title: 'T', touch: [{ box: 'runs', what: 'a' }], steps: ['one'] });
   const msg = planMessage({ ...plan, revision: 2 }, prev);
