@@ -264,7 +264,7 @@
   function renderAll() {
     msgsEl.innerHTML = ''; lastRole = null;
     if (!state.history.length) {
-      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is and write a comment right there; <b>Details</b> shows its code. Comments go out together, each with the code it points to.</p></div>`;
+      msgsEl.innerHTML = `<div class="intro"><p>Ask about anything on the page. <b>Click a box</b> to see what it is; <b>double-click</b> it to write a comment right there. Comments go out together, each with the code it points to.</p></div>`;
     }
     for (const e of state.history) appendEntry(e, false);
     renderWorking();

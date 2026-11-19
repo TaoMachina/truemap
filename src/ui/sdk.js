@@ -422,7 +422,7 @@
     el.className = view ? 'card viewing' : 'card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', view ? 'About this box' : 'Comment');
     el.innerHTML = `<div class="what"><b></b><code></code></div><div class="sum"></div><textarea rows="3"></textarea>
       <div class="suggest"></div>
-      <div class="foot">${view ? '<button class="btn primary" data-act="comment" type="button">Comment</button>' : ''}${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${planComment ? 'Send' : existing ? T.save : T.add}</button></div>`;
+      <div class="foot">${view ? '<button class="btn primary" data-act="comment" type="button" title="Or double-click the box">Comment</button>' : ''}${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${planComment ? 'Send' : existing ? T.save : T.add}</button></div>`;
     el.querySelector('b').textContent = text ? `“${label}”` : label;
     el.querySelector('code').textContent = target?.getAttribute('data-tag') || src;
     // what it is, in a line or two; what a plan or a change says about it
@@ -600,6 +600,19 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     e.preventDefault(); e.stopPropagation();
     const existing = [...notes.values()].find((n) => n.el === el);
     openCard({ target: el, noteId: existing?.id || null });
+  }, true);
+
+  // A double click on a box goes straight to writing a comment (a single click only looks).
+  document.addEventListener('dblclick', (e) => {
+    if (!e.isTrusted || e.composedPath().includes(host)) return;
+    const t = e.target instanceof Element ? e.target : null;
+    const box = t?.closest(boxSel);
+    if (!box || t.closest('a[href],button,input,select,textarea,label,summary,.tm-ask,[role=tab]')) return;
+    e.preventDefault();
+    getSelection()?.removeAllRanges();
+    select(box);
+    const existing = [...notes.values()].find((n) => n.el === box);
+    openCard({ target: box, noteId: existing?.id || null });
   }, true);
 
   document.addEventListener('mouseup', (e) => {
