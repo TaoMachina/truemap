@@ -67,7 +67,7 @@ export function currentPlan(root) {
     .map((f) => ({ f, t: statSync(join(d, f)).mtimeMs })).sort((a, b) => b.t - a.t);
   for (const { f } of files) {
     const p = readPlan(root, f.replace(/\.json$/, ''));
-    if (p && p.status !== 'done') return p;
+    if (p && !['done', 'rejected'].includes(p.status)) return p;
   }
   return null;
 }

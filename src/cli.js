@@ -264,6 +264,11 @@ async function doListen(root, opts) {
       ].join('\n'));
       return;
     }
+    if (b.messages.some((m) => m.kind === 'plan_rejected')) {
+      block('next_step', `The user REJECTED your plan. Do not build it. Ask in one short reply what they want instead (\`${CMD} reply "…" --listen\`${bg}).`);
+      return;
+    }
+    if (b.plan_waiting) block('plan_note', `Your plan "${b.plan_waiting}" is waiting for approval. If the user approves it in this message (approve, OK, go, yes, 同意, 可以, 开始), run \`${CMD} plan --approve\` first, then build. If they reject it, drop it.`);
     if (b.messages.some((m) => m.kind === 'plan_changes')) {
       block('next_step', [
         'The user asked for changes to your plan. Do not build yet.',

@@ -69,7 +69,7 @@ let plan = (() => { try { return currentPlan(root); } catch { return null; } })(
 function setPlan(p) {
   plan = p;
   if (p) { try { savePlan(root, p); } catch { /* ignore */ } }
-  broadcast({ type: 'plan', plan: p && p.status !== 'done' ? p : null });
+  broadcast({ type: 'plan', plan: p && !['done', 'rejected'].includes(p.status) ? p : null });
 }
 async function approvePlan(by) {
   if (!plan || plan.status === 'done') return false;
@@ -157,7 +157,7 @@ function deliverQueue() {
   setAgentState('working');
   lastAgentActivity = Date.now();
   broadcast({ type: 'delivered', ids: messages.map((m) => m.id) });
-  finishListen({ status: 'message', messages });
+  finishListen({ status: 'message', messages, ...(plan && plan.status === 'review' ? { plan_waiting: plan.title } : {}) });
 }
 
 function scheduleCloseCheck() {
@@ -436,6 +436,12 @@ const server = createServer(async (req, res) => {
     if (p === '/api/plan' && req.method === 'POST') {
       const b = await readBody(req);
       if (b.action === 'approve') return sendJson(res, 200, { ok: await approvePlan('user') });
+      if (b.action === 'reject' && plan && plan.status !== 'done') {
+        setPlan({ ...plan, status: 'rejected', rejectedAt: new Date().toISOString() });
+        const msg = { id: `m${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), kind: 'plan_rejected', from: 'user', page: plan.page, text: `Rejected the plan: ${plan.title}`, context: [], plan: plan.slug };
+        queue.push(msg); remember({ role: 'user', ...msg }); deliverQueue();
+        return sendJson(res, 200, { ok: true });
+      }
       return sendJson(res, 400, { error: 'unknown action' });
     }
     if (p === '/api/drift' && req.method === 'GET') {

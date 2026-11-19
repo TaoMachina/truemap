@@ -646,6 +646,8 @@
     const counts = [p.add.length && `${p.add.length} new`, p.touch.length && `${p.touch.length} changing`, p.remove.length && `${p.remove.length} removed`].filter(Boolean).join(', ');
     const here = p.page === state.page;
     const old = here && state.planUnsupported;
+    // on its own map the plan's buttons sit beside its boxes; the bar is only a way there (or for old pages)
+    if (here && !old) { planBar.hidden = true; planBar.innerHTML = ''; renderNotes(); return; }
     let html = `<div class="pb-text"><b>Plan</b><span class="pb-title">${esc(p.title)}</span><span class="pb-meta">${old ? 'not drawn: this page uses the old map format' : `${esc(counts)}${p.revision > 1 && p.status === 'review' ? ', revised' : ''}`}</span></div>`;
     if (p.status === 'review' && old) {
       html += `<div class="pb-acts"><span class="pb-wait">Read it in the conversation; the agent converts the map first.</span><button type="button" class="pb-btn" data-pb="request">Request changes</button><button type="button" class="pb-btn primary" data-pb="approve">Approve as text</button></div>`;
@@ -813,7 +815,7 @@
   const userIsInFrame = () => document.activeElement === frame && state.frameFocusAt > 0;
 
   // ---------- messages from the page frame ----------
-  window.addEventListener('message', (e) => {
+  window.addEventListener('message', async (e) => {
     if (e.source !== frame.contentWindow || e.origin !== CONTENT || !e.data || !e.data.__truemap) return;
     const d = e.data;
     if (d.type === 'press' || d.type === 'deselect') {
@@ -850,6 +852,13 @@
       $('litText').textContent = n === 1 ? '1 box lit' : `${n} boxes lit`;
     } else if (d.type === 'focus-cleared') {
       $('litPill').hidden = true;
+    } else if (d.type === 'plan-act') {
+      if (d.act === 'approve') {
+        if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { approving: true }); }
+        await api('/api/plan', { action: 'approve' });
+      } else if (d.act === 'reject') {
+        await api('/api/plan', { action: 'reject' });
+      }
     } else if (d.type === 'changes-names') {
       for (const it of d.items || []) if (it && it.src) ch.names.set(String(it.src), String(it.name || '').slice(0, 80));
       if (showingChanges()) renderChanges();

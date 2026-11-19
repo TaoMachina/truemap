@@ -50,7 +50,7 @@
 
   const drawWires = () => { window.truemapDiagram?.draw(); window.truemapWires?.draw(); markWires(); };
   let wireTimer = null;
-  const scheduleWires = () => { clearTimeout(wireTimer); wireTimer = setTimeout(() => { drawWires(); placePins(); }, 40); };
+  const scheduleWires = () => { clearTimeout(wireTimer); wireTimer = setTimeout(() => { drawWires(); placePins(); placePlanAct(); }, 40); };
 
   // ---------- focus: the agent (or a chat link) points at boxes ----------
   let focusSet = []; let focusNote = null; let hotBox = null;
@@ -333,9 +333,59 @@
       .btn.primary { background: #f2f2ee; color: #141413; }
       .pin { border-color: #161615; }
     }
-  </style><div id="rings"></div><div id="pins"></div><div id="slot"></div>`;
+      .planact { position: absolute; display: flex; align-items: center; gap: 6px; padding: 6px; background: #fff; border: 1px solid #d2d2cb; border-radius: 12px; box-shadow: 0 10px 28px -12px rgba(20,20,19,.35); font: 13px/1.3 "Instrument Sans", system-ui, sans-serif; color: #141413; pointer-events: auto; z-index: 3; }
+    .planact .pt { font-weight: 600; font-size: 12px; border: 1px solid #141413; border-radius: 6px; padding: 0 6px; margin-left: 4px; }
+    .planact .ttl { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; margin-right: 4px; }
+    .planact .wait { color: #6c6c65; padding: 0 6px; }
+    .planact button { all: unset; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; cursor: pointer; font-weight: 500; border: 1px solid #d2d2cb; }
+    .planact button:hover { background: #f2f2ef; }
+    .planact button.ok { background: #141413; color: #fff; border-color: #141413; }
+    .planact button.ok:hover { background: #3a3a36; }
+    .planact button:focus-visible { outline: 2px solid #141413; outline-offset: 2px; }
+    .planact svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-color-scheme: dark) {
+      .planact { background: #1b1b1a; color: #f2f2ee; border-color: #44443f; }
+      .planact .pt { border-color: #f2f2ee; }
+      .planact button { border-color: #44443f; } .planact button:hover { background: #252523; }
+      .planact button.ok { background: #f2f2ee; color: #141413; border-color: #f2f2ee; }
+    }
+  </style><div id="rings"></div><div id="pins"></div><div id="slot"></div><div id="planact"></div>`;
   const pinsEl = shadow.getElementById('pins');
   const slot = shadow.getElementById('slot');
+  const planActEl = shadow.getElementById('planact');
+  let planNow = null;
+  const ICON = {
+    ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5"/></svg>',
+    no: '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+    ask: '<svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z"/></svg>',
+  };
+  // The plan's actions sit next to the boxes it adds or changes, where your eyes already are.
+  function placePlanAct() {
+    planActEl.innerHTML = '';
+    const p = planNow;
+    if (!p || !['review', 'revise', 'approved'].includes(p.status)) return;
+    const els = [...document.querySelectorAll('[data-plan]')].filter((el) => el.isConnected && el.getBoundingClientRect().width);
+    if (!els.length) return;
+    mount();
+    const rs = els.map((el) => el.getBoundingClientRect());
+    const u = { l: Math.min(...rs.map((r) => r.left)) + scrollX, t: Math.min(...rs.map((r) => r.top)) + scrollY, r: Math.max(...rs.map((r) => r.right)) + scrollX, b: Math.max(...rs.map((r) => r.bottom)) + scrollY };
+    const box = document.createElement('div'); box.className = 'planact'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Plan');
+    const ttl = `<span class="pt">Plan</span><span class="ttl"></span>`;
+    if (p.status === 'review') box.innerHTML = `${ttl}<button class="ok" data-pa="approve" title="Approve: the agent starts building">${ICON.ok}Approve</button><button data-pa="reject" title="Reject: the agent drops this plan">${ICON.no}Reject</button><button data-pa="ask" title="Ask or comment; the agent answers and revises">${ICON.ask}Comment</button>`;
+    else box.innerHTML = `${ttl}<span class="wait">${p.status === 'revise' ? 'Waiting for the revised plan' : 'Approved'}</span>`;
+    box.querySelector('.ttl').textContent = p.title;
+    planActEl.appendChild(box);
+    const vw = document.documentElement.clientWidth; const w = box.offsetWidth; const h = box.offsetHeight;
+    let left = u.r + 14; let top = u.t;
+    if (left + w > scrollX + vw - 8) { left = Math.max(scrollX + 8, Math.min(u.l, scrollX + vw - w - 8)); top = u.t - h - 12; }
+    if (top < scrollY + 4) top = u.b + 12;
+    box.style.left = `${left}px`; box.style.top = `${top}px`;
+    box.onclick = (e) => {
+      const act = e.target.closest('[data-pa]')?.dataset.pa; if (!act) return;
+      if (act === 'ask') { const r = box.getBoundingClientRect(); openCard({ text: p.title, rect: docRect(r), planComment: true }); return; }
+      post({ type: 'plan-act', act });
+    };
+  }
   rings = shadow.getElementById('rings');
   const mount = () => { if (!host.isConnected) document.body.appendChild(host); };
 
@@ -355,7 +405,7 @@
   }
   function docRect(r) { return { left: r.left + scrollX, top: r.top + scrollY, right: r.right + scrollX, bottom: r.bottom + scrollY, width: r.width, height: r.height }; }
 
-  function openCard({ target = null, text = null, rect, noteId = null }) {
+  function openCard({ target = null, text = null, rect, noteId = null, planComment = false }) {
     closeCard(); hideSelectBtn(); mount(); setHover(null);
     const existing = noteId ? notes.get(noteId) : null;
     const sel = getSelection();
@@ -366,7 +416,7 @@
     el.className = 'card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Comment');
     el.innerHTML = `<div class="what"><b></b><code></code></div><div class="sum"></div><textarea rows="3"></textarea>
       <div class="suggest"></div>
-      <div class="foot">${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${existing ? T.save : T.add}</button></div>`;
+      <div class="foot">${target ? '<button class="btn" data-act="details" type="button">Details</button>' : ''}<span class="hint"></span>${existing ? `<button class="btn danger" data-act="remove" type="button">${T.remove}</button>` : `<button class="btn" data-act="cancel" type="button">${T.cancel}</button>`}<button class="btn primary" data-act="add" type="button">${planComment ? 'Send' : existing ? T.save : T.add}</button></div>`;
     el.querySelector('b').textContent = text ? `“${label}”` : label;
     el.querySelector('code').textContent = target?.getAttribute('data-tag') || src;
     // what it is, in a line or two; what a plan or a change says about it
@@ -387,7 +437,8 @@
 el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]').title = T.hint;
     const ta = el.querySelector('textarea'); ta.placeholder = T.placeholder; ta.value = existing?.text || '';
     const sug = el.querySelector('.suggest');
-    if (!existing) for (const [lbl, prompt] of T.suggest) {
+    if (planComment) { el.querySelector('b').textContent = `Plan: ${label}`; ta.placeholder = 'Ask a question or say what should change'; }
+    if (!existing && !planComment) for (const [lbl, prompt] of T.suggest) {
       const b = document.createElement('button'); b.type = 'button'; b.textContent = lbl;
       b.onclick = () => { ta.value = prompt; ta.focus(); };
       sug.appendChild(b);
@@ -420,7 +471,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     };
     el.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
-      if (act === 'add') finish(false);
+      if (act === 'add') finish(planComment);
       else if (act === 'details') peek(target);
       else if (act === 'cancel') closeCard();
       else if (act === 'remove') { removeNote(noteId, true); closeCard(); }
@@ -628,6 +679,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     } else if (d.type === 'select') {
       select(d.id ? document.getElementById(d.id) : null);
     } else if (d.type === 'plan') {
+      planNow = d.plan || null;
       // A plan drawn on the map: what it touches, adds (dashed, in its group) and removes.
       for (const el of document.querySelectorAll('[data-plan-overlay], [data-plan-revised]')) { el.removeAttribute('data-plan'); el.removeAttribute('data-plan-note'); el.removeAttribute('data-plan-overlay'); el.removeAttribute('data-plan-revised'); }
       clearFocus();
@@ -643,6 +695,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
       };
       if (p) { for (const t of p.touch || []) markPlan(t.box, 'change', t.what); for (const r of p.remove || []) markPlan(r.box, 'remove', r.why); }
       for (const id of p?.revised || []) findItems([id])[0]?.setAttribute('data-plan-revised', '');
+      setTimeout(placePlanAct, 60);
       for (const b of document.querySelectorAll('.tm-node, .tm-step')) { if (!b.hasAttribute('tabindex') && !b.matches('a[href]')) b.setAttribute('tabindex', '0'); }
       markWires();
     } else if (d.type === 'changes') {
