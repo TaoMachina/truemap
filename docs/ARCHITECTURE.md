@@ -1,6 +1,6 @@
 # Architecture (v0.1, solo)
 
-> 2026-11-19. This describes what is implemented. Earlier, heavier designs are kept in [archive/](archive/).
+> 2026-11-19, v0.2. This describes what is implemented. Earlier, heavier designs are kept in [archive/](archive/).
 
 ## First principles
 
@@ -20,7 +20,7 @@ your-repo/
     ├── index.html            the blueprint: overall structure, each module links to its page
     ├── payments.html
     ├── retry-decision.html
-    └── assets/truemap.css    the shared page kit (copied on first run; tokens editable)
+    └── assets/theme.css      optional token overrides (brand colors, font); the kit itself is served by truemap
 ```
 
 - **There is no data model, no IDs and no config.** The folder is the index and the HTML is everything.
@@ -41,7 +41,8 @@ We own three distribution points:
 
 | Command | What it does |
 |---|---|
-| `npx -y truemap-cli [page]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. Prints the check result for the page and a `next_step` |
+| `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. `--annotate` turns on comment mode. Prints the check result for the page and a `next_step` |
+| `npx -y truemap-cli outline` | A compact repo outline (folders, sizes, manifests, likely entry points) so the first blueprint is fast |
 | `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
 | `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-]` | Shows the answer in the chat. With `--listen` it keeps listening in the same call |
 | `npx -y truemap-cli check [page…]` / `check --ok <page>` | Checks anchors / marks a page as reviewed |
@@ -57,13 +58,16 @@ We own three distribution points:
 
 ```
 browser workspace (http://127.0.0.1:<port>/?t=<token>)
- ├─ top bar: page switcher (a small menu, Ctrl/Cmd+K; index first, check dots) + check status + chat toggle
+ ├─ top bar: mark + page switcher (Ctrl/Cmd+K) + check status + Annotate switch + one panel toggle
  ├─ center: the page in a sandboxed iframe from a SEPARATE origin (http://127.0.0.1:<contentPort>)
- └─ chat (collapsible): history, agent status, context chips, quick actions
+ │    the injected SDK draws map wires (data-to), shows check marks, and in annotate mode turns
+ │    clicks and text selections into numbered comments
+ └─ conversation panel (collapsible): agent state, history, queued comments, composer, state notices
         │  SSE (server → browser) + fetch POST (browser → server)
 local server (src/server.js, one per repo, detached, auto-exits when idle)
  ├─ chat queue between browser and agent
  ├─ fs.watch on .truemap/ → reload + re-check
+ ├─ serves the page kit + fonts (kit/), with .truemap/assets/theme.css appended
  └─ checker (src/check.js)
         ▲  HTTP with token (from ~/.truemap/servers/<repo-hash>.json)
 CLI (src/cli.js) ← run by the agent
@@ -74,9 +78,10 @@ CLI (src/cli.js) ← run by the agent
 | `bin/truemap.js`, `src/cli.js` | The CLI. Output is YAML-ish text written for agents |
 | `src/server.js` | Two HTTP listeners: workspace + API (token-protected), and content (pages only, SDK injected) |
 | `src/check.js` | Anchor checker; also lists pages |
+| `src/outline.js` | Repo outline for `truemap outline` |
 | `src/ui/workspace.*` | Workspace UI: zero dependencies, no build step |
-| `src/ui/sdk.js` | Injected into served pages only (never written to files). Handles click/selection context, decision forms and check marks |
-| `kit/truemap.css` | The page kit, copied into `.truemap/assets/` on first run |
+| `src/ui/sdk.js` | Injected into served pages only (never written to files). Draws map wires, runs annotate mode and the comment card, decision forms and check marks |
+| `kit/truemap.css`, `kit/fonts/` | The page kit and IBM Plex fonts, served to every page as `assets/truemap.css`, so repos always get the current kit. A repo that keeps its own `assets/truemap.css` (older setups) keeps it |
 | `src/guide.md` | Printed by `truemap guide` |
 | `skills/truemap/SKILL.md` | A short skill stub that sends the agent to the CLI |
 
@@ -84,14 +89,15 @@ Zero runtime dependencies, Node ≥ 20.
 
 ## Chat rules (listen / reply)
 
-- **Messages queue.** Messages sent while the agent is busy are kept. The next `listen` returns all of them at once, in order, each with its page, the selected elements and their `data-src`.
+- **Messages queue.** Messages sent while the agent is busy are kept. The next `listen` returns all of them at once, in order, each with its page and its numbered comments (element or text, `data-src`, comment text).
+- **Comments.** With Annotate on, a click on a box or a text selection opens a comment card on the page. Enter adds the comment (a numbered pin on the page, a row in the panel); Send delivers all of them in one message. Ctrl+Enter sends at once. Outside annotate mode, links work normally and a text selection offers a small Comment button. The agent can switch annotate on with `--annotate` or `<meta name="truemap-annotate" content="on">`.
 - **There is one listener at a time.** A new `listen` replaces the old one, which returns `replaced`.
 - **`browser_closed`** is returned about 10 s after the last tab closes, so the agent never waits forever.
 - **`reply --listen`** answers and keeps listening in one call, so the conversation doesn't drop when the agent forgets to listen again.
 - **Per-agent guidance** is printed by the CLI, based on environment detection:
   - Claude Code runs `listen` with `run_in_background`. Waiting costs no tokens and the terminal stays free.
   - Codex runs it in the foreground.
-- **The browser shows the agent's state**: listening, working, or not connected. Messages sent while no one is listening are marked *queued*.
+- **The browser shows the agent's state**, by name (Claude Code, Codex): listening; working (with elapsed time and progress lines); not listening (it answered and went back to the terminal); no agent connected; or workspace closed (the server stopped). Each non-live state shows what to do next, with a copyable command. Messages sent while no one listens are marked *Waiting for the agent*.
 - **Messages from page scripts** (`window.truemap.send`, untrusted decision submits) are tagged `from: page`, so the agent can tell them apart from the user.
 
 ## The checker: language-agnostic

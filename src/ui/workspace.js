@@ -2,27 +2,26 @@
   const TOKEN = window.TRUEMAP_TOKEN;
   const CONTENT = window.TRUEMAP_CONTENT;
 
+  const AGENTS = { 'claude-code': 'Claude Code', codex: 'Codex' };
   const S = {
-    listening: 'Agent is listening', working: 'Agent is working', offline: 'Agent not connected',
-    placeholder: 'Ask about this project, or select something on the page', placeholderCtx: 'Ask about the selection',
-    intro: 'Select a box or some text on the page, then ask about it. The agent receives the code it points to.',
+    placeholder: 'Ask about this page', placeholderNotes: 'Add a message (optional)',
     drawPrompt: 'Read this project and draw its blueprint as .truemap/index.html, then open it for me.',
-    quick: [
-      ['Explain', 'Explain how this works.'],
-      ['What uses it', 'What depends on this, and what does it depend on?'],
-      ['Why like this', 'Why is it built this way? What are the trade-offs?'],
-      ['Change it…', null],
-    ],
-    changePrefix: 'Change it so that ',
-    ok: 'Matches the code', changed: (n) => `${n} changed in code`, broken: (n) => `${n} out of date`,
+    ok: 'Matches the code', changed: (n) => `${n} changed in code`, broken: (n) => `${n} no longer match`,
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
-    queued: 'Waiting for the agent', answered: 'Chose', fromPage: 'sent by the page', blueprint: 'Blueprint',
-    offlineHint: 'Messages wait here until the agent runs <code>truemap listen</code>.',
+    chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
+    state: {
+      listening: (a) => `${a} is listening`, working: (a) => `${a} is working`, idle: (a) => `${a} is not listening`,
+      offline: () => 'No agent connected', closed: () => 'Workspace closed',
+    },
   };
 
   const $ = (id) => document.getElementById(id);
   const app = $('app'); const frame = $('frame'); const msgsEl = $('msgs'); const input = $('input'); const menu = $('menu');
-  const state = { pages: [], check: { results: [] }, page: null, chips: [], agent: 'offline', pending: new Set(), scroll: {}, history: [], frameFocusAt: 0 };
+  const state = {
+    pages: [], check: { results: [] }, page: null, history: [], pending: new Set(), scroll: {},
+    notes: [], agent: { state: 'offline', name: '', since: 0 }, progress: '', cmd: 'npx -y truemap-cli',
+    annotate: false, annotateTouched: false, conn: 'live', frameFocusAt: 0,
+  };
 
   const store = {
     get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -32,6 +31,7 @@
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Truemap-Token': TOKEN }, body: JSON.stringify(body || {}),
   }).then((r) => r.json()).catch(() => ({}));
   const toFrame = (msg) => { if (state.page && !frame.hidden) frame.contentWindow?.postMessage({ __truemap: true, ...msg }, CONTENT); };
+  const agentName = () => AGENTS[state.agent.name] || 'The agent';
 
   // ---------- text helpers ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -65,24 +65,38 @@
     flush(); close();
     return html;
   }
+  const fmtElapsed = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`; };
 
-  // ---------- chat panel open/closed ----------
+  // ---------- conversation panel: one button opens and closes it ----------
   const narrow = () => window.matchMedia('(max-width: 860px)').matches;
-  function setChat(open, remember = true) {
-    app.classList.toggle('chat-closed', !open);
-    $('toggleChat').hidden = open;
+  const panelOpen = () => !app.classList.contains('panel-closed');
+  function setPanel(open, remember = true) {
+    app.classList.toggle('panel-closed', !open);
+    const b = $('togglePanel');
+    b.setAttribute('aria-pressed', String(open));
+    b.title = open ? 'Hide conversation' : 'Show conversation';
+    b.setAttribute('aria-label', b.title);
     if (open) $('unread').hidden = true;
-    if (remember && !narrow()) store.set('truemap.chat', open ? 'open' : 'closed');
+    if (remember && !narrow()) store.set('truemap.panel', open ? 'open' : 'closed');
   }
-  setChat(narrow() ? false : store.get('truemap.chat') !== 'closed', false);
-  $('toggleChat').onclick = () => { setChat(true); input.focus(); };
-  $('closeChat').onclick = () => setChat(false);
-  const chatOpen = () => !app.classList.contains('chat-closed');
+  setPanel(narrow() ? false : store.get('truemap.panel') !== 'closed', false);
+  $('togglePanel').onclick = () => { const open = !panelOpen(); setPanel(open); if (open) input.focus(); };
+
+  // ---------- annotate ----------
+  function setAnnotate(on, { touched = false } = {}) {
+    state.annotate = !!on;
+    if (touched) { state.annotateTouched = true; store.set('truemap.annotate', on ? 'on' : 'off'); }
+    $('annotate').setAttribute('aria-checked', String(state.annotate));
+    toFrame({ type: 'annotate', on: state.annotate });
+  }
+  state.annotate = store.get('truemap.annotate') === 'on';
+  $('annotate').setAttribute('aria-checked', String(state.annotate));
+  $('annotate').onclick = () => setAnnotate(!state.annotate, { touched: true });
 
   // ---------- page switcher ----------
   const resultFor = (page) => state.check.results?.find((r) => r.page === page);
   const stateOf = (r) => (r?.counts?.broken ? 'broken' : r?.counts?.changed ? 'changed' : '');
-  const titleOf = (p) => (p.page === 'index.html' && (!p.title || p.title === 'index') ? S.blueprint : p.title);
+  const titleOf = (p) => (p.page === 'index.html' && (!p.title || p.title === 'index') ? 'Blueprint' : p.title || p.page);
 
   function renderMenu() {
     const list = $('pages'); list.innerHTML = '';
@@ -94,11 +108,12 @@
         const st = stateOf(resultFor(p.page));
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'page-item' + (p.page === state.page ? ' active' : ''); b.setAttribute('role', 'menuitem');
-        b.innerHTML = `<span class="pi-text"><span class="pi-title">${esc(titleOf(p))}</span><span class="pi-file">${esc(p.page)}</span></span>${st ? `<span class="state-dot ${st}"></span>` : ''}`;
+        b.innerHTML = `<span class="pi-text"><span class="pi-title">${esc(titleOf(p))}</span><span class="pi-file">${esc(p.page)}</span></span>${st ? `<span class="tri ${st}" title="${st === 'broken' ? 'Out of date' : 'Code changed'}"></span>` : ''}`;
         b.onclick = () => { closeMenu(); go(p.page); };
         list.appendChild(b);
         if (i === 0 && p.page === 'index.html' && arr.length > 1) list.insertAdjacentHTML('beforeend', '<div class="menu-gap"></div>');
       });
+    if (!state.pages.length) list.innerHTML = '<div class="menu-head">No pages in .truemap/ yet</div>';
   }
   function openMenu() { renderMenu(); menu.hidden = false; $('pageBtn').setAttribute('aria-expanded', 'true'); ($('filter').hidden ? menu.querySelector('.page-item.active, .page-item') : $('filter'))?.focus(); }
   function closeMenu() { menu.hidden = true; $('pageBtn').setAttribute('aria-expanded', 'false'); }
@@ -107,6 +122,7 @@
   document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.switcher')) closeMenu(); });
   window.addEventListener('blur', () => { if (!menu.hidden) closeMenu(); });
   document.addEventListener('keydown', (e) => {
+    const typing = e.target.closest?.('input,textarea,select,[contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); menu.hidden ? openMenu() : closeMenu(); }
     else if (e.key === 'Escape' && !menu.hidden) { closeMenu(); $('pageBtn').focus(); }
     else if (!menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -114,24 +130,25 @@
       e.preventDefault();
       const i = items.indexOf(document.activeElement);
       items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+    } else if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a' && menu.hidden) {
+      setAnnotate(!state.annotate, { touched: true });
     }
   });
   $('recheck').onclick = () => { api('/api/check'); closeMenu(); };
 
   function renderHeader() {
     const p = state.pages.find((x) => x.page === state.page);
-    $('pageTitle').textContent = p ? titleOf(p) : 'truemap';
+    $('pageTitle').textContent = p ? titleOf(p) : (state.pages.length ? 'Pages' : 'No pages yet');
     $('pagePath').textContent = state.page ? `.truemap/${state.page}` : '';
     document.title = p ? `${titleOf(p)} – truemap` : 'truemap';
     const r = resultFor(state.page); const st = stateOf(r);
-    const dot = $('titleDot'); dot.hidden = !st; dot.className = `state-dot ${st}`;
     const chip = $('checkChip');
     if (!r || r.missing || !r.anchors?.length) { chip.hidden = true; return; }
     chip.hidden = false;
     const { changed, broken } = r.counts;
     chip.dataset.state = st || 'ok';
-    chip.textContent = broken ? S.broken(broken) + (changed ? `, ${S.changed(changed)}` : '') : changed ? S.changed(changed) : S.ok;
-    chip.title = st ? 'Ask the agent to update this page' : '';
+    $('checkText').textContent = broken ? S.broken(broken) + (changed ? `, ${S.changed(changed)}` : '') : changed ? S.changed(changed) : S.ok;
+    chip.title = st ? 'Ask the agent to update this page' : `${r.counts.ok} boxes checked against the code`;
   }
   function sendMarks() {
     const r = resultFor(state.page);
@@ -146,42 +163,81 @@
     setCurrent(page);
   }
   function setCurrent(page) {
-    if (state.page !== page) { state.chips = []; renderChips(); }
     state.page = page;
     history.replaceState(null, '', `${location.pathname}${location.search}#page=${encodeURIComponent(page)}`);
     api('/api/viewing', { page });
-    renderHeader();
+    renderHeader(); renderNotice();
   }
   function showEmpty() {
-    state.page = null; frame.hidden = true; frame.removeAttribute('src'); $('empty').hidden = false; renderHeader();
+    state.page = null; frame.hidden = true; frame.removeAttribute('src'); $('empty').hidden = false; renderHeader(); renderNotice();
   }
   const reloadFrame = () => { if (state.page) frame.src = pageUrl(state.page, true); };
 
-  // ---------- chat ----------
+  // ---------- notes (comments collected in annotate mode) ----------
+  const notesForPage = () => state.notes.filter((n) => n.page === state.page);
+  function syncFrameNotes() { toFrame({ type: 'notes', items: notesForPage().map(({ id, kind, label, src, text, selector }) => ({ id, kind, label, src, text, selector })) }); }
+  function renderNotes() {
+    const list = $('notes'); list.innerHTML = '';
+    list.hidden = state.notes.length === 0;
+    state.notes.forEach((n, i) => {
+      const li = document.createElement('li'); li.className = 'note';
+      li.innerHTML = `<span class="mn-num">${i + 1}</span><span class="mn-what"><b>${esc(n.kind === 'text' ? `“${n.label}”` : n.label)}</b>${n.page !== state.page ? ` on ${esc(n.page)}` : ''}</span><span class="note-text">${esc(n.text)}</span><button class="note-x" type="button" aria-label="Remove comment" title="Remove">×</button>`;
+      li.querySelector('.note-x').onclick = (e) => { e.stopPropagation(); state.notes = state.notes.filter((x) => x.id !== n.id); renderNotes(); syncFrameNotes(); };
+      li.onclick = () => { if (n.page !== state.page) go(n.page); else toFrame({ type: 'focus-note', id: n.id }); };
+      list.appendChild(li);
+    });
+    const count = state.notes.length;
+    $('send').textContent = count ? `Send ${count} comment${count > 1 ? 's' : ''}` : 'Send';
+    input.placeholder = count ? S.placeholderNotes : S.placeholder;
+  }
+
+  // ---------- conversation ----------
+  function whoLine(role, at, name) {
+    const el = document.createElement('div'); el.className = 'who';
+    el.innerHTML = `<b>${esc(role === 'agent' ? (AGENTS[name] || name || agentName()) : S.you)}</b><span>${timeOf(at)}</span>`;
+    return el;
+  }
+  let lastRole = null;
   function renderAll() {
-    msgsEl.innerHTML = `<p class="intro">${esc(S.intro)}</p>`;
+    msgsEl.innerHTML = ''; lastRole = null;
+    if (!state.history.length) {
+      msgsEl.innerHTML = `<div class="intro"><h2>Ask about anything on the page</h2><ol>
+        <li>Turn on <b>Annotate</b> (or press <kbd>A</kbd>), then click a box or select text to comment on it.</li>
+        <li>Add as many comments as you like. They go out together, each with the code it points to.</li>
+        <li>Or just type a question below.</li></ol></div>`;
+    }
     for (const e of state.history) appendEntry(e, false);
+    renderWorking();
     scrollChat();
   }
   function appendEntry(e, scroll = true) {
+    msgsEl.querySelector('.intro')?.remove();
+    if (e.role !== lastRole) { msgsEl.appendChild(whoLine(e.role, e.at, e.agent)); lastRole = e.role; }
     const el = document.createElement('div');
     if (e.role === 'agent') {
       el.className = 'msg agent';
-      el.innerHTML = `<div class="bubble">${md(e.text)}</div><div class="meta"><span>${timeOf(e.at)}</span></div>`;
-      $('progress').hidden = true;
-      if (!chatOpen()) $('unread').hidden = false;
+      el.innerHTML = md(e.text);
+      if (!panelOpen()) $('unread').hidden = false;
     } else {
-      const isAnswer = e.kind === 'answer';
-      el.className = 'msg user' + (isAnswer ? ' answer' : '');
-      el.dataset.id = e.id;
-      const ctx = (e.context || []).map((c) => `<span title="${esc(c.src || '')}">${esc(c.label)}</span>`).join('');
-      const body = isAnswer
-        ? `${esc(S.answered)}: <strong>${esc(e.answer?.choice || '')}</strong>${e.answer?.note ? `<br>${esc(e.answer.note)}` : ''}<span class="answer-q">${esc(e.answer?.question || '')}</span>`
-        : esc(e.text);
-      const pending = state.pending.has(e.id) ? `<span class="pending">${S.queued}</span>` : '';
-      el.innerHTML = `${ctx && !isAnswer ? `<div class="ctx">${ctx}</div>` : ''}<div class="bubble">${body}</div><div class="meta">${pending}${e.from === 'page' ? `<span>${S.fromPage}</span>` : ''}<span>${timeOf(e.at)}</span></div>`;
+      el.className = 'msg user'; el.dataset.id = e.id;
+      let body = '';
+      if (e.kind === 'answer') {
+        body = `<span class="answer-q">${esc(e.answer?.question || '')}</span>${esc(S.chose)}: <strong>${esc(e.answer?.choice || '')}</strong>${e.answer?.note ? `<br>${esc(e.answer.note)}` : ''}`;
+      } else {
+        const notes = (e.context || []).filter((c) => c.comment);
+        const sel = (e.context || []).filter((c) => !c.comment);
+        if (notes.length) {
+          body += `<ol class="msg-notes">${notes.map((c, i) => `<li class="mn"><span class="mn-num">${i + 1}</span><span class="mn-what"><b>${esc(c.kind === 'text' ? `“${c.label}”` : c.label)}</b>${c.src ? ` ${esc(c.src)}` : ''}</span><span>${esc(c.comment)}</span></li>`).join('')}</ol>`;
+        }
+        if (sel.length) body += `<div class="mn-what">${sel.map((c) => `<b>${esc(c.label)}</b>`).join(', ')}</div>`;
+        if (e.text) body += `<div class="msg-text">${esc(e.text).replace(/\n/g, '<br>')}</div>`;
+      }
+      el.innerHTML = body
+        + (e.from === 'page' ? `<div class="from-page">${S.fromPage}</div>` : '')
+        + (state.pending.has(e.id) ? `<div class="waiting">${S.waiting}</div>` : '');
     }
     msgsEl.appendChild(el);
+    renderWorking();
     if (scroll) scrollChat();
   }
   const scrollChat = () => { msgsEl.scrollTop = msgsEl.scrollHeight; };
@@ -192,49 +248,70 @@
     const [page] = a.dataset.page.split('#');
     if (state.pages.some((p) => p.page === page)) go(page);
   });
-
-  function setAgent(s) {
-    state.agent = s;
-    $('agent').dataset.state = s; $('agentLabel').textContent = S[s] || s;
-    $('offlineHint').innerHTML = S.offlineHint; $('offlineHint').hidden = s !== 'offline';
+  function markPending(id, on) {
+    const el = msgsEl.querySelector(`.msg[data-id="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.querySelector('.waiting')?.remove();
+    if (on) el.insertAdjacentHTML('beforeend', `<div class="waiting">${S.waiting}</div>`);
   }
 
-  function renderChips() {
-    const box = $('chips'); box.innerHTML = '';
-    state.chips.forEach((c, i) => {
-      const chip = document.createElement('span'); chip.className = 'chip';
-      chip.innerHTML = `<span class="chip-label">${esc(c.label)}</span>${c.src ? `<span class="chip-src">${esc(c.src)}</span>` : ''}<button type="button" aria-label="Remove">×</button>`;
-      chip.querySelector('button').onclick = () => {
-        state.chips.splice(i, 1); renderChips();
-        if (!state.chips.some((x) => x.kind === 'element')) toFrame({ type: 'clear-selection' });
-      };
-      box.appendChild(chip);
-    });
-    const quick = $('quick');
-    quick.hidden = state.chips.length === 0;
-    if (!quick.childElementCount) {
-      for (const [label, prompt] of S.quick) {
-        const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
-        b.onclick = () => { if (!prompt) { input.value = S.changePrefix; input.focus(); autosize(); return; } send(prompt); };
-        quick.appendChild(b);
-      }
+  // ---------- agent state ----------
+  let tick = null;
+  function renderWorking() {
+    msgsEl.querySelector('.working')?.remove();
+    if (state.agent.state !== 'working' || state.conn !== 'live') return;
+    const w = document.createElement('div'); w.className = 'working';
+    w.innerHTML = `<i></i><span>${esc(state.progress || `${agentName()} is working on it`)}</span>`;
+    msgsEl.appendChild(w);
+  }
+  function renderAgent() {
+    const s = state.conn === 'closed' ? 'closed' : state.agent.state;
+    $('agent').dataset.state = s;
+    $('agentLabel').textContent = S.state[s] ? S.state[s](agentName()) : s;
+    clearInterval(tick);
+    const el = $('elapsed');
+    if (s === 'working' && state.agent.since) {
+      const upd = () => { el.textContent = fmtElapsed(Date.now() - state.agent.since); };
+      upd(); el.hidden = false; tick = setInterval(upd, 1000);
+    } else el.hidden = true;
+    renderWorking(); renderNotice();
+  }
+  function renderNotice() {
+    const n = $('notice');
+    const s = state.conn === 'closed' ? 'closed' : state.agent.state;
+    const page = state.page && state.page !== 'index.html' ? ` ${state.page}` : '';
+    let html = '';
+    if (s === 'closed') {
+      html = `<b>This workspace is closed</b>Your pages are still in <code>.truemap/</code>. To reopen, ask your agent to run:${cmdBox(state.cmd + page)}`;
+    } else if (s === 'offline') {
+      html = `<b>No agent is connected</b>Messages wait here until one listens. In your terminal, ask your agent to open this page:${cmdBox(state.cmd + page)}`;
+    } else if (s === 'idle') {
+      html = `<b>${esc(agentName())} went back to the terminal</b>Messages you send now wait here. To pick them up, tell your agent in the terminal to listen to truemap again.`;
     }
-    input.placeholder = state.chips.length ? S.placeholderCtx : S.placeholder;
+    n.innerHTML = html; n.hidden = !html;
+    n.querySelector('.copy')?.addEventListener('click', (e) => {
+      const text = n.querySelector('.cmd code').textContent;
+      navigator.clipboard?.writeText(text).then(() => { e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy'; }, 1400); }).catch(() => {});
+    });
+  }
+  const cmdBox = (cmd) => `<div class="cmd"><code>${esc(cmd)}</code><button class="copy" type="button">Copy</button></div>`;
+  function setAgent(a) {
+    if (!a) return;
+    state.agent = { state: a.state || 'offline', name: a.name || state.agent.name, since: a.since || 0 };
+    if (state.agent.state !== 'working') state.progress = '';
+    renderAgent();
   }
 
+  // ---------- sending ----------
   async function send(text, extra = {}) {
     text = String(text || '').trim();
-    const context = extra.context ?? state.chips;
+    const withNotes = !extra.answer && !extra.noNotes;
+    const notes = withNotes ? state.notes : [];
+    const context = extra.context ?? notes.map((n) => ({ kind: n.kind, label: n.label, src: n.src, excerpt: n.excerpt, comment: n.text, page: n.page }));
     if (!text && !context.length && !extra.answer) return;
     const r = await api('/api/send', { text, context, page: state.page, ...extra });
     if (r.id && !r.delivered) { state.pending.add(r.id); markPending(r.id, true); }
-    if (!extra.keepChips) { state.chips = []; renderChips(); toFrame({ type: 'clear-selection' }); }
-  }
-  function markPending(id, on) {
-    const el = msgsEl.querySelector(`.msg[data-id="${CSS.escape(id)}"] .meta`);
-    if (!el) return;
-    el.querySelector('.pending')?.remove();
-    if (on) el.insertAdjacentHTML('afterbegin', `<span class="pending">${S.queued}</span>`);
+    if (withNotes && notes.length && r.id) { state.notes = []; renderNotes(); syncFrameNotes(); }
   }
 
   const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; };
@@ -245,80 +322,100 @@
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const text = input.value;
-    if (!text.trim() && !state.chips.length) return;
+    if (!text.trim() && !state.notes.length) { input.focus(); return; }
     input.value = ''; autosize();
     send(text);
   });
-  input.placeholder = S.placeholder;
 
-  $('drawBlueprint').onclick = () => { setChat(true); send(S.drawPrompt, { context: [] }); };
+  $('drawBlueprint').onclick = () => { setPanel(true); send(S.drawPrompt, { context: [], noNotes: true }); };
   $('checkChip').onclick = () => {
     const r = resultFor(state.page);
     if (!r || (!r.counts.changed && !r.counts.broken)) return;
-    setChat(true);
-    send(S.fixPrompt(`.truemap/${state.page}`, r.counts.changed, r.counts.broken), { context: [] });
+    setPanel(true);
+    send(S.fixPrompt(`.truemap/${state.page}`, r.counts.changed, r.counts.broken), { context: [], noNotes: true });
   };
 
   // A decision only counts as the user's if the user actually moved focus into the page.
   window.addEventListener('blur', () => { setTimeout(() => { if (document.activeElement === frame) state.frameFocusAt = Date.now(); }, 0); });
   const userIsInFrame = () => document.activeElement === frame && state.frameFocusAt > 0;
 
-  // ---------- messages from the page iframe ----------
+  // ---------- messages from the page frame ----------
   window.addEventListener('message', (e) => {
     if (e.source !== frame.contentWindow || e.origin !== CONTENT || !e.data || !e.data.__truemap) return;
     const d = e.data;
     if (d.type === 'loaded') {
       if (d.page && d.page !== state.page) setCurrent(d.page);
       renderHeader(); sendMarks();
+      if (!state.annotateTouched && typeof d.annotate === 'boolean') state.annotate = d.annotate;
+      setAnnotate(state.annotate);
+      syncFrameNotes();
       const y = state.scroll[d.page]; if (y) toFrame({ type: 'scroll', y });
     } else if (d.type === 'scroll') {
       state.scroll[d.page] = d.y;
-    } else if (d.type === 'select') {
-      state.chips = [...state.chips.filter((c) => c.kind === 'text'), ...(d.items || [])].slice(0, 8);
-      renderChips();
-      if (d.items?.length) { setChat(true, false); input.focus({ preventScroll: true }); }
-    } else if (d.type === 'select-text') {
-      state.chips = [...state.chips.filter((c) => c.kind !== 'text'), d.item];
-      renderChips();
+    } else if (d.type === 'note' || d.type === 'note-update') {
+      const n = d.note || {};
+      const note = { id: String(n.id), page: d.page, kind: n.kind === 'text' ? 'text' : 'element', label: String(n.label || '').slice(0, 80), src: String(n.src || ''), excerpt: String(n.excerpt || '').slice(0, 400), text: String(n.text || '').slice(0, 4000), selector: String(n.selector || '') };
+      const i = state.notes.findIndex((x) => x.id === note.id);
+      if (i >= 0) state.notes[i] = note; else state.notes.push(note);
+      renderNotes(); syncFrameNotes();
+      if (d.send) send(input.value).then(() => { input.value = ''; autosize(); });
+      else if (!panelOpen() && !narrow()) setPanel(true, false);
+    } else if (d.type === 'note-remove') {
+      state.notes = state.notes.filter((x) => x.id !== d.id); renderNotes(); syncFrameNotes();
+    } else if (d.type === 'toggle-annotate') {
+      setAnnotate(!state.annotate, { touched: true });
     } else if (d.type === 'answer') {
       const fromUser = d.trusted === true && userIsInFrame();
       send('', {
-        kind: 'answer', from: fromUser ? 'user' : 'page', keepChips: true,
+        kind: 'answer', from: fromUser ? 'user' : 'page', noNotes: true,
         context: d.src ? [{ kind: 'element', label: d.question, src: d.src }] : [],
         answer: { question: d.question, choice: d.choice, note: d.note },
       });
     } else if (d.type === 'page-send') {
-      if (d.text) send(d.text, { from: 'page', context: [], keepChips: true });
+      if (d.text) send(d.text, { from: 'page', context: [], noNotes: true });
     }
   });
 
   // ---------- live events from the server ----------
+  let closedTimer = null;
+  function setConn(c) {
+    if (state.conn === c) return;
+    state.conn = c; app.dataset.conn = c;
+    $('annotate').disabled = c === 'closed';
+    renderAgent();
+  }
   function connect() {
     const es = new EventSource(`/api/events?t=${encodeURIComponent(TOKEN)}`);
     let greeted = false;
     const guard = setTimeout(() => { if (!greeted) { es.close(); connect(); } }, 3000);
+    es.onerror = () => {
+      if (closedTimer) return;
+      closedTimer = setTimeout(() => { if (es.readyState !== EventSource.OPEN) setConn('closed'); }, 5000);
+    };
     es.onmessage = (ev) => {
       let d; try { d = JSON.parse(ev.data); } catch { return; }
       if (d.type === 'hello') {
-        greeted = true; clearTimeout(guard);
+        greeted = true; clearTimeout(guard); clearTimeout(closedTimer); closedTimer = null;
+        setConn('live');
         state.pages = d.pages || []; state.check = d.check || { results: [] }; state.history = d.history || [];
         state.pending = new Set(d.pending || []);
+        if (d.cmd) state.cmd = d.cmd;
+        if (typeof d.annotate === 'boolean') { state.annotate = d.annotate; state.annotateTouched = true; $('annotate').setAttribute('aria-checked', String(d.annotate)); }
         $('ver').textContent = `truemap ${d.version}`;
         $('project').textContent = String(d.root || '').split(/[\\/]/).filter(Boolean).pop() || '';
-        setAgent(d.agent);
-        renderAll();
+        state.agent = { state: d.agent?.state || 'offline', name: d.agent?.name || '', since: d.agent?.since || 0 };
+        renderAll(); renderAgent(); renderNotes();
         const fromHash = decodeURIComponent((location.hash.match(/page=([^&]+)/) || [])[1] || '');
         const target = [state.page, fromHash, d.current].find((p) => p && state.pages.some((x) => x.page === p)) || state.pages[0]?.page;
         target ? go(target, { force: !frame.getAttribute('src') }) : showEmpty();
       } else if (d.type === 'chat') {
         state.history.push(d.entry); appendEntry(d.entry);
       } else if (d.type === 'agent') {
-        setAgent(d.state);
-        if (d.state !== 'working') $('progress').hidden = true;
+        setAgent(d.agent);
       } else if (d.type === 'delivered') {
         for (const id of d.ids || []) { state.pending.delete(id); markPending(id, false); }
       } else if (d.type === 'progress') {
-        const p = $('progress'); p.textContent = d.text; p.hidden = !d.text;
+        state.progress = d.text || ''; renderWorking(); scrollChat();
       } else if (d.type === 'pages') {
         state.pages = d.pages || []; renderHeader(); if (!menu.hidden) renderMenu();
         if (!state.page && state.pages[0]) go(state.pages[0].page);
@@ -330,10 +427,15 @@
         state.check = d.check || { results: [] }; renderHeader(); sendMarks(); if (!menu.hidden) renderMenu();
       } else if (d.type === 'navigate') {
         if (d.pages) state.pages = d.pages;
+        if (typeof d.annotate === 'boolean') { state.annotate = d.annotate; state.annotateTouched = true; }
         if (d.page && state.pages.some((p) => p.page === d.page)) go(d.page, { force: true });
+        else setAnnotate(state.annotate);
         renderHeader();
+      } else if (d.type === 'closing') {
+        es.close(); setConn('closed');
       }
     };
   }
+  renderNotes();
   connect();
 })();

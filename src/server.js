@@ -15,6 +15,9 @@ const statePath = serverStatePath(root);
 const IDLE_MS = Number(process.env.TRUEMAP_IDLE_MS || 30 * 60 * 1000);
 const CLOSE_GRACE_MS = Number(process.env.TRUEMAP_CLOSE_GRACE_MS || 10_000);
 const UI_DIR = join(PKG_DIR, 'src', 'ui');
+const KIT_DIR = join(PKG_DIR, 'kit');
+const FONT_DIR = join(KIT_DIR, 'fonts');
+const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap-cli';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -27,7 +30,10 @@ const MIME = {
 const clients = new Set();          // SSE responses (browser tabs)
 const queue = [];                   // messages waiting for the agent
 let listener = null;                // { res, timer } – the single active `listen`
-let agentState = 'offline';         // listening | working | offline
+let agentState = 'offline';         // offline (never seen) | listening | working | idle (back in the terminal)
+let agentName = '';                 // claude-code | codex | ''
+let agentSince = 0;                 // when the current state began
+let annotateWish;                   // set by `truemap <page> --annotate` before a tab is open
 let lastAgentActivity = 0;
 let currentPage = null;
 let closeTimer = null;
@@ -54,10 +60,15 @@ function broadcast(event) {
   for (const res of clients) res.write(data);
 }
 
+const agentInfo = () => ({ state: agentState, name: agentName, since: agentSince });
 function setAgentState(s) {
   if (agentState === s) return;
   agentState = s;
-  broadcast({ type: 'agent', state: s });
+  agentSince = Date.now();
+  broadcast({ type: 'agent', agent: agentInfo() });
+}
+function noteAgent(name) {
+  if (typeof name === 'string' && name && name !== agentName) { agentName = name.slice(0, 40); broadcast({ type: 'agent', agent: agentInfo() }); }
 }
 
 function touchIdle() {
@@ -69,11 +80,12 @@ function touchIdle() {
 }
 
 function shutdown() {
+  broadcast({ type: 'closing' });
   try {
     const s = JSON.parse(readFileSync(statePath, 'utf8'));
     if (s.pid === process.pid) rmSync(statePath, { force: true });
   } catch { /* ignore */ }
-  process.exit(0);
+  setTimeout(() => process.exit(0), 150); // let the browsers hear 'closing'
 }
 
 // ---------- listen / reply ----------
@@ -86,7 +98,7 @@ function finishListen(body) {
 }
 
 function deliverQueue() {
-  if (listener && (listener.res.destroyed || listener.res.writableEnded)) { clearTimeout(listener.timer); listener = null; setAgentState('offline'); }
+  if (listener && (listener.res.destroyed || listener.res.writableEnded)) { clearTimeout(listener.timer); listener = null; setAgentState('idle'); }
   if (!listener || queue.length === 0) return;
   const messages = queue.splice(0, queue.length);
   setAgentState('working');
@@ -101,7 +113,7 @@ function scheduleCloseCheck() {
   closeTimer = setTimeout(() => {
     if (listener && clients.size === 0 && queue.length === 0) {
       finishListen({ status: 'browser_closed' });
-      setAgentState('offline');
+      setAgentState('idle');
     }
   }, CLOSE_GRACE_MS);
 }
@@ -223,6 +235,26 @@ function servePage(res, file) {
   res.end(body);
 }
 
+function serveStatic(res, dir, name, cache = 'no-store') {
+  const file = safeFile(dir, name);
+  if (!file) return sendText(res, 404, 'not found');
+  res.writeHead(200, { 'Content-Type': MIME[extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': cache });
+  res.end(readFileSync(file));
+}
+
+// The page kit comes from truemap itself, so every repo gets kit updates. A repo may still keep its own
+// assets/truemap.css (older setups, or a hand-tuned copy): that copy wins. assets/theme.css is appended.
+function serveKit(res) {
+  const own = folderIsSafe() ? safeFile(folder, 'assets/truemap.css') : null;
+  let css = readFileSync(own || join(KIT_DIR, 'truemap.css'), 'utf8');
+  const theme = folderIsSafe() ? safeFile(folder, 'assets/theme.css') : null;
+  if (theme) css += `
+/* .truemap/assets/theme.css */
+${readFileSync(theme, 'utf8')}`;
+  res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(css);
+}
+
 function serveUi(res, name) {
   const file = safeFile(UI_DIR, name);
   if (!file) return sendText(res, 404, 'not found');
@@ -248,6 +280,7 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
       return res.end(html);
     }
+    if (p.startsWith('/__truemap/fonts/') && req.method === 'GET') return serveStatic(res, FONT_DIR, p.slice('/__truemap/fonts/'.length), 'max-age=86400');
     if (p.startsWith('/__truemap/') && req.method === 'GET') return serveUi(res, p.slice('/__truemap/'.length));
     if (!p.startsWith('/api/')) return sendText(res, 404, 'not found');
     if (!originAllowed(req) || !tokenOk(req, url)) return sendText(res, 403, 'forbidden');
@@ -257,9 +290,10 @@ const server = createServer(async (req, res) => {
       scheduleChecks();
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       res.write(`data: ${JSON.stringify({
-        type: 'hello', version: VERSION, root, agent: agentState, pages: safePages(), check: lastCheck,
-        history, current: currentPage, pending: queue.map((m) => m.id),
+        type: 'hello', version: VERSION, root, cmd: CMD, agent: agentInfo(), pages: safePages(), check: lastCheck,
+        history, current: currentPage, pending: queue.map((m) => m.id), ...(annotateWish !== undefined ? { annotate: annotateWish } : {}),
       })}\n\n`);
+      annotateWish = undefined;
       clients.add(res);
       clearTimeout(closeTimer);
       const ping = setInterval(() => res.write(': ping\n\n'), 20_000);
@@ -269,7 +303,13 @@ const server = createServer(async (req, res) => {
     if (p === '/api/send' && req.method === 'POST') {
       const b = await readBody(req);
       const text = String(b.text ?? '').slice(0, 20_000);
-      const context = Array.isArray(b.context) ? b.context.slice(0, 12) : [];
+      const str = (v, n) => String(v ?? '').slice(0, n);
+      const context = (Array.isArray(b.context) ? b.context.slice(0, 20) : [])
+        .filter((c) => c && typeof c === 'object')
+        .map((c) => ({
+          kind: c.kind === 'text' ? 'text' : 'element', label: str(c.label, 120), src: str(c.src, 300), excerpt: str(c.excerpt, 600),
+          ...(c.comment ? { comment: str(c.comment, 4000) } : {}), ...(c.page ? { page: str(c.page, 200) } : {}),
+        }));
       const answer = b.kind === 'answer' && b.answer && typeof b.answer === 'object'
         ? { question: String(b.answer.question ?? '').slice(0, 500), choice: String(b.answer.choice ?? '').slice(0, 2000), note: String(b.answer.note ?? '').slice(0, 4000) }
         : null;
@@ -305,12 +345,13 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       if (listener) finishListen({ status: 'replaced' });
       lastAgentActivity = Date.now();
+      noteAgent(b.agent);
       const timeoutMs = Number(b.timeoutMs) > 0 ? Number(b.timeoutMs) : 0;
       const timer = timeoutMs ? setTimeout(() => { finishListen({ status: 'timeout' }); setAgentState('offline'); }, timeoutMs) : null;
       listener = { res, timer };
       // The request body is already consumed, so watch the response: it closes when the CLI goes away.
       res.on('close', () => {
-        if (listener && listener.res === res) { clearTimeout(listener.timer); listener = null; setAgentState('offline'); }
+        if (listener && listener.res === res) { clearTimeout(listener.timer); listener = null; setAgentState('idle'); }
       });
       if (queue.length) return deliverQueue();
       setAgentState('listening');
@@ -322,14 +363,17 @@ const server = createServer(async (req, res) => {
       const text = String(b.text ?? '').slice(0, 100_000);
       if (!text.trim()) return sendJson(res, 400, { error: 'empty reply' });
       lastAgentActivity = Date.now();
-      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), text });
-      if (!listener) setAgentState(b.keepWorking ? 'working' : 'offline');
+      noteAgent(b.agent);
+      remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, text });
+      if (!listener) setAgentState(b.keepWorking || b.willListen ? 'working' : 'idle');
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
     if (p === '/api/agent/navigate' && req.method === 'POST') {
       const b = await readBody(req);
       const page = String(b.page ?? '');
-      broadcast({ type: 'navigate', page, pages: safePages() });
+      noteAgent(b.agent);
+      if (typeof b.annotate === 'boolean' && clients.size === 0) annotateWish = b.annotate;
+      broadcast({ type: 'navigate', page, pages: safePages(), ...(typeof b.annotate === 'boolean' ? { annotate: b.annotate } : {}) });
       scheduleChecks();
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
@@ -360,6 +404,8 @@ const content = createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);
     }
+    if (p.startsWith('/__truemap/fonts/')) return serveStatic(res, FONT_DIR, p.slice('/__truemap/fonts/'.length), 'max-age=86400');
+    if (p === '/pages/assets/truemap.css') return serveKit(res);
     if (p.startsWith('/pages/')) {
       const file = folderIsSafe() ? safeFile(folder, p.slice('/pages/'.length)) : null;
       if (!file) return sendText(res, 404, 'page not found');
@@ -387,7 +433,7 @@ setInterval(() => { if (clients.size > 0) scheduleChecks(); }, 30_000).unref();
 
 // Mark the agent offline if it hasn't listened or replied in a long while.
 setInterval(() => {
-  if (!listener && agentState === 'working' && Date.now() - lastAgentActivity > 20 * 60 * 1000) setAgentState('offline');
+  if (!listener && (agentState === 'working' || agentState === 'idle') && Date.now() - lastAgentActivity > 20 * 60 * 1000) setAgentState('offline');
 }, 60_000).unref();
 
 process.on('SIGTERM', shutdown);

@@ -1,61 +1,62 @@
 # truemap
 
-**Agents explain your project with living HTML pages that stay true to the code.**
-Click anything on a page to ask about it. Click an option to decide. The pages live in your repo and get checked against the code, so they never quietly lie.
+**A map of your codebase that your agent draws, and that stays true to the code.**
 
+Your coding agent explains the project as HTML pages in your repo: a blueprint of the whole system, a page per module, the options when it needs your call. You read them in the browser, click any box to comment on it, and the agent answers right next to the page. Every box is pinned to real code, so when the code moves on, the map tells you.
 
----
+![The truemap workspace: a project blueprint with wires, two comments pinned to boxes, and the agent's answer in the conversation panel](docs/images/workspace.png)
 
 ## Why
 
-Coding agents write code faster than anyone can read it. Their answers come back as walls of text, and the diagrams they draw are thrown away after one chat. truemap gives the agent a better way to talk to you:
+Coding agents write code faster than anyone can read it. Their explanations come back as walls of text, and the diagrams they draw are gone after one chat.
 
-- **Pages, not paragraphs.** The agent draws the architecture, a flow, or the options as an HTML page and opens it in your browser.
-- **Point and ask.** Click a box on the page, ask in the chat panel next to it. The agent receives your question *and* the code that box points to. It is the same agent session you are already using, so there is no new login or extra app.
-- **Click to decide.** When the agent needs your call, the page shows options. One click and the answer goes back to the agent.
-- **Pages that stay true.** Every box carries a `data-src="path#name"` anchor. When the code moves on, truemap marks the box amber (changed) or red (gone), and the agent fixes the page.
-- **It all stays in the repo.** Pages live in `.truemap/`, with `index.html` as the project blueprint. They are plain files you can commit, diff, and open anywhere.
+- **Pages, not paragraphs.** The agent draws the architecture, a flow, or the options as a page and opens it for you.
+- **Point at it.** Switch on Annotate, click a box or select a sentence, write a comment. Comments go out together, each with the code it points to. It is the agent session you already have open: no login, no extra app.
+- **Click to decide.** When the agent needs your call, the page shows the options. One click and the answer is back with the agent.
+- **Pages that stay true.** Every box carries a `data-src="path#name"` anchor. When that code changes or disappears, the box is marked and the agent fixes the page.
+- **It stays in the repo.** Pages live in `.truemap/`, with `index.html` as the blueprint. Plain files you commit, diff and share.
 
 ## Install
 
-Install the skill once. That is all the setup there is.
+Install the skill once. That is the whole setup.
 
 ```sh
 npx skills add TaoMachina/truemap --skill truemap
 ```
 
-Then just talk to your agent (Claude Code or Codex): *"How does payment work?"* or *"Show me the project."* The agent writes or updates a page and opens it. You can also ask for it directly: `/truemap show me the architecture`.
+Then talk to your agent (Claude Code or Codex) as usual: *"How does payment work?"* or *"Show me the project."* The agent writes or updates a page and opens it. You can also ask directly: `/truemap draw the architecture`.
 
-It also works with no skill installed. Tell the agent: *"use `npx -y truemap-cli --help`"*.
+No skill installed? Tell the agent: *"use `npx -y truemap-cli --help`"*.
 
 ## How it works
 
 ```
 your repo/
 └── .truemap/
-    ├── index.html        the blueprint: every module links to its page
+    ├── index.html          the blueprint: every module links to its page
     ├── payments.html
     ├── retry-decision.html
-    └── assets/truemap.css   shared look (edit the tokens to match your brand)
+    └── assets/theme.css    optional: your brand colors and font
 ```
 
 | Command (run by the agent) | What it does |
 |---|---|
-| `npx -y truemap-cli [page]` | Opens the workspace in your browser: page switcher on top, the page in the middle, chat on the right (collapsible) |
-| `npx -y truemap-cli listen` | Waits for your next message from the chat panel |
-| `npx -y truemap-cli reply "…" --listen` | Shows the agent's answer in the chat, then keeps listening |
+| `npx -y truemap-cli [page] [--annotate]` | Opens the workspace in your browser, or switches the tab you already have open |
+| `npx -y truemap-cli outline` | A compact map of the repo, so the first blueprint takes minutes, not an hour |
+| `npx -y truemap-cli listen` | Waits for your next message or comments from the page |
+| `npx -y truemap-cli reply "…" --listen` | Shows the answer in the conversation panel, then keeps listening |
 | `npx -y truemap-cli check` | Checks every `data-src` anchor against the code |
-| `npx -y truemap-cli guide` | The page-writing guide for agents: kit components, anchors, decision forms |
+| `npx -y truemap-cli guide` | The page-writing guide for agents: the map, anchors, decisions, design rules |
 
-The checker doesn't depend on the programming language. It uses only git and a plain-text search:
+The checker works for any language. It uses git and a plain-text search:
 
-- **✕ broken**: the path is gone, or `#name` no longer appears in the file (whole word, case-sensitive).
-- **● changed**: the file changed after the page was last updated. The agent reviews it, then updates the page or runs `check --ok`.
+- **No longer matches**: the path is gone, or `#name` no longer appears in the file (whole word, case-sensitive).
+- **Changed in code**: the file changed after the page was last updated. The agent reviews it, then updates the page or runs `check --ok`.
 
-Everything runs locally:
+Everything runs on your machine:
 
-- The server listens on `127.0.0.1` only and needs a token for every request.
-- Pages render in a sandboxed iframe on a separate origin, so page scripts can't reach the chat API.
+- The server listens on `127.0.0.1` only and needs a per-launch token.
+- Pages render in a sandboxed frame on a separate origin, so page scripts can't reach the agent.
 
 ## Requirements
 
@@ -64,5 +65,4 @@ Everything runs locally:
 
 ## License
 
-MIT
-
+MIT. Fonts: IBM Plex Sans and IBM Plex Mono, SIL Open Font License (`kit/fonts/OFL.txt`).

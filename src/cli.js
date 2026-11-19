@@ -1,6 +1,6 @@
 // truemap CLI. Output is plain YAML-ish text written for agents: what happened + next_step.
 import { spawn } from 'node:child_process';
-import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -8,6 +8,7 @@ import {
   samePath, serverLockPath, serverStatePath,
 } from './common.js';
 import { checkAll, listPages, markOk, pageInFolder } from './check.js';
+import { outline } from './outline.js';
 
 const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap-cli';
 
@@ -103,9 +104,7 @@ function openBrowser(url) {
 function ensureFolder(root) {
   const dir = folderPath(root);
   const created = !existsSync(dir);
-  mkdirSync(join(dir, 'assets'), { recursive: true });
-  const css = join(dir, 'assets', 'truemap.css');
-  if (!existsSync(css)) copyFileSync(join(PKG_DIR, 'kit', 'truemap.css'), css);
+  mkdirSync(dir, { recursive: true });
   return created;
 }
 
@@ -157,8 +156,12 @@ async function cmdOpen(root, args, opts = {}) {
   const state = await ensureServer(root);
   const url = `http://127.0.0.1:${state.port}/?t=${state.token}${page ? `#page=${encodeURIComponent(page)}` : ''}`;
   let browser;
+  if (state.status.clients === 0 && opts.annotate !== undefined) {
+    // No tab yet: the server remembers the wish and the tab picks it up when it opens.
+    await call(state, 'POST', '/api/agent/navigate', { page, agent: detectAgent(), annotate: opts.annotate }).catch(() => {});
+  }
   if (state.status.clients > 0) {
-    await call(state, 'POST', '/api/agent/navigate', { page });
+    await call(state, 'POST', '/api/agent/navigate', { page, agent: detectAgent(), ...(opts.annotate !== undefined ? { annotate: opts.annotate } : {}) });
     browser = 'reused the open tab';
   } else if (process.env.TRUEMAP_NO_OPEN || opts.noOpen) {
     browser = 'not opened (--no-open); give the user the url';
@@ -174,11 +177,11 @@ async function cmdOpen(root, args, opts = {}) {
   if (page) printCheck(checkAll(root, [page]).results[0]);
 
   if (created) {
-    out(`setup: created ${FOLDER}/ with assets/truemap.css`);
+    out(`setup: created ${FOLDER}/`);
     block('setup_note', `Add this note to CLAUDE.md and AGENTS.md (create the section if missing) so future sessions use ${FOLDER}/:\n\n${SETUP_NOTE}`);
   }
   const steps = [];
-  if (!page) steps.push(`No pages yet. Write ${FOLDER}/index.html (the project blueprint) – run \`${CMD} guide\` first for the page kit and rules – then run \`${CMD} index.html\`.`);
+  if (!page) steps.push(`No pages yet. Run \`${CMD} outline\` for a fast map of the repo and \`${CMD} guide\` for the page kit, write ${FOLDER}/index.html (the blueprint, 5-12 boxes), then run \`${CMD} index.html\`. Show a first blueprint within a few minutes; go deeper only when the user asks.`);
   else {
     const r = checkAll(root, [page]).results[0];
     if (r.counts.broken) steps.push('Fix the broken anchors first: update the page (or its data-src) to match the code.');
@@ -201,9 +204,21 @@ function formatMessages(messages) {
       out('    answer:');
       for (const [k, v] of Object.entries(m.answer)) out(`      ${k}: ${q(Array.isArray(v) ? v.join(', ') : v)}`);
     }
-    if (m.context?.length) {
+    const comments = (m.context || []).filter((c) => c.comment);
+    const selected = (m.context || []).filter((c) => !c.comment);
+    if (comments.length) {
+      out('    comments:   # the user clicked these on the page and wrote a comment on each');
+      comments.forEach((c, i) => {
+        out(`      - n: ${i + 1}`);
+        out(`        on: ${c.kind === 'text' ? 'text' : 'element'} ${q(c.label || '')}${c.page && c.page !== m.page ? ` (page ${q(c.page)})` : ''}`);
+        if (c.src) out(`        data-src: ${q(c.src)}`);
+        block('comment', c.comment, '        ');
+        if (c.excerpt) out(`        excerpt: ${q(String(c.excerpt).slice(0, 300))}`);
+      });
+    }
+    if (selected.length) {
       out('    selected:');
-      for (const c of m.context) {
+      for (const c of selected) {
         out(`      - ${c.kind === 'text' ? 'text selection' : 'element'}: ${q(c.label || '')}`);
         if (c.src) out(`        data-src: ${q(c.src)}`);
         if (c.excerpt) out(`        excerpt: ${q(String(c.excerpt).slice(0, 400))}`);
@@ -222,7 +237,7 @@ async function doListen(root, opts) {
   const timeoutMs = opts.timeout ? Number(opts.timeout) * 1000 : 0;
   let r;
   try {
-    r = await call(state, 'POST', '/api/agent/listen', { timeoutMs });
+    r = await call(state, 'POST', '/api/agent/listen', { timeoutMs, agent: detectAgent() });
   } catch {
     out('status: interrupted');
     block('next_step', `The connection dropped (the server restarted or stopped). Run \`${CMD}\` to reopen if needed, then \`${CMD} listen\` again.`);
@@ -235,7 +250,7 @@ async function doListen(root, opts) {
     const decided = b.messages.filter((m) => m.kind === 'answer' && m.from === 'user');
     if (decided.length) block('decision_note', 'The user made a decision on the page. Act on it, and record it on the relevant page (what was chosen and why) so it stays with the project.');
     block('next_step', [
-      'Answer the user. If they selected something, its data-src tells you which code it refers to – read it before answering.',
+      'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
       'If the answer changes the page (or the code it describes), update the page; the browser reloads by itself.',
       `Then run \`${CMD} reply "<answer>" --listen\`${detectAgent() === 'claude-code' ? ' with run_in_background' : ''}. Keep the reply short and concrete; use - lists and **bold** sparingly.`,
     ].join('\n'));
@@ -260,7 +275,7 @@ async function cmdReply(root, args, opts) {
     block('next_step', `truemap is not running. Give the answer in the terminal, or run \`${CMD}\` to reopen the page.`);
     return;
   }
-  const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working });
+  const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working, willListen: !!opts.listen, agent: detectAgent() });
   if (r.status !== 200) throw new Error(`reply was rejected: ${r.body?.error || r.status}`);
   out(`reply: ${r.body?.browsers ? `shown in ${r.body.browsers} tab(s)` : 'saved (no tab open right now; the user sees it next time)'}`);
   if (opts.listen) await doListen(root, opts);
@@ -306,6 +321,18 @@ async function cmdStop(root) {
   out('status: stopped');
 }
 
+function cmdOutline(root) {
+  const o = outline(root);
+  out(`root: ${q(o.name)}`);
+  out(`files: ${o.files}${o.gitRepo ? '' : '   # no git: walked the folder, skipping node_modules and dot folders'}`);
+  if (o.manifests.length) out(`manifests: ${o.manifests.map(q).join(', ')}`);
+  if (o.languages.length) out(`languages: ${o.languages.map(([ext, n]) => `${ext} ${n}`).join(', ')}`);
+  out('tree:   # folder, files, approx lines, biggest files');
+  for (const d of o.dirs) out(`  - ${q(d.path)}  files=${d.files} lines=${d.lines}  ${d.top.join(', ')}`);
+  if (o.entries.length) out(`likely_entry_points: ${o.entries.map(q).join(', ')}`);
+  block('next_step', `Read the manifests and entry points (not every file), then write ${FOLDER}/index.html: one layer per role (entry points, modules, storage, external), 5-12 boxes, data-to wires along the main path, data-src on every box. Run \`${CMD} guide\` for the kit if you have not.`);
+}
+
 function cmdGuide() {
   out(readFileSync(join(PKG_DIR, 'src', 'guide.md'), 'utf8').replaceAll('{{CMD}}', CMD));
 }
@@ -315,11 +342,13 @@ function help() {
 
 usage:
   ${CMD} [page]                 open a page from ${FOLDER}/ (default: index.html) in the user's browser
+  ${CMD} <page> --annotate      open it with comment mode on (when you want the user's review)
   ${CMD} listen [--timeout s]   wait for the user's next message from the page chat
   ${CMD} reply "<text>" [--listen] [--file path|-]
                                 show your answer in the page chat (--listen: then wait for the next message)
   ${CMD} check [page...]        check data-src anchors against the code
   ${CMD} check --ok <page>      mark a page as reviewed after its code changed
+  ${CMD} outline                a compact map of the repo (folders, sizes, entry points) for a fast first blueprint
   ${CMD} guide                  how to write pages: folder rules, data-src, page kit, decisions
   ${CMD} progress "<text>"      show a short status line in the chat while you work
   ${CMD} stop                   stop the background server
@@ -337,6 +366,8 @@ function parseArgs(argv) {
     if (a === '--listen') opts.listen = true;
     else if (a === '--working') opts.working = true;
     else if (a === '--no-open') opts.noOpen = true;
+    else if (a === '--annotate') opts.annotate = true;
+    else if (a === '--no-annotate') opts.annotate = false;
     else if (a === '--timeout') opts.timeout = argv[++i];
     else if (a === '--file') opts.file = argv[++i];
     else if (a === '--ok') opts.ok = argv[++i];
@@ -350,7 +381,7 @@ function parseArgs(argv) {
 export async function main(argv) {
   const { args, opts } = parseArgs(argv);
   if (opts.version) return out(VERSION);
-  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, help };
+  const commands = { listen: cmdListen, reply: cmdReply, check: cmdCheck, stop: cmdStop, guide: cmdGuide, progress: cmdProgress, outline: cmdOutline, help };
   const name = args[0] && commands[args[0]] ? args.shift() : null;
   if (opts.help || name === 'help') return help();
   const root = findRoot();
