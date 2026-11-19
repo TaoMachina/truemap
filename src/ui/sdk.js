@@ -333,21 +333,23 @@
       .btn.primary { background: #f2f2ee; color: #141413; }
       .pin { border-color: #161615; }
     }
-      .planact { position: absolute; display: flex; align-items: center; gap: 6px; padding: 6px; background: #fff; border: 1px solid #d2d2cb; border-radius: 12px; box-shadow: 0 10px 28px -12px rgba(20,20,19,.35); font: 13px/1.3 "Instrument Sans", system-ui, sans-serif; color: #141413; pointer-events: auto; z-index: 3; }
-    .planact .pt { font-weight: 600; font-size: 12px; border: 1px solid #141413; border-radius: 6px; padding: 0 6px; margin-left: 4px; }
-    .planact .ttl { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; margin-right: 4px; }
-    .planact .wait { color: #6c6c65; padding: 0 6px; }
-    .planact button { all: unset; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; cursor: pointer; font-weight: 500; border: 1px solid #d2d2cb; }
-    .planact button:hover { background: #f2f2ef; }
-    .planact button.ok { background: #141413; color: #fff; border-color: #141413; }
+      .planact { position: absolute; display: flex; gap: 4px; padding: 4px; background: #fff; border: 1px solid #d2d2cb; border-radius: 999px; box-shadow: 0 8px 22px -10px rgba(20,20,19,.4); pointer-events: auto; z-index: 3; animation: pa-in .22s cubic-bezier(.2,.8,.3,1.2) both; }
+    @keyframes pa-in { from { opacity: 0; transform: translateY(4px) scale(.92); } to { opacity: 1; transform: none; } }
+    .planact button { all: unset; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; color: #141413; transition: transform .12s ease, background-color .12s ease; }
+    .planact button:hover { background: #f2f2ef; transform: scale(1.1); }
+    .planact button.ok { background: #141413; color: #fff; }
     .planact button.ok:hover { background: #3a3a36; }
     .planact button:focus-visible { outline: 2px solid #141413; outline-offset: 2px; }
-    .planact svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .planact svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .planact .wait { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #2f7a4f; }
+    .planact .wait.revise { color: #6c6c65; animation: pa-pulse 1.4s ease-in-out infinite; }
+    @keyframes pa-pulse { 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { .planact, .planact .wait.revise { animation: none; } .planact button { transition: none; } }
     @media (prefers-color-scheme: dark) {
-      .planact { background: #1b1b1a; color: #f2f2ee; border-color: #44443f; }
-      .planact .pt { border-color: #f2f2ee; }
-      .planact button { border-color: #44443f; } .planact button:hover { background: #252523; }
-      .planact button.ok { background: #f2f2ee; color: #141413; border-color: #f2f2ee; }
+      .planact { background: #1b1b1a; border-color: #44443f; }
+      .planact button { color: #f2f2ee; } .planact button:hover { background: #252523; }
+      .planact button.ok { background: #f2f2ee; color: #141413; }
+      .planact .wait { color: #7cc49c; }
     }
   </style><div id="rings"></div><div id="pins"></div><div id="slot"></div><div id="planact"></div>`;
   const pinsEl = shadow.getElementById('pins');
@@ -370,15 +372,14 @@
     const rs = els.map((el) => el.getBoundingClientRect());
     const u = { l: Math.min(...rs.map((r) => r.left)) + scrollX, t: Math.min(...rs.map((r) => r.top)) + scrollY, r: Math.max(...rs.map((r) => r.right)) + scrollX, b: Math.max(...rs.map((r) => r.bottom)) + scrollY };
     const box = document.createElement('div'); box.className = 'planact'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Plan');
-    const ttl = `<span class="pt">Plan</span><span class="ttl"></span>`;
-    if (p.status === 'review') box.innerHTML = `${ttl}<button class="ok" data-pa="approve" title="Approve: the agent starts building">${ICON.ok}Approve</button><button data-pa="reject" title="Reject: the agent drops this plan">${ICON.no}Reject</button><button data-pa="ask" title="Ask or comment; the agent answers and revises">${ICON.ask}Comment</button>`;
-    else box.innerHTML = `${ttl}<span class="wait">${p.status === 'revise' ? 'Waiting for the revised plan' : 'Approved'}</span>`;
-    box.querySelector('.ttl').textContent = p.title;
+    if (p.status === 'review') box.innerHTML = `<button class="ok" data-pa="approve" title="Approve the plan" aria-label="Approve the plan">${ICON.ok}</button><button data-pa="reject" title="Reject the plan" aria-label="Reject the plan">${ICON.no}</button><button data-pa="ask" title="Ask or comment on the plan" aria-label="Ask or comment on the plan">${ICON.ask}</button>`;
+    else box.innerHTML = p.status === 'revise' ? `<span class="wait revise" title="Waiting for the revised plan">${ICON.ask}</span>` : `<span class="wait" title="Approved">${ICON.ok}</span>`;
+    box.title = p.title;
     planActEl.appendChild(box);
     const vw = document.documentElement.clientWidth; const w = box.offsetWidth; const h = box.offsetHeight;
-    let left = u.r + 14; let top = u.t;
-    if (left + w > scrollX + vw - 8) { left = Math.max(scrollX + 8, Math.min(u.l, scrollX + vw - w - 8)); top = u.t - h - 12; }
-    if (top < scrollY + 4) top = u.b + 12;
+    let left = u.r + 10; let top = u.t - h / 2;
+    if (left + w > scrollX + vw - 8) { left = Math.max(scrollX + 8, u.r - w); top = u.t - h - 14; }
+    if (top < scrollY + 4) top = u.b + 10;
     box.style.left = `${left}px`; box.style.top = `${top}px`;
     box.onclick = (e) => {
       const act = e.target.closest('[data-pa]')?.dataset.pa; if (!act) return;
