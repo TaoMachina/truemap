@@ -86,8 +86,8 @@ PAGE SKELETON
 KIT COMPONENTS
 Map (layered structure with wires – the heart of index.html). You declare structure; truemap does the geometry.
 Give boxes an id; data-to lists the ids they call or feed, separated by spaces, each with an optional wire label
-after a colon (underscores become spaces; the label is everything after the first colon, so it may contain
-colons): data-to="store:writes runs:postUserMessage db:node:sqlite". `check` reports ids
+after a colon (underscores become spaces, write \_ for a real underscore; the label is everything after the
+first colon, so it may contain colons): data-to="store:writes runs:postUserMessage db:node:sqlite". `check` reports ids
 that don't exist. Never position boxes or draw wires yourself on a map.
   <div class="tm-map">
     <div class="tm-layer"><div class="tm-layer-label">HTTP routes</div><div class="tm-layer-nodes">

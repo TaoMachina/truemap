@@ -256,7 +256,9 @@ async function doListen(root, opts) {
     const decided = b.messages.filter((m) => m.kind === 'answer' && m.from === 'user');
     if (decided.length) block('decision_note', 'The user made a decision on the page. Act on it, and record it on the relevant page (what was chosen and why) so it stays with the project.');
     block('next_step', [
-      'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
+      b.messages.every((m) => m.kind === 'answer')
+        ? 'The user answered your question. Act on the choice now, and record the decision (what and why) on the relevant page.'
+        : 'Answer the user. Comments and selections carry a data-src: read that code before answering. Answer every numbered comment.',
       'If the answer changes the page (or the code it describes), update the page; the browser reloads by itself.',
       `Then run \`${CMD} reply "<answer>" --listen\`${detectAgent() === 'claude-code' ? ' with run_in_background' : ''}. Keep the reply short and concrete; use - lists and **bold** sparingly.`,
     ].join('\n'));
@@ -285,7 +287,7 @@ async function cmdReply(root, args, opts) {
   }
   const r = await call(state, 'POST', '/api/agent/reply', { text, keepWorking: !!opts.working, willListen: !!opts.listen, agent: detectAgent(), focus: splitList(opts.focus), ...(opts.ask ? { ask: opts.ask } : {}) });
   if (r.status !== 200) throw new Error(`reply was rejected: ${r.body?.error || r.status}`);
-  out(`reply: ${r.body?.browsers ? `shown in ${r.body.browsers} tab(s)` : 'saved (no tab open right now; the user sees it next time)'}`);
+  out(`${opts.ask ? 'asked' : 'reply'}: ${r.body?.browsers ? `shown in ${r.body.browsers} tab(s)` : 'saved (no tab open right now; the user sees it next time)'}`);
   if (opts.listen) await doListen(root, opts);
 }
 

@@ -54,7 +54,7 @@ export function exportPage(root, page) {
   });
 
   const wires = readFileSync(join(UI_DIR, 'wires.js'), 'utf8');
-  const boot = `<script>\n${wires}\n(() => { const d = () => window.truemapWires.draw(); if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', d); else d(); addEventListener('resize', d); document.fonts && document.fonts.ready.then(d); })();\n</script>`;
+  const boot = `<script>\n${wires}\n(() => { const d = () => { window.truemapWires.draw(); window.truemapWires.mark && window.truemapWires.mark(); }; window.truemapWires.interact(); if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', d); else d(); addEventListener('resize', d); document.fonts && document.fonts.ready.then(d); })();\n</script>`;
   const stamp = `<!-- Exported by truemap ${VERSION} from ${FOLDER}/${page} on ${new Date().toISOString().slice(0, 10)}. Links to other pages need the .truemap folder. -->`;
   const note = `<p style="max-width:960px;margin:0 auto;padding:0 48px 40px;font:13px/1.5 var(--tm-font);color:var(--tm-pencil)">Exported from <code>${FOLDER}/${page}</code> with truemap. Links to other pages work inside the project's ${FOLDER} folder.</p>`;
   html = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, () => `${note}\n${boot}\n</body>`) : html + note + boot;

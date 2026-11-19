@@ -48,6 +48,7 @@ export function snippet(root, src, around = 10) {
     ];
     const weak = /\b(function|class|def|fn|func|const|let|var|type|interface|export|struct|enum|router\.\w+|app\.\w+)\b/;
     const hits = lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i >= 0);
+    if (!hits.length) return { path, name, missing: true, total: lines.length };
     line = hits.find((i) => strong.some((s) => s.test(lines[i]))) ?? hits.find((i) => weak.test(lines[i])) ?? hits[0] ?? 0;
   }
   const start = Math.max(0, line - 3);

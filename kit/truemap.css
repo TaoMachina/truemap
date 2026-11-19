@@ -150,7 +150,13 @@ html[style*="--tm-vw"] .tm-map, html[style*="--tm-vw"] .tm-blueprint { width: ca
 .tm-wire.is-ext { stroke-dasharray: 4 4; }
 .tm-wire-head { fill: var(--tm-rule-strong); }
 .tm-wire-head.is-key { fill: var(--tm-route); }
-.tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-pencil); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 4px; stroke-linejoin: round; }
+/* Labels: the main path's always show; any other wire's label shows when its box is hovered or its path is lit. */
+.tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-pencil); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 6px; stroke-linejoin: round; opacity: 0; transition: opacity .15s ease; }
+.tm-wire-label.is-key, .tm-wire-label.is-hot, .tm-wire-label.is-focus { opacity: 1; }
+/* A lit path (a flow, or the agent pointing): everything else steps back. */
+html[data-tm-focusing] .tm-node:not([data-tm-focus]), html[data-tm-focusing] .tm-step:not([data-tm-focus]) { opacity: .34; }
+html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus) { opacity: .16; }
+html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: 0; }
 .tm-wire.is-hot { stroke: var(--tm-ink); stroke-width: 1.75; }
 .tm-wire-head.is-hot { fill: var(--tm-ink); }
 .tm-wire-label.is-hot { fill: var(--tm-ink); }

@@ -392,7 +392,7 @@
       if (ref) { pointAt([box.id, ref.dataset.focus].filter(Boolean), '', ''); return; }
       if (act === 'open') { closePeek(); if (page.id) state.pendingFocus = { type: 'focus', items: [page.id] }; go(page.page); }
       else if (act === 'ask') { state.about = { kind: 'element', label: box.label, src: box.src, excerpt: box.desc }; renderAbout(); closePeek(); setPanel(true); input.focus(); }
-      else if (act === 'links') { pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', ''); }
+      else if (act === 'links') { closePeek(); pointAt([box.id, ...box.to.map((c) => c.id), ...box.from.map((c) => c.id)], '', ''); }
     };
     if (box.src) {
       let sn = {};
@@ -400,6 +400,7 @@
       const code = peekEl.querySelector('.peek-code'); if (seq !== peekSeq || !code || peekEl.hidden) return; // a newer peek won
       if (sn.kind === 'folder') code.innerHTML = `<div class="peek-loading">A folder: ${esc(sn.path)}</div>`;
       else if (sn.error) code.innerHTML = `<div class="peek-loading">${esc(sn.error)}</div>`;
+      else if (sn.missing) code.innerHTML = `<div class="peek-loading broken">“${esc(sn.name)}” no longer appears in ${esc(sn.path)}. The code moved on; ask the agent to update this box.</div>`;
       else {
         code.innerHTML = `<div class="peek-codehead">${esc(sn.path)}, line ${sn.line}${sn.lastChange ? `, changed ${esc(sn.lastChange)}` : ''}</div><pre>${sn.lines.map((l, i) => `<span class="${sn.start + i === sn.line ? 'hit' : ''}"><i>${sn.start + i}</i>${esc(l) || ' '}</span>`).join('')}</pre>`;
         place();

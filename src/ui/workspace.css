@@ -242,7 +242,8 @@ code { font-family: var(--code); font-size: 0.9em; }
 .peek-code { margin-top: 12px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--paper); }
 .peek-codehead { font: 12px var(--code); color: var(--graphite); padding: 6px 10px; border-bottom: 1px solid var(--rule); background: var(--chrome); }
 .peek-code pre { margin: 0; padding: 6px 0; font: 12px/1.55 var(--code); color: var(--text); overflow-x: auto; max-height: 260px; }
-.peek-code pre span { display: block; padding: 0 10px; white-space: pre; }
+.peek-code pre span { display: block; padding: 0 10px; white-space: pre; width: max-content; min-width: 100%; }
+.peek-loading.broken { color: var(--broken); }
 .peek-code pre span i { display: inline-block; width: 3.2em; color: var(--pencil); font-style: normal; user-select: none; }
 .peek-code pre span.hit { background: var(--route-wash); }
 .peek-loading { padding: 10px; font-size: 12.5px; color: var(--pencil); }

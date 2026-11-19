@@ -54,7 +54,7 @@
         if (!dst || dst === src || !map.contains(dst) || !rectOf.has(src) || !rectOf.has(dst)) continue;
         const a = rectOf.get(src); const b = rectOf.get(dst);
         const ra = rowOf(a); const rb = rowOf(b);
-        edges.push({ src, dst, a, b, ra, rb, dir: rb > ra ? 'down' : rb < ra ? 'up' : 'same', label: labelParts.join(':').replace(/_/g, ' ') });
+        edges.push({ src, dst, a, b, ra, rb, dir: rb > ra ? 'down' : rb < ra ? 'up' : 'same', label: labelParts.join(':').replace(/\\_/g, '\u0001').replace(/_/g, ' ').replace(/\u0001/g, '_') });
       }
     }
     const group = (key, pick) => {
@@ -196,21 +196,24 @@
       arrow.setAttribute('d', head); arrow.setAttribute('class', `tm-wire-head${key ? ' is-key' : ''}`);
       for (const el of [path, arrow]) { el.dataset.from = e.src.id; el.dataset.to = e.dst.id; }
       svg.appendChild(path); svg.appendChild(arrow);
-      // Labels sit by the box the wire leaves; one per text per box; never on another label or a box.
-      const used = labelsBy.get(e.src) || labelsBy.set(e.src, { texts: [], x: null }).get(e.src);
+      // A label never leaves its own wire: it sits beside the stem where the wire leaves its box (on the
+      // left when the map edge is near); several labels from one box stack along the stem. Only main-path
+      // labels show by default; the rest appear when their box is hovered or their path is lit (kit CSS).
+      const used = labelsBy.get(e.src) || labelsBy.set(e.src, { texts: [], n: 0 }).get(e.src);
       if (e.label && !used.texts.includes(e.label)) {
-        const lw = e.label.length * 6.4; const y = p.label.y;
-        let x = p.label.middle ? p.label.x - lw / 2 : Math.max(p.label.x, used.x ?? -Infinity);
-        const hits = (lx) => placed.some((q) => lx < q.r + 8 && lx + lw > q.l - 8 && Math.abs(q.y - y) < 12)
-          || rects.some((o) => lx < o.r && lx + lw > o.l && y > o.t && y - 10 < o.b);
-        for (let i = 0; i < 40 && hits(x); i++) x += 12;
+        const lw = e.label.length * 6.4;
+        let x; let y; let anchor = 'start';
+        if (p.label.middle) { x = p.label.x; y = p.label.y; anchor = 'middle'; } else {
+          const sx = p.pts[0][0];
+          y = p.label.y + (p.head === 'up' ? -used.n : used.n) * 13;
+          if (sx + 6 + lw > w - 4) { x = sx - 6; anchor = 'end'; } else x = sx + 6;
+        }
         const t = document.createElementNS(SVGNS, 'text');
-        t.setAttribute('class', 'tm-wire-label'); t.setAttribute('x', x); t.setAttribute('y', y);
+        t.setAttribute('class', `tm-wire-label${key ? ' is-key' : ''}`); t.setAttribute('x', x); t.setAttribute('y', y);
+        if (anchor !== 'start') t.setAttribute('text-anchor', anchor);
         t.dataset.from = e.src.id; t.dataset.to = e.dst.id;
         t.textContent = e.label; svg.appendChild(t);
-        placed.push({ l: x, r: x + lw, y });
-        if (!p.label.middle) used.x = x + lw + 12;
-        used.texts.push(e.label);
+        used.n++; used.texts.push(e.label);
       }
     }
     // key wires on top, labels above every wire
@@ -235,5 +238,32 @@
     map.classList.toggle('tm-scrolls', map.scrollWidth - map.clientWidth - map.scrollLeft > 4);
     if (!map.__tmScroll) { map.__tmScroll = true; map.addEventListener('scroll', () => markScroll(map), { passive: true }); }
   }
-  window.truemapWires = { draw: drawWires };
+  // Hover and path buttons without the truemap workspace (used by exported pages; the SDK has its own).
+  function interact() {
+    let hot = null; let lit = [];
+    const mark = () => {
+      const ids = new Set(lit);
+      for (const el of document.querySelectorAll('.tm-wire, .tm-wire-head, .tm-wire-label')) {
+        el.classList.toggle('is-hot', !!hot && (el.dataset.from === hot.id || el.dataset.to === hot.id));
+        el.classList.toggle('is-focus', ids.has(el.dataset.from) && ids.has(el.dataset.to));
+      }
+    };
+    document.addEventListener('mousemove', (e) => {
+      const box = e.target.closest?.('.tm-map .tm-node, .tm-blueprint .tm-node') || null;
+      if (box !== hot) { hot = box; mark(); }
+    });
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest?.('[data-tm-flow]'); if (!btn) return;
+      const ids = btn.getAttribute('data-tm-flow').split(/[\s,]+/).filter(Boolean);
+      const same = lit.length && ids.join() === lit.join();
+      lit = same ? [] : ids;
+      document.documentElement.toggleAttribute('data-tm-focusing', !!lit.length);
+      for (const el of document.querySelectorAll('[data-tm-focus]')) el.removeAttribute('data-tm-focus');
+      for (const id of lit) document.getElementById(id)?.setAttribute('data-tm-focus', '');
+      for (const b of document.querySelectorAll('[data-tm-flow]')) b.setAttribute('aria-pressed', String(!same && b === btn));
+      mark();
+    });
+    window.truemapWires.mark = mark;
+  }
+  window.truemapWires = { draw: drawWires, interact };
 })();

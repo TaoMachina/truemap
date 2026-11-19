@@ -38,7 +38,8 @@
     .tm-node:focus-visible, .tm-step:focus-visible { outline: 2px solid var(--tm-route, #2453c4); outline-offset: 3px; }
     /* The agent points at the map: everything else steps back. */
     html[data-tm-focusing] .tm-node:not([data-tm-focus]), html[data-tm-focusing] .tm-step:not([data-tm-focus]) { opacity: .34; }
-    html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus), html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: .16; }
+    html[data-tm-focusing] .tm-wire:not(.is-focus), html[data-tm-focusing] .tm-wire-head:not(.is-focus) { opacity: .16; }
+    html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: 0; }
     .tm-node, .tm-step, .tm-wire, .tm-wire-head, .tm-wire-label { transition: opacity .18s ease, stroke .12s ease, fill .12s ease; }
     @media (prefers-reduced-motion: reduce) { .tm-node, .tm-step, .tm-wire, .tm-wire-head, .tm-wire-label { transition: none; } }
   `;
