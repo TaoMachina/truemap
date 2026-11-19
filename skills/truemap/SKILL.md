@@ -1,6 +1,6 @@
 ---
 name: truemap
-description: Explain code on a page that opens in the user's browser instead of answering only in the terminal. Use this whenever the user asks you to explain, walk through or make clear any code, in any language ("how does X work", "explain X to me", "I don't get X"), even a single function or file; no project map is needed. Also use it before a change that touches 3+ parts (show the plan, wait for approval), after editing code (show what changed), and when asked to show the project. Skip it only for short factual answers (which file, which flag, yes or no).
+description: Explain code on a page that opens in the user's browser instead of answering only in the terminal. Use this whenever the user asks you to explain or make clear any code, however it is phrased and in any language ("explain this", "can you just explain this", "how does X work", "what does this do", "walk me through", "break it down", "I don't get X"), even a single function or file; no project map is needed. Also use it before a change that touches 3+ parts (show the plan, wait for approval), after editing code (show what changed), and when asked to show the project. A question about what code does or how it works is a request to explain, not a short factual question. Skip it only for lookups (which file, which flag, yes or no).
 allowed-tools: Bash(npx -y truemap-cli:*), Bash(npx truemap-cli:*), Bash(truemap:*)
 license: MIT
 ---
