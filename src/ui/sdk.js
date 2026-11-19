@@ -274,7 +274,7 @@
         b.style.top = `${fitsRight ? g.t : above ? g.t - bh - 12 : g.b + 12}px`;
       } else { b.style.left = `${scrollX + vw - 320}px`; b.style.top = `${scrollY + 16}px`; }
     }
-    if (card?.target) ring(card.target, 'active');
+    if (card?.target && !card.target.closest('.tm-diagram')) ring(card.target, 'active'); // a map box shows its own selection
     else if (annotating && hovered) ring(hovered, 'hover');
   }
   function setAnnotate(on) {

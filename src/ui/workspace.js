@@ -887,7 +887,7 @@
     const broken = stale.filter((a) => a.state === 'broken').length;
     pointAt(stale.map((a) => a.src), broken ? 'These boxes no longer match the code.' : 'The code under these boxes changed after this page was written.', 'truemap');
     setPanel(true); setTab('convo');
-    if (!input.value.trim()) { input.value = `The code under ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} changed. check whether the map still says the right thing about ${stale.length > 1 ? 'them' : 'it'}: fix what is wrong, confirm the rest.`; autosize(); }
+    if (!input.value.trim()) { input.value = `The code under ${stale.map((a) => a.src.split('#')[1] || a.path).join(', ')} changed. Check whether the map still says the right thing about ${stale.length > 1 ? 'them' : 'it'}: fix what is wrong, confirm the rest.`; autosize(); }
     input.focus(); requestAnimationFrame(scrollChat);
   };
 
