@@ -362,6 +362,12 @@
       .planact .wait { color: #7cc49c; }
     }
   </style><div id="rings"></div><div id="pins"></div><div id="slot"></div><div id="planact"></div>`;
+  { const st = shadow.querySelector('style'); if (typeof tmThemeable === 'function') st.textContent = tmThemeable(st.textContent, { host: true }); }
+  const applyTheme = (t) => {
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+    host.classList.toggle('tm-dark', t === 'dark'); host.classList.toggle('tm-light', t === 'light');
+  };
+  applyTheme(document.documentElement.getAttribute('data-theme'));
   const pinsEl = shadow.getElementById('pins');
   const slot = shadow.getElementById('slot');
   const planActEl = shadow.getElementById('planact');
@@ -669,6 +675,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
   window.addEventListener('message', (e) => {
     if (e.source !== parentWin || e.origin !== PARENT || !e.data || !e.data.__truemap) return;
     const d = e.data;
+    if (d.type === 'theme') { applyTheme(d.theme); return; }
     if (d.type === 'marks') {
       document.querySelectorAll('[data-tm-mark]').forEach((el) => el.removeAttribute('data-tm-mark'));
       for (const m of d.items || []) {

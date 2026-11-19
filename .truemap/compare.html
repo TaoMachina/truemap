@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>truemap and other tools</title>
+<link rel="stylesheet" href="assets/truemap.css">
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <nav class="tm-crumb"><a href="index.html">truemap architecture</a> / Other tools</nav>
+    <h1 class="tm-title">truemap and other tools</h1>
+    <p class="tm-lede">Each open-source tool nearby covers one stage of working with an agent. truemap puts the plan, the change and the check on one map that lives in the repo. Facts about other tools come from the research in docs/VISION.md (2026-11-19), not re-checked since.</p>
+  </header>
+
+  <figure class="tm-diagram">
+    <section class="tm-group" id="start" data-label="Your agent">
+      <div class="tm-node is-ext is-key" id="agent" data-name="Coding agent" data-tag="any CLI agent" data-to="plan:proposes">
+        <div class="tm-detail"><p>truemap does not replace the agent or the editor: it is a CLI the agent runs.</p></div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="before" data-label="Before the change">
+      <div class="tm-node is-key" id="plan" data-name="Plan review" data-tag="truemap" data-src="src/plan.js#savePlan" data-to="changes:then_built">
+        <div class="tm-detail">
+          <p>The plan is drawn on the project map: new boxes dashed, touched boxes marked. You comment on boxes and approve.</p>
+          <p class="tm-why">The plan is reviewed where the system is, not as a list of text.</p>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="plannotator" data-name="Plannotator" data-tag="plan review">
+        <div class="tm-detail">
+          <p>Reviews and annotates an agent's plan, and sends the notes back.</p>
+          <ul><li>Stored in ~/.plannotator, outside the repo.</li><li>Share links last 7 days.</li><li>Apache-2.0, about 13.5k stars.</li></ul>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="speckit" data-name="spec-kit, OpenSpec" data-tag="Markdown specs">
+        <div class="tm-detail">
+          <p>Specs written in Markdown and kept in git.</p>
+          <ul><li>Text only: nothing to click that goes back to the agent.</li><li>Specs go stale; their own issues complain about it.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="after" data-label="After the change">
+      <div class="tm-node is-key" id="changes" data-name="Changes by box" data-tag="truemap" data-src="src/changes.js#changes" data-to="checker:kept_true_by">
+        <div class="tm-detail">
+          <p>Changed files are attributed to the boxes that own them; each box carries its +/- lines and opens its diff.</p>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="lavish" data-name="lavish-axi" data-tag="one page">
+        <div class="tm-detail">
+          <p>Review one HTML page an agent wrote, and send comments back. truemap's chat-on-the-page idea comes from here.</p>
+          <ul><li>A single file, not a project map.</li><li>No check against the code.</li><li>MIT, about 4.6k stars.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="time" data-label="Over time">
+      <div class="tm-node is-key" id="checker" data-name="Anchor check" data-tag="truemap" data-src="src/check.js#checkAll" data-to="pages:keeps_true">
+        <div class="tm-detail">
+          <p>Every box points at a function, route or file; check says when that code is gone or newer than the page.</p>
+          <ul><li>Deterministic, no AI, works for any language.</li></ul>
+        </div>
+      </div>
+      <div class="tm-node is-ext" id="nimbalyst" data-name="Nimbalyst" data-tag="desktop app">
+        <div class="tm-detail">
+          <p>The closest tool: an Electron app where people and many agents edit the same documents, with decision blocks.</p>
+          <ul>
+            <li>Staleness is per file and per code snippet, not per function or route.</li>
+            <li>Team sync goes through its own closed-source server.</li>
+            <li>You move into its app to use it. MIT, about 2.1k stars.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="tm-group" id="where" data-label="Where it lives">
+      <div class="tm-node is-key" id="pages" data-name=".truemap pages" data-tag="your repo" data-src=".truemap">
+        <div class="tm-detail"><p>Plain HTML committed with the code. Sharing is git and PRs; no account, no cloud.</p></div>
+      </div>
+      <div class="tm-node is-ext" id="chopin" data-name="Chopin" data-tag="GitHub Next">
+        <div class="tm-detail">
+          <p>A 2026-09 prototype for many people working with agents together, on a server bound to a repo.</p>
+          <ul><li>No check against the code. MIT, about 664 stars.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <ol class="tm-flows">
+      <li data-path="agent plan changes checker pages" data-note="One map carries the whole loop: the plan is reviewed on it, the change shows on it, and the check keeps it true.">truemap's loop</li>
+    </ol>
+  </figure>
+
+  <section class="tm-section">
+    <h2>Side by side</h2>
+    <div class="tm-table-wrap"><table class="tm-table">
+      <thead><tr><th>Tool</th><th>Lives in the repo</th><th>Your clicks reach the agent</th><th>Checked against code</th><th>What you take on</th></tr></thead>
+      <tbody>
+        <tr><td>truemap</td><td>Yes, .truemap/</td><td>Yes: comments, approve, chat</td><td>Yes, per function or route</td><td>Nothing: npx and a local page</td></tr>
+        <tr><td>Nimbalyst</td><td>Partly: docs yes, tasks in its database</td><td>Yes, decision blocks</td><td>Partly, per file and snippet</td><td>A desktop app; its server for teams</td></tr>
+        <tr><td>Plannotator</td><td>No, ~/.plannotator</td><td>Yes</td><td>No</td><td>Links that expire in 7 days</td></tr>
+        <tr><td>lavish-axi</td><td>One file</td><td>Yes</td><td>No</td><td>Nothing</td></tr>
+        <tr><td>spec-kit, OpenSpec</td><td>Yes</td><td>No, Markdown only</td><td>No, synced by hand</td><td>Writing and updating specs</td></tr>
+        <tr><td>GitHub Next Chopin</td><td>No, a server</td><td>Yes, many people</td><td>No</td><td>A hosted prototype</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="tm-section">
+    <h2>Where truemap is weaker</h2>
+    <ul>
+      <li>No real-time editing by several people at once; Nimbalyst and Chopin have it.</li>
+      <li>Nimbalyst's decision blocks offer six question types; truemap's ask is a single choice.</li>
+      <li>The bet that people will direct agents on a map, not only in the terminal, is not yet proven.</li>
+    </ul>
+  </section>
+</main></body>
+</html>

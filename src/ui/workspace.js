@@ -47,12 +47,18 @@
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?![*\w])/g, '$1<em>$2</em>')
-      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, href) => {
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, href) => {
+        const src = /^https:\/\/[^\s"'<>]+$/i.test(href) ? href
+          : /^[^\s"'<>:]+\.(png|jpe?g|gif|webp)$/i.test(href) || /^[a-z]:[\\/][^\s"'<>]+\.(png|jpe?g|gif|webp)$/i.test(href) ? `/api/image?path=${encodeURIComponent(href.replace(/&amp;/g, '&'))}&t=${encodeURIComponent(TOKEN)}` : '';
+        if (!src) return all;
+        return `<a class="pic" href="${src}" target="_blank" rel="noopener noreferrer"><img src="${src}" alt="${alt}" loading="lazy" onerror="this.parentNode.classList.add('broken')"></a>`;
+      })
+      .replace(/(^|[^!])\[([^\]]+)\]\(([^)\s]+)\)/g, (all, pre, t, href) => pre + ((() => {
         if (/^[\w./-]+\.html?(#[\w-]*)?$/i.test(href)) return `<a href="#" data-page="${href}">${t}</a>`;
         if (/^#[\w-]+$/.test(href)) return `<a href="#" class="ref" data-focus="${href.slice(1)}">${t}</a>`;
         if (/^https:\/\/[^\s"'<>]+$/i.test(href)) return `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
         return t;
-      });
+      })()));
   }
   function md(text) {
     const lines = esc(text).split('\n');
@@ -162,6 +168,20 @@
     $('endHint').textContent = talking ? `Lets ${agentName()} go back to the terminal` : 'No conversation is running';
   }
   const closeMore = () => { more.hidden = true; $('moreBtn').setAttribute('aria-expanded', 'false'); };
+  const renderTheme = () => {
+    const t = document.documentElement.getAttribute('data-theme') || '';
+    for (const b of document.querySelectorAll('[data-theme-pick]')) b.setAttribute('aria-pressed', String(b.dataset.themePick === t));
+  };
+  renderTheme();
+  for (const b of document.querySelectorAll('[data-theme-pick]')) {
+    b.onclick = () => {
+      const t = b.dataset.themePick;
+      if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+      renderTheme();
+      toFrame({ type: 'theme', theme: t });
+      api('/api/prefs', { theme: t || 'system' });
+    };
+  }
   $('moreBtn').onclick = (e) => {
     e.stopPropagation();
     if (!more.hidden) return closeMore();

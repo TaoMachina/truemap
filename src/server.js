@@ -4,8 +4,9 @@
 import { createServer, request as httpRequest } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, watch } from 'node:fs';
-import { basename, extname, join, resolve, sep } from 'node:path';
-import { FOLDER, PKG_DIR, VERSION, appendPrivate, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { themeable } from './theme.js';
+import { FOLDER, PKG_DIR, VERSION, appendPrivate, stateHome, historyPath, serverStatePath, serversDir, snapshotsPath, writePrivate } from './common.js';
 import { changes, fileDiff, snapshotTree } from './changes.js';
 import { cleanPlan, currentPlan, parseReport, planCheck, planMessage, planWarnings, readPlan, savePlan, srcOfBox, stepCheck } from './plan.js';
 import { checkAll, listPages } from './check.js';
@@ -276,6 +277,12 @@ function sendText(res, status, text) {
   res.end(text);
 }
 
+// Light or dark, when the user picked one; otherwise the system decides. Shared by every project.
+const prefsFile = () => join(stateHome(), 'prefs.json');
+function readPrefs() { try { return JSON.parse(readFileSync(prefsFile(), 'utf8')) || {}; } catch { return {}; } }
+const theme = () => { const t = readPrefs().theme; return t === 'light' || t === 'dark' ? t : ''; };
+const withTheme = (html) => { const t = theme(); return t ? html.replace(/<html\b/i, `<html data-theme="${t}"`) : html; };
+
 function readBody(req, limit = 2 * 1024 * 1024) {
   return new Promise((ok, fail) => {
     let size = 0;
@@ -333,6 +340,7 @@ function servePage(res, file) {
     const inject = `<script src="/__truemap/sdk.js"></script>`;
     let html = body.toString('utf8');
     html = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${inject}</body>`) : html + inject;
+    html = withTheme(html);
     body = Buffer.from(html, 'utf8');
   }
   res.writeHead(200, {
@@ -353,7 +361,7 @@ function serveStatic(res, dir, name, cache = 'no-store') {
 // The page kit comes from truemap itself, so every repo gets kit updates. A repo may still keep its own
 // assets/truemap.css (older setups, or a hand-tuned copy): that copy wins. assets/theme.css is appended.
 function serveKit(res) {
-  const css = kitCss(root);
+  const css = themeable(kitCss(root));
   res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(css);
 }
@@ -363,7 +371,7 @@ function serveUi(res, name) {
   if (!file) return sendText(res, 404, 'not found');
   const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
-  res.end(readFileSync(file));
+  res.end(name === 'workspace.css' ? themeable(readFileSync(file, 'utf8')) : readFileSync(file));
 }
 
 // ---------- routes ----------
@@ -377,7 +385,7 @@ const server = createServer(async (req, res) => {
     // Workspace shell (token required so other local pages can't embed a live session).
     if (p === '/' && req.method === 'GET') {
       if (!tokenOk(req, url)) return sendText(res, 403, 'missing token – open the link printed by `truemap`');
-      const html = readFileSync(join(UI_DIR, 'workspace.html'), 'utf8')
+      const html = withTheme(readFileSync(join(UI_DIR, 'workspace.html'), 'utf8'))
         .replace('__TRUEMAP_TOKEN__', token)
         .replace('__TRUEMAP_CONTENT__', `http://127.0.0.1:${contentPort}`);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
@@ -402,6 +410,13 @@ const server = createServer(async (req, res) => {
       const ping = setInterval(() => res.write(': ping\n\n'), 20_000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); lastSeenAt = Date.now(); scheduleCloseCheck(); touchIdle(); });
       return;
+    }
+    if (p === '/api/prefs' && req.method === 'POST') {
+      const b = await readBody(req);
+      const next = { ...readPrefs() };
+      if ('theme' in b) { if (b.theme === 'light' || b.theme === 'dark') next.theme = b.theme; else delete next.theme; }
+      writePrivate(prefsFile(), JSON.stringify(next));
+      return sendJson(res, 200, { ok: true, theme: theme() });
     }
     if (p === '/api/send' && req.method === 'POST') {
       const b = await readBody(req);
@@ -448,6 +463,16 @@ const server = createServer(async (req, res) => {
       const name = page.split('/').pop().replace(/\.html?$/i, '') || 'page';
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name.replace(/[^\w.-]/g, '_')}-truemap.html"` });
       return res.end(html);
+    }
+    if (p === '/api/image' && req.method === 'GET') {
+      // A picture the agent put in its reply: a raster image inside this repo, nothing else.
+      const asked = String(url.searchParams.get('path') || '');
+      const rel = isAbsolute(asked) ? relative(root, asked) : asked;
+      const file = rel && !rel.startsWith('..') && !isAbsolute(rel) ? safeFile(root, rel.split(sep).join('/')) : null;
+      const type = file && { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }[extname(file).toLowerCase()];
+      if (!type) return sendText(res, 404, 'not an image in this repo');
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      return res.end(readFileSync(file));
     }
     if (p === '/api/snippet' && req.method === 'GET') {
       try { return sendJson(res, 200, snippet(root, url.searchParams.get('src') || '')); } catch (e) { return sendJson(res, 200, { error: String(e.message || e) }); }
@@ -628,7 +653,8 @@ const content = createServer((req, res) => {
   const p = new URL(req.url, `http://127.0.0.1:${contentPort}`).pathname;
   try {
     if (p === '/__truemap/sdk.js') {
-      const js = [join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
+      const themeSrc = readFileSync(new URL('./theme.js', import.meta.url), 'utf8').replace(/^export /m, '');
+      const js = `const tmThemeable = (() => {\n${themeSrc}\nreturn themeable;\n})();\n` + [join(UI_DIR, 'wires.js'), join(UI_DIR, 'diagram.js')].map((f) => readFileSync(f, 'utf8')).join('\n;\n')
         + '\n' + readFileSync(join(UI_DIR, 'sdk.js'), 'utf8').replace('__TRUEMAP_PARENT__', `http://127.0.0.1:${port}`);
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(js);
