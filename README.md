@@ -26,7 +26,7 @@ npx skills add TaoMachina/truemap --skill truemap
 
 Then just talk to your agent (Claude Code or Codex): *"How does payment work?"* or *"Show me the project."* The agent writes or updates a page and opens it. You can also ask for it directly: `/truemap show me the architecture`.
 
-It also works with no skill installed. Tell the agent: *"use `npx -y truemap --help`"*.
+It also works with no skill installed. Tell the agent: *"use `npx -y truemap-cli --help`"*.
 
 ## How it works
 
@@ -41,11 +41,11 @@ your repo/
 
 | Command (run by the agent) | What it does |
 |---|---|
-| `npx -y truemap [page]` | Opens the workspace in your browser: pages on the left, the page in the middle, chat on the right |
-| `npx -y truemap listen` | Waits for your next message from the chat panel |
-| `npx -y truemap reply "…" --listen` | Shows the agent's answer in the chat, then keeps listening |
-| `npx -y truemap check` | Checks every `data-src` anchor against the code |
-| `npx -y truemap guide` | The page-writing guide for agents: kit components, anchors, decision forms |
+| `npx -y truemap-cli [page]` | Opens the workspace in your browser: page switcher on top, the page in the middle, chat on the right (collapsible) |
+| `npx -y truemap-cli listen` | Waits for your next message from the chat panel |
+| `npx -y truemap-cli reply "…" --listen` | Shows the agent's answer in the chat, then keeps listening |
+| `npx -y truemap-cli check` | Checks every `data-src` anchor against the code |
+| `npx -y truemap-cli guide` | The page-writing guide for agents: kit components, anchors, decision forms |
 
 The checker doesn't depend on the programming language. It uses only git and a plain-text search:
 

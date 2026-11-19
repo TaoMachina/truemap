@@ -34,20 +34,20 @@ This is our own product. It defines a new way for agents and people to interact:
 We own three distribution points:
 
 1. **The skill**, listed on skills.sh and the plugin marketplaces. It decides when an agent thinks of us.
-2. **The command name**: agents always call `npx -y truemap`.
+2. **The command name**: agents always call `npx -y truemap-cli`. (npm refused the bare name `truemap` as too close to `true-map`; the installed binary is still `truemap`.)
 3. **The `.truemap/` folder convention.** Every repo that carries the folder spreads the tool: when someone clones it, their agent sees the folder and opens it with truemap.
 
 ## Commands (all the agent needs)
 
 | Command | What it does |
 |---|---|
-| `npx -y truemap [page]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. Prints the check result for the page and a `next_step` |
-| `npx -y truemap listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
-| `npx -y truemap reply "<text>" [--listen] [--file path\|-]` | Shows the answer in the chat. With `--listen` it keeps listening in the same call |
-| `npx -y truemap check [page…]` / `check --ok <page>` | Checks anchors / marks a page as reviewed |
-| `npx -y truemap guide` | The page-writing guide: folder rules, anchors, kit components, decision forms |
-| `npx -y truemap progress "<text>"` | Shows a short status line in the chat while the agent works |
-| `npx -y truemap stop` | Stops the background server |
+| `npx -y truemap-cli [page]` | Opens the workspace in the user's default browser, or switches the tab that is already open. Defaults to `index.html`. Prints the check result for the page and a `next_step` |
+| `npx -y truemap-cli listen [--timeout s]` | Long-polls for the user's next chat message. Returns `message`, `browser_closed`, `replaced` or `timeout` |
+| `npx -y truemap-cli reply "<text>" [--listen] [--file path\|-]` | Shows the answer in the chat. With `--listen` it keeps listening in the same call |
+| `npx -y truemap-cli check [page…]` / `check --ok <page>` | Checks anchors / marks a page as reviewed |
+| `npx -y truemap-cli guide` | The page-writing guide: folder rules, anchors, kit components, decision forms |
+| `npx -y truemap-cli progress "<text>"` | Shows a short status line in the chat while the agent works |
+| `npx -y truemap-cli stop` | Stops the background server |
 
 - **Zero install:** `npx -y` runs it directly.
 - **No login:** the chat panel talks to the user's current Claude Code or Codex session. truemap never starts an agent and never touches credentials.
@@ -124,7 +124,7 @@ The real test is whether the agent reaches for truemap without being asked:
 1. **The skill description** says *when* to use it: explaining architecture or a flow, comparing options, a "how does X work" question, or any time `.truemap/` exists.
 2. **A three-line project note.** When the CLI creates `.truemap/`, it prints a note and asks the agent to add it to `CLAUDE.md` and `AGENTS.md`. Both agents read those files every session, and the note travels with clones. It also carries the anti-annoyance rule: give a 1–3 line answer in the terminal, and open a page only for 3+ interacting parts or a decision.
 3. **`next_step` in every command's output.**
-4. **The `allowed-tools` field in the skill**, so `npx -y truemap …` doesn't trigger a permission prompt on every `listen` and `reply`.
+4. **The `allowed-tools` field in the skill**, so `npx -y truemap-cli …` doesn't trigger a permission prompt on every `listen` and `reply`.
 
 ## How we'll know it works
 

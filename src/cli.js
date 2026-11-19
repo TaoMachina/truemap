@@ -9,7 +9,7 @@ import {
 } from './common.js';
 import { checkAll, listPages, markOk, pageInFolder } from './check.js';
 
-const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap';
+const CMD = process.env.TRUEMAP_CMD || 'npx -y truemap-cli';
 
 // ---------- tiny output helpers ----------
 const out = (s = '') => process.stdout.write(s + '\n');

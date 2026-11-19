@@ -1,5 +1,5 @@
 {
-  "name": "truemap",
+  "name": "truemap-cli",
   "version": "0.1.0",
   "description": "Agents explain your project with living HTML pages that stay true to the code. Click, ask, and decide right on the page.",
   "repository": {
