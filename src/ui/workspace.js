@@ -407,7 +407,8 @@
     inspBody.innerHTML = `
       <div class="insp-name"><h2>${esc(box.label)}</h2>${box.tag ? `<code>${esc(box.tag)}</code>` : ''}</div>
       ${PLAN[box.plan] ? `<span class="insp-plan">${PLAN[box.plan]}</span>${box.planNote ? `<p class="insp-why">${esc(box.planNote)}</p>` : ''}` : ''}
-      ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed after this page was written.'}</div>` : ''}
+      ${box.mark ? `<div class="insp-state ${box.mark === 'broken' ? 'broken' : ''}">${box.mark === 'broken' ? 'This box no longer matches the code.' : 'The code changed since this box was last checked.'}</div>` : ''}
+      ${box.mark === 'changed' && box.src ? '<details class="insp-drift" open><summary>What changed in its code</summary><div class="code-box"><div class="code-note">Reading the diff…</div></div></details>' : ''}
       ${unbuiltNote(box)}${changeSection(box)}
       ${detail ? `<div class="insp-detail">${detail}</div>` : ''}
       ${box.why ? `<div class="insp-why">${esc(box.why)}</div>` : ''}
@@ -418,6 +419,13 @@
       ${pageT ? `<div class="insp-actions">${pageT ? `<button type="button" data-act="open">Open ${esc(titleOf(pageT))}</button>` : ''}</div>` : ''}`;
     inspBody.scrollTop = 0;
     wireChangeSection();
+    const drift = inspBody.querySelector('.insp-drift .code-box');
+    if (drift) {
+      const a = resultFor(state.page)?.anchors?.find((x) => x.src === box.src);
+      fetch(`/api/drift?path=${encodeURIComponent(box.src.split('#')[0].replace(/\/+$/, ''))}&since=${encodeURIComponent(a?.since || '')}&t=${encodeURIComponent(TOKEN)}`).then((r) => r.json())
+        .then((r) => { if (seq === inspSeq) drift.innerHTML = r.error ? `<div class="code-note">${esc(r.error)}</div>` : r.text.trim() ? diffHtml(r.text) : '<div class="code-note">No text changes since then (only the file time moved).</div>'; })
+        .catch(() => { drift.innerHTML = '<div class="code-note">Could not read the diff.</div>'; });
+    }
     const form = inspBody.querySelector('.insp-comment'); const ta = form.querySelector('textarea'); const add = form.querySelector('button');
     ta.placeholder = `Comment on ${box.label}, or ask about it`;
     ta.addEventListener('input', () => { add.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });

@@ -246,15 +246,16 @@ export function checkPage(ctx, page) {
     const key = `${page}|${src}`;
     const fp = fingerprint(ctx, path);
     const rec = ctx.records[key];
+    const since = ctx.records[`@${key}`] || (pageTime ? new Date(pageTime * 1000).toISOString() : null);
     if (rec !== undefined) {
-      return rec === fp ? { src, path, name, state: 'ok', reason: '' } : { src, path, name, state: 'changed', reason: `${path} changed since this box was last checked` };
+      return rec === fp ? { src, path, name, state: 'ok', reason: '' } : { src, path, name, state: 'changed', since, reason: `${path} changed since this box was last checked` };
     }
     // No fingerprint yet: fall back to times (code newer than the page), then remember the code as it is.
     const t = changeTime(ctx, path.replace(/\/+$/, ''));
     if (t !== null && pageTime && t > pageTime) {
-      return { src, path, name, state: 'changed', reason: `${path} changed after this page was last updated` };
+      return { src, path, name, state: 'changed', since, reason: `${path} changed after this page was last updated` };
     }
-    ctx.records[key] = fp; ctx.recordsDirty = true;
+    ctx.records[key] = fp; ctx.records[`@${key}`] = new Date().toISOString(); ctx.recordsDirty = true;
     return { src, path, name, state: 'ok', reason: '' };
   });
   const counts = { ok: 0, changed: 0, broken: 0 };
@@ -344,7 +345,10 @@ export function markOk(root, page, boxes) {
   if (boxes?.length) { // one box: its fingerprint only
     const ctx = createContext(root);
     const only = new Set(boxes.flatMap((b) => { const t = html.match(new RegExp(`<[^>]*\\sid=["']${escapeRe(b)}["'][^>]*>`))?.[0]; return [b, t?.match(/data-src=["']([^"']+)/)?.[1]].filter(Boolean); }));
-    for (const src of extractAnchors(html)) { if (!only.has(src)) continue; const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
+    const anchors = extractAnchors(html);
+    const unknown = boxes.filter((b) => !anchors.includes(b) && !anchors.some((a) => only.has(a) && html.includes(`id="${b}"`)));
+    if (unknown.length) throw new Error(`no box with an anchor named ${unknown.join(', ')} on ${rel} (use a box id or its data-src)`);
+    for (const src of extractAnchors(html)) { if (!only.has(src)) continue; const { path } = parseAnchor(src); if (path) { ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); ctx.records[`@${rel}|${src}`] = new Date().toISOString(); } }
     ctx.recordsDirty = true; saveRecords(ctx);
     return true;
   }
@@ -355,7 +359,7 @@ export function markOk(root, page, boxes) {
   // every box on the page matches its code as it is now
   const ctx = createContext(root);
   const only = boxes?.length ? new Set(boxes.flatMap((b) => { const tag = html.match(new RegExp(`<[^>]*\\sid=["']${escapeRe(b)}["'][^>]*>`))?.[0]; return [b, tag?.match(/data-src=["']([^"']+)/)?.[1]].filter(Boolean); })) : null;
-  for (const src of extractAnchors(html)) { if (only && !only.has(src)) continue; const { path } = parseAnchor(src); if (path) ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); }
+  for (const src of extractAnchors(html)) { if (only && !only.has(src)) continue; const { path } = parseAnchor(src); if (path) { ctx.records[`${rel}|${src}`] = fingerprint(ctx, path); ctx.records[`@${rel}|${src}`] = new Date().toISOString(); } }
   ctx.recordsDirty = true; saveRecords(ctx);
   return true;
 }

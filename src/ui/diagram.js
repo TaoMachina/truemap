@@ -108,7 +108,7 @@
   //  - Positions: as close to the connected boxes as the ordering and spacing allow (block merging).
   //  - Connections run only through the gaps between rows and through their reserved slots, so they
   //    never cross a box.
-  function layered(m, edges, dir, labelW) {
+  function layered(m, edges, dir, labelW, room = 860) {
     const lr = dir === 'LR';
     const nodes = m.nodes;
     const idx = new Map(nodes.map((n, i) => [n.id, i]));
@@ -123,7 +123,7 @@
     const gOf = nodes.map((n) => { const k = m.groups.findIndex((gr) => gr.id === n.dataset.group); return k < 0 ? m.groups.length : k; });
     const E = edges.map((e) => ({ e, a: idx.get(e.back ? e.to : e.from), b: idx.get(e.back ? e.from : e.to) }));
     // 1. rows
-    const rank = new Array(nodes.length).fill(0);
+    const rank = new Array(nodes.length).fill(0); const localRank = new Array(nodes.length).fill(0);
     const bands = [];
     let base = 0;
     for (const g of [...new Set(gOf)].sort((x, y) => x - y)) {
@@ -131,7 +131,10 @@
       const local = new Map(members.map((i) => [i, 0]));
       for (const i of members) for (const x of E) if (x.a === i && gOf[x.b] === g) local.set(x.b, Math.max(local.get(x.b), local.get(i) + 1));
       let top = base;
-      for (const i of members) { rank[i] = base + local.get(i); top = Math.max(top, rank[i]); }
+      const intra = E.filter((x) => gOf[x.a] === g && gOf[x.b] === g);
+      const rowW = members.reduce((n, i) => n + S[i].w, 0) + (members.length - 1) * NODESEP + intra.reduce((n, x) => n + (x.e.lw ? x.e.lw + 30 : 12), 0);
+      const oneRow = !lr && rowW <= room - gutter - 24;
+      for (const i of members) { rank[i] = oneRow ? base : base + local.get(i); localRank[i] = local.get(i); top = Math.max(top, rank[i]); }
       bands.push({ g, from: base, to: top });
       base = top + 1;
     }
@@ -146,10 +149,25 @@
     for (let r = 0; r < R; r++) for (const it of rows[r]) it.row = r;
     const up = new Map(); const down = new Map();
     const link = (map, k, v) => { if (!map.has(k)) map.set(k, []); map.get(k).push(v); };
-    for (const x of E) for (let k = 0; k + 1 < x.chain.length; k++) { link(down, x.chain[k], x.chain[k + 1]); link(up, x.chain[k + 1], x.chain[k]); }
+    for (const x of E) x.same = rank[x.a] === rank[x.b];
+    for (const x of E) if (!x.same) for (let k = 0; k + 1 < x.chain.length; k++) { link(down, x.chain[k], x.chain[k + 1]); link(up, x.chain[k + 1], x.chain[k]); }
+    const sameEdges = E.filter((x) => x.same);
+    // inside a row, a call goes left to right: the caller stays left of the callee
+    const keepCalls = (row) => {
+      for (let pass = 0; pass < 6; pass++) {
+        let moved = false;
+        for (const x of sameEdges) {
+          const a = item[x.a]; const b = item[x.b];
+          if (a.row !== row[0]?.row) continue;
+          const ia = row.indexOf(a); const ib = row.indexOf(b);
+          if (ia > ib) { row.splice(ia, 1); row.splice(ib, 0, a); moved = true; }
+        }
+        if (!moved) break;
+      }
+    };
     // 2. order within rows
     const number = () => { for (const row of rows) row.forEach((it, k) => { it.k = k; }); };
-    for (const row of rows) row.sort((p, q) => p.order - q.order);
+    for (const row of rows) row.sort((p, q) => (p.dummy ? 0 : localRank[p.node]) - (q.dummy ? 0 : localRank[q.node]) || p.order - q.order);
     number();
     const crossings = () => {
       let c = 0;
@@ -168,6 +186,7 @@
         const nb = downward ? up : down;
         for (const it of rows[r]) { const ns = nb.get(it) || []; it.bc = ns.length ? ns.reduce((s, q) => s + q.k, 0) / ns.length : it.k; }
         rows[r].sort((p, q) => p.bc - q.bc || p.k - q.k);
+        keepCalls(rows[r]);
         rows[r].forEach((it, k) => { it.k = k; });
       }
       const c = crossings();
@@ -176,7 +195,9 @@
     for (let r = 0; r < R; r++) rows[r] = best[r];
     number();
     // 3. positions across the rows
-    const sep = (p, q) => (p.dummy || q.dummy ? 10 : NODESEP);
+    const pairGap = new Map();
+    for (const x of sameEdges) { const k = [x.a, x.b].sort((u, v) => u - v).join('|'); pairGap.set(k, Math.max(pairGap.get(k) || 0, x.e.lw ? x.e.lw + 30 : 28)); }
+    const sep = (p, q) => (p.dummy || q.dummy ? 10 : Math.max(NODESEP, pairGap.get([p.node, q.node].sort((u, v) => u - v).join('|')) || 0));
     function settle(row, want) {
       const blocks = [];
       row.forEach((it, k) => {
@@ -213,18 +234,22 @@
     const rowH = rows.map((row) => Math.max(1, ...row.map((it) => it.h)));
     const bandOf = (r) => bands.find((b) => r >= b.from && r <= b.to);
     const ys = []; const gapAfter = []; let y = MY + (lr ? 0 : BANDPAD);
+    const adjacent = (x) => Math.abs(item[x.a].k - item[x.b].k) === 1;
+    const needsBelow = new Set(sameEdges.filter((x) => !adjacent(x)).map((x) => rank[x.a]));
     for (let r = 0; r < R; r++) {
       const b = bandOf(r);
       if (b.from === r) y += HEAD;
       ys[r] = y + rowH[r] / 2; y += rowH[r];
       if (r + 1 < R) { const g = bandOf(r + 1) !== b ? BANDPAD * 2 + GAPB : GAP; gapAfter[r] = { top: y, bottom: y + g }; y += g; }
     }
+    if (needsBelow.has(R - 1)) { gapAfter[R - 1] = { top: y, bottom: y + 30 }; y += 30; }
     y += BANDPAD + MY;
     const H = y;
     // 4. routes
     const out = new Map(); const inc = new Map();
     for (const x of E) {
       x.label = x.e.label; x.bundle = `${x.a}|${x.e.back ? '<' : '>'}|${x.label}`;
+      if (x.same) continue;
       if (!out.has(x.a)) out.set(x.a, []); out.get(x.a).push(x);
       if (!inc.has(x.b)) inc.set(x.b, []); inc.get(x.b).push(x);
     }
@@ -249,6 +274,10 @@
     const hops = [];
     for (const x of E) {
       const pts = [];
+      if (x.same) {
+        if (!adjacent(x)) { const a = item[x.a]; const b = item[x.b]; const dir = Math.sign(b.x - a.x); x.below = { px: a.x + dir * a.w / 4, qx: b.x - dir * b.w / 4 }; hops.push({ x, k: 0, row: a.row, px: x.below.px, qx: x.below.qx, key: `${x.e.name}:same` }); }
+        x.pts = pts; continue;
+      }
       for (let k = 0; k + 1 < x.chain.length; k++) {
         const p = x.chain[k]; const q = x.chain[k + 1];
         const px = k === 0 ? x.exit : p.x; const qx = k + 1 === x.chain.length - 1 ? x.entry : q.x;
@@ -270,6 +299,19 @@
       list.forEach(([key], i) => laneY.set(`${row}|${key}`, g.top + span / 2 + (i - (list.length - 1) / 2) * step));
     }
     for (const x of E) {
+      if (x.same) {
+        const a = item[x.a]; const b = item[x.b]; const r = rank[x.a];
+        if (!x.below) {
+          const dir = Math.sign(b.x - a.x) || 1;
+          const both = sameEdges.some((z) => z.a === x.b && z.b === x.a);
+          const yy = ys[r] + (both ? (x.a < x.b ? -6 : 6) : 0);
+          x.pts = [{ x: a.x + dir * a.w / 2, y: yy }, { x: b.x - dir * b.w / 2, y: yy }];
+        } else {
+          const ly = laneY.get(`${r}|${x.e.name}:same`) ?? (gapAfter[r].top + gapAfter[r].bottom) / 2;
+          x.pts = simplify([{ x: x.below.px, y: ys[r] + a.h / 2 }, { x: x.below.px, y: ly }, { x: x.below.qx, y: ly }, { x: x.below.qx, y: ys[r] + b.h / 2 }]);
+        }
+        continue;
+      }
       const pts = [{ x: x.exit, y: ys[rank[x.a]] + item[x.a].h / 2 }];
       for (const h of hops.filter((z) => z.x === x)) {
         const ly = laneY.get(`${h.row}|${h.key}`) ?? (gapAfter[h.row].top + gapAfter[h.row].bottom) / 2;
@@ -312,16 +354,17 @@
         const [id, ...lab] = spec.split(':');
         if (!byId.has(id) || id === src.id || edges.some((e) => e.from === src.id && e.to === id)) continue;
         const label = viaOf(lab.join(':'));
-        if (label) { probe.textContent = label; labelW = Math.max(labelW, probe.offsetWidth); }
-        edges.push({ from: src.id, to: id, label, name: `${src.id}>${id}`, back: order(src) > order(byId.get(id)) });
+        let lw = 0;
+        if (label) { probe.textContent = label; lw = probe.offsetWidth; labelW = Math.max(labelW, lw); }
+        edges.push({ from: src.id, to: id, label, lw, name: `${src.id}>${id}`, back: order(src) > order(byId.get(id)) });
       }
     }
     probe.remove();
     // Direction: the author's, or left to right when it fits the column, else top to bottom.
     const room = fig.clientWidth || 860;
     const asked = (fig.getAttribute('data-direction') || '').toUpperCase();
-    let L = layered(m, edges, asked === 'TB' ? 'TB' : 'LR', labelW);
-    if (!asked && L.width > room) L = layered(m, edges, 'TB', labelW);
+    let L = layered(m, edges, asked === 'TB' ? 'TB' : 'LR', labelW, room);
+    if (!asked && L.width > room) L = layered(m, edges, 'TB', labelW, room);
     fig.dataset.laidOut = L.dir;
     if (L.dir === 'TB' && L.width < room) {
       const dx = (room - L.width) / 2;

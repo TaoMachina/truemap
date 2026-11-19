@@ -390,6 +390,10 @@ async function cmdPlan(root, args, opts) {
     if (r.status !== 200) throw new Error(r.body?.error || `plan update failed (${r.status})`);
     out(`status: ${r.body.status}`);
     out(`plan: ${q(r.body.plan)}`);
+    for (const st of r.body.check?.steps || []) {
+      if (st.conflict) out(`conflict: step ${st.n}: ${q(st.conflict)}   # shown to the user in the conversation and the Changes view`);
+      if (st.rewritten) out(`report_history: step ${st.n}: ${q(st.rewritten)}`);
+    }
     const missing = (r.body.check?.planned || []).filter((p) => !p.changed);
     if (missing.length) {
       out('warning: some planned boxes have no changes in their files   # tell the user which parts of the plan are not built');

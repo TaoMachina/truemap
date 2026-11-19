@@ -392,3 +392,8 @@ code { font-family: var(--code); font-size: 0.9em; }
 .ch-conflicts p { margin: 4px 0 0; }
 .ch-steps li.st-conflict .st-rep { color: var(--broken); font-weight: 500; }
 .st-text code { font-size: 12px; background: var(--surface); padding: 0 4px; border-radius: 4px; }
+.insp-drift { margin-top: 10px; }
+.insp-drift summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--ink); }
+.insp-drift .code-box { margin-top: 6px; }
+/* diffs wrap: the change matters more than the column */
+.insp-change .code-box pre span, .insp-drift .code-box pre span, .ch-diff pre span { white-space: pre-wrap; word-break: break-word; width: auto; }

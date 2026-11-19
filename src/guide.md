@@ -26,7 +26,8 @@ ANCHORS (this is what keeps pages true)
   case-sensitive); optional; folders take none. A route works too: data-src="server/api.ts#/api/orders".
 - Only anchor code you have actually read. Never invent paths.
 - `{{CMD}} check` reports broken (path or name gone) and changed (code changed after the page was written).
-  Fix the page, or if it is still accurate run `{{CMD}} check --ok <page>`.
+  Fix the page, then confirm the boxes you reviewed: `{{CMD}} check --ok <page> --box <id>` (or the whole page
+  without --box). Until then the box stays marked, even if the page changed.
 - Changes are attributed to boxes by file: a box owns the file its data-src names, plus any files listed in
   data-also="server/db.ts server/hub.ts" (its migration, its wiring), so a reviewer sees them under that box. Anchor the file that holds
   the module's main code, not a shared index file, or every change lands on every box. For a web app, anchor

@@ -438,6 +438,17 @@ const server = createServer(async (req, res) => {
       if (b.action === 'approve') return sendJson(res, 200, { ok: await approvePlan('user') });
       return sendJson(res, 400, { error: 'unknown action' });
     }
+    if (p === '/api/drift' && req.method === 'GET') {
+      const path = String(url.searchParams.get('path') || '').replace(/\\/g, '/');
+      const since = String(url.searchParams.get('since') || '');
+      if (!path || path.includes('..')) return sendJson(res, 400, { error: 'bad path' });
+      const { execFileSync } = await import('node:child_process');
+      const g = (args) => { try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return null; } };
+      const commit = (since && g(['rev-list', '-1', `--before=${since}`, 'HEAD'])?.trim()) || 'HEAD';
+      const text = g(['diff', '--no-color', '-U3', commit, '--', path]);
+      if (text === null) return sendJson(res, 200, { error: 'git diff failed' });
+      return sendJson(res, 200, { path, from: commit.slice(0, 8), text: text.length > 200_000 ? `${text.slice(0, 200_000)}\n… (cut)` : text });
+    }
     if (p === '/api/projects' && req.method === 'GET') return sendJson(res, 200, { projects: await projects() });
     if (p === '/api/end' && req.method === 'POST') {
       // The user is done talking on the page: free the agent to go back to the terminal.
@@ -530,6 +541,13 @@ const server = createServer(async (req, res) => {
           plan = { ...plan, report: rep2.report, reports: [...(plan.reports || []), { at: new Date().toISOString(), report: rep2.report }] };
           if (snapshots.plan?.slug === plan.slug) { await takeSnapshot('planEnd', { slug: plan.slug }); const r = await changesFor('plan', true); check = r.plan || null; }
           setPlan({ ...plan, status: 'done', doneAt: new Date().toISOString() });
+          const sts = check?.steps || [];
+          const tally = ['done', 'partly', 'not_built', 'dropped'].map((k) => [k, plan.report.filter((x) => x?.status === k).length]).filter(([, n]) => n).map(([k, n]) => `${n} ${k.replace('_', ' ')}`).join(', ');
+          const conflicts = sts.filter((x) => x.conflict || x.rewritten);
+          remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, plan: plan.slug,
+            text: [`**Plan closed: ${plan.title}.** Steps: ${tally}.`, ...plan.report.map((x, i) => x && x.status !== 'done' ? `- Step ${i + 1} ${x.status.replace('_', ' ')}: ${x.note}` : null).filter(Boolean),
+              ...(conflicts.length ? ['', '**Check before you trust this report:**', ...conflicts.map((x) => `- Step ${x.n}: ${[x.conflict, x.rewritten].filter(Boolean).join(' ')}`)] : []),
+              '', 'Open the Changes tab to see each step beside its diff.'].join('\n') });
         }
         return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status, check });
       }

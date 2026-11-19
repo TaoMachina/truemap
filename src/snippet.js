@@ -53,7 +53,8 @@ export function snippet(root, src, around = 10) {
   }
   const start = Math.max(0, line - 3);
   const end = Math.min(lines.length, start + around * 2 + 1);
-  const changed = git(root, ['log', '-1', '--format=%cr', '--', path]);
+  const dirty = (git(root, ['status', '--porcelain', '--', path]) || '').trim();
+  const changed = dirty ? 'uncommitted changes' : git(root, ['log', '-1', '--format=%cr', '--', path]);
   return {
     path, name, line: line + 1, start: start + 1, total: lines.length,
     lines: lines.slice(start, end).map((l) => (l.length > 220 ? `${l.slice(0, 220)}…` : l)),
