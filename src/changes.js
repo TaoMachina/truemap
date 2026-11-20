@@ -14,7 +14,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FOLDER, gitExe } from './common.js';
-import { extractAnchors, listPages, parseAnchor } from './check.js';
+import { anchorTags, attrOf, extractAnchors, listPages, parseAnchor } from './check.js';
 
 function git(root, args, env) {
   const exe = gitExe();
@@ -50,7 +50,9 @@ async function mainBase(root) {
 }
 
 export async function resolveBase(root, kind, snapshots = {}) {
-  const want = kind && kind !== 'auto' ? kind : snapshots.plan ? 'plan' : snapshots.turn ? 'turn' : 'head';
+  // auto: the plan while it is being built and in the turn that closed it; after that, the turn
+  const closedEarlier = snapshots.plan && snapshots.planEnd?.slug === snapshots.plan.slug && snapshots.turn && snapshots.planEnd.at < snapshots.turn.at;
+  const want = kind && kind !== 'auto' ? kind : snapshots.plan && !closedEarlier ? 'plan' : snapshots.turn ? 'turn' : 'head';
   if (want === 'plan' && snapshots.plan) {
     const end = snapshots.planEnd?.slug === snapshots.plan.slug ? snapshots.planEnd : null;
     return { kind: 'plan', tree: snapshots.plan.tree, to: end?.tree, at: snapshots.plan.at, label: end ? 'What was done for the plan' : 'Since you approved the plan' };
@@ -98,18 +100,18 @@ export function attribute(root, files) {
       if (path) anchors.push({ page, src, path, own: true });
     }
     // data-also="server/db.ts server/hub.ts": more files a box owns (its migration, its wiring)
-    for (const m of html.matchAll(/<[^>]*\sdata-src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
-      const also = m[0].match(/\sdata-also\s*=\s*["']([^"']*)["']/i)?.[1];
-      for (const p of (also || '').split(/[\s,]+/).filter(Boolean)) anchors.push({ page, src: m[1], path: p.replace(/^\.?\//, '') });
+    for (const { tag, src } of anchorTags(html)) {
+      const also = attrOf(tag, 'data-also');
+      for (const p of (also || '').split(/[\s,]+/).filter(Boolean)) anchors.push({ page, src, path: p.replace(/^\.?\//, '') });
     }
   }
   const names = new Map();
   for (const { page } of pages) {
     let html = '';
     try { html = readFileSync(join(root, FOLDER, page), 'utf8'); } catch { continue; }
-    for (const m of html.matchAll(/<[^>]*\sdata-src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
-      const nm = m[0].match(/\sdata-name\s*=\s*["']([^"']+)["']/i)?.[1];
-      if (nm && !names.has(m[1])) names.set(m[1], nm);
+    for (const { tag, src } of anchorTags(html)) {
+      const nm = attrOf(tag, 'data-name');
+      if (nm && !names.has(src)) names.set(src, nm);
     }
   }
   const boxes = new Map(); // src -> { src, pages:Set, files:[] }

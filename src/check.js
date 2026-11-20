@@ -10,7 +10,6 @@ import { createHash } from 'node:crypto';
 import { FOLDER, gitExe, verifiedPath } from './common.js';
 
 const META_RE = /<meta\s+name=["']truemap-verified["']\s+content=["']([^"']*)["']\s*\/?>/i;
-const ANCHOR_RE = /\bdata-src\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
 const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
 const MAX_SCAN_BYTES = 4 * 1024 * 1024;
 
@@ -69,13 +68,35 @@ function decodeEntities(s) {
   return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
-export function extractAnchors(html) {
-  const seen = new Set();
-  for (const m of html.matchAll(ANCHOR_RE)) {
-    const v = decodeEntities((m[1] ?? m[2] ?? '').trim());
-    if (v) seen.add(v);
+// Start tags of real elements only. Comments, raw text (script, style, textarea, title) and what is inside
+// <pre> and <code> are text, and so is an escaped sample (&lt;div data-src=…&gt;): a draft that shows
+// `data-src="src/server.js#start"` as an example must not be checked as an anchor.
+const TAG_RE = /<[a-zA-Z][\w:-]*(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+const ATTR_RE = /\s([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+function elementTags(html) {
+  const text = html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
+    .replace(/<(script|style|textarea|title|pre|code)\b((?:[^>"']|"[^"]*"|'[^']*')*)>[\s\S]*?<\/\1\s*>/gi, (_m, t, a) => `<${t}${a}>`);
+  return text.match(TAG_RE) || [];
+}
+export function attrOf(tag, name) {
+  const body = tag.replace(/^<[a-zA-Z][\w:-]*/, '');
+  for (const m of body.matchAll(ATTR_RE)) if (m[1].toLowerCase() === name) return decodeEntities(m[2] ?? m[3] ?? m[4] ?? '');
+  return null;
+}
+
+/** The start tags that carry a data-src, with that value: { tag, src }. */
+export function anchorTags(html) {
+  const out = [];
+  for (const tag of elementTags(html)) {
+    const v = attrOf(tag, 'data-src');
+    if (v !== null && v.trim()) out.push({ tag, src: v.trim() });
   }
-  return [...seen];
+  return out;
+}
+
+export function extractAnchors(html) {
+  return [...new Set(anchorTags(html).map((a) => a.src))];
 }
 
 export function parseAnchor(raw) {
@@ -283,6 +304,11 @@ export function checkLayout(html) {
   return notes.concat(lintDiagrams(html));
 }
 
+// Most boxes one box may wire to. A map has 7-12 boxes; 5 targets is already half of a 10-box map and
+// as many as a full group (5) holds. Past that the wires leave one side of the box together, their curves
+// overlap into one bundle and their labels collide, so no single connection can be followed.
+const MAX_FANOUT = 5;
+
 /** The rules of a v0.5 map (figure.tm-diagram), checked so a page that breaks them is told why. */
 export function lintDiagrams(html) {
   const notes = [];
@@ -300,6 +326,28 @@ export function lintDiagrams(html) {
       const label = sec[0].match(/data-label=["']([^"']+)/)?.[1] || 'a group';
       if (n > 5) notes.push(`${where}group "${label}" has ${n} boxes; keep a group to 5 or fewer (split it by responsibility) so it reads as one row.`);
     }
+    if (groups > 5) notes.push(`${where}${groups} groups; 3-5 read at a glance. Merge a small group into the neighbour with the same responsibility, or give a part its own page.`);
+    // Connections as the map draws them: data-to on a box, to another box on this map, once per pair.
+    const out = new Map(); const wired = new Set();
+    for (const t of nodes) {
+      const from = attr(t, 'id');
+      if (!from) continue;
+      const to = new Set((attr(t, 'data-to') || '').split(/[\s,]+/).filter(Boolean).map((s) => s.split(':')[0]).filter((x) => x !== from && ids.has(x)));
+      out.set(from, to);
+      if (to.size) wired.add(from);
+      for (const x of to) wired.add(x);
+    }
+    if (nodes.length > 1 && !wired.size) notes.push(`${where}no connections. Give each box data-to="id:verb" for what it calls or feeds.`);
+    else {
+      for (const t of nodes) {
+        const id = attr(t, 'id');
+        if (!id) continue;
+        const label = attr(t, 'data-name') || id;
+        if (!wired.has(id)) notes.push(`${where}box "${label}" has no connections, so it reads as clutter. Connect it (data-to on it or on what calls it), or fold it into a neighbour's .tm-detail.`);
+        const n = out.get(id)?.size || 0;
+        if (n > MAX_FANOUT) notes.push(`${where}box "${label}" has ${n} outgoing connections; past ${MAX_FANOUT} they merge into one bundle of lines. Keep the ones on the main paths and name the rest in its .tm-detail, or split the box by responsibility.`);
+      }
+    }
     const outside = body.replace(/<section\b[^>]*class=["'][^"']*\btm-group\b[\s\S]*?<\/section>/gi, '');
     const loose = (outside.match(/class=["'][^"']*\btm-node\b/gi) || []).length;
     if (groups && loose) notes.push(`${where}${loose} box(es) outside any group; every box belongs to one group.`);
@@ -312,7 +360,17 @@ export function lintDiagrams(html) {
       if (!attr(t, 'data-src') && !/\bis-ext\b/.test(attr(t, 'class') || '')) notes.push(`${where}box "${label}" has no data-src; anchor it to its code, or mark it is-ext if it is outside the code.`);
     }
     for (const m of body.matchAll(/<li\b[^>]*\sdata-path\s*=\s*["']([^"']*)["']/gi)) {
-      for (const id of m[1].split(/[\s,]+/).filter(Boolean)) if (!ids.has(id)) notes.push(`${where}flow step "${id}" is not a box id on this map.`);
+      const path = m[1].split(/[\s,]+/).filter(Boolean);
+      for (const id of path) if (!ids.has(id)) notes.push(`${where}flow step "${id}" is not a box id on this map.`);
+      // A lit flow numbers the wire from each step to the next, in that direction only (diagram.js markFlow):
+      // a pair with no such wire shows no number and no line, and the flow reads as missing a step.
+      const name = body.slice(m.index + m[0].length).split(/<\/li>|<li\b/i)[0].replace(/^[^>]*>/, '').replace(/<[^>]+>/g, '').trim() || m[1];
+      path.forEach((a, i) => {
+        const b = path[i + 1];
+        if (!b || a === b || !ids.has(a) || !ids.has(b) || out.get(a)?.has(b)) return;
+        const back = out.get(b)?.has(a);
+        notes.push(`${where}flow "${name}": no wire from "${a}" to "${b}"${back ? ` (the wire goes from "${b}" to "${a}")` : ''}, so step ${i + 1} is not drawn. List the steps in the direction the wires point${back ? '' : `, or add data-to="${b}:…" on "${a}"`}.`);
+      });
     }
   });
   if (figs.length && /<style\b|\sstyle\s*=\s*["'][^"']*(?:color|background|font|border)/i.test(html)) notes.push('page sets its own colours or fonts; the look is fixed so every map reads the same. Remove <style> and style="…".');

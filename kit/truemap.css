@@ -290,7 +290,10 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 .tm-dg-group ~ .tm-dg-label { background: var(--dg-bg); }
 .tm-dg-label.is-hot, .tm-dg-label.is-flow { color: var(--dg-ink); }
 /* at rest only the main path says its verbs; a hovered or selected box, a lit path or a flow shows the rest */
-.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-flow):not(.is-focus), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+/* one word said once for several edges carries a count at rest; a lit edge says only its own word */
+.tm-dg-label[data-many]::after { content: attr(data-many); margin-left: .4em; }
+.tm-dg-label.is-sel[data-many]::after, .tm-dg-label.is-flow[data-many]::after, .tm-dg-label.is-focus[data-many]::after { content: none; }
 .tm-dg-edge.is-sel { stroke: var(--dg-ink); stroke-width: 1.75; }
 .tm-dg-head.is-sel { fill: var(--dg-ink); }
 .tm-dg-label.is-sel { color: var(--dg-ink); }

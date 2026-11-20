@@ -29,6 +29,44 @@ test('lintDiagrams passes a well-formed map and names what is wrong in a bad one
   assert.match(notes, /own colours/);
 });
 
+test('lintDiagrams: too many groups, a box with no connections, a hub wired to everything', () => {
+  const box = (id, extra = '') => `<div class="tm-node" id="${id}" data-name="${id}" data-src="src/${id}.ts" ${extra}></div>`;
+  const group = (id, inner) => `<section class="tm-group" id="${id}" data-label="${id}">${inner}</section>`;
+  // six groups; the hub calls six boxes (one of them twice, one is itself, one is not on the map)
+  const map = page(`<figure class="tm-diagram">
+    ${group('g1', box('hub', 'data-to="a:calls b:calls c:calls d:reads e:writes f:posts a:again hub:self ghost:x"'))}
+    ${group('g2', box('a') + box('b'))}${group('g3', box('c'))}${group('g4', box('d'))}${group('g5', box('e'))}
+    ${group('g6', box('f') + box('alone') + '<div class="tm-node is-ext" id="cloud" data-name="Cloud" data-to="f:feeds"></div>')}
+  </figure>`);
+  const notes = lintDiagrams(map).join('\n');
+  assert.match(notes, /6 groups; 3-5/);
+  assert.match(notes, /box "alone" has no connections/);
+  assert.match(notes, /box "hub" has 6 outgoing connections; past 5/);
+  assert.doesNotMatch(notes, /"Cloud" has no/); // an outside service wired in is fine and needs no data-src
+  assert.doesNotMatch(notes, /box "a" has no connections/); // a box only called is connected
+  // five targets is still fine; a map with no wires at all gets one note, not one per box
+  const ok = page(`<figure class="tm-diagram">${group('g1', box('hub', 'data-to="a b c d e"'))}${group('g2', box('a') + box('b') + box('c') + box('d') + box('e'))}</figure>`);
+  assert.deepEqual(lintDiagrams(ok), []);
+  const bare = lintDiagrams(page(`<figure class="tm-diagram">${group('g1', box('a') + box('b') + box('c'))}</figure>`));
+  assert.deepEqual(bare, ['map: no connections. Give each box data-to="id:verb" for what it calls or feeds.']);
+});
+
+test('lintDiagrams: a flow step with no wire in its direction is named, since the map cannot number it', () => {
+  const box = (id, to = '') => `<div class="tm-node" id="${id}" data-name="${id}" data-src="src/${id}.ts"${to ? ` data-to="${to}"` : ''}></div>`;
+  const map = (flows) => page(`<figure class="tm-diagram"><section class="tm-group" id="g" data-label="Core">
+    ${box('web', 'api:calls')}${box('api', 'store:writes')}${box('store')}${box('log', 'api:tails')}</section>
+    <ol class="tm-flows">${flows}</ol></figure>`);
+  assert.deepEqual(lintDiagrams(map('<li data-path="web api store">Save</li>')), []);
+  const notes = lintDiagrams(map('<li data-path="store api web" data-note="x">Read <b>back</b></li><li data-path="web api log">Tail</li>'));
+  assert.deepEqual(notes, [
+    'map: flow "Read back": no wire from "store" to "api" (the wire goes from "api" to "store"), so step 1 is not drawn. List the steps in the direction the wires point.',
+    'map: flow "Read back": no wire from "api" to "web" (the wire goes from "web" to "api"), so step 2 is not drawn. List the steps in the direction the wires point.',
+    'map: flow "Tail": no wire from "api" to "log" (the wire goes from "log" to "api"), so step 2 is not drawn. List the steps in the direction the wires point.',
+  ]);
+  const gap = lintDiagrams(map('<li data-path="web store">Skip</li>'));
+  assert.deepEqual(gap, ['map: flow "Skip": no wire from "web" to "store", so step 1 is not drawn. List the steps in the direction the wires point, or add data-to="store:…" on "web".']);
+});
+
 test('cleanPlan keeps the parts it needs and refuses a plan that names no boxes', () => {
   const p = cleanPlan({ title: 'Per-agent rate limits!', page: '.truemap/index.html', touch: [{ box: 'runs', what: 'check' }], add: [{ id: 'lim its', name: 'Rate limits', group: 'hub', from: ['runs:asks'] }], steps: ['a', 2] });
   assert.equal(p.slug, 'per-agent-rate-limits');
@@ -124,4 +162,8 @@ test('truemap draft makes numbered draft pages that read as a record', () => {
   const run = (...a) => execFileSync(process.execPath, [join(process.cwd(), 'bin', 'truemap.js'), ...a], { cwd: root, encoding: 'utf8', env: { ...process.env, TRUEMAP_NO_OPEN: '1' } });
   assert.match(run('draft', 'how routing works'), /drafts\/001-how-routing-works\.html/);
   assert.match(run('draft', 'why a queue'), /drafts\/002-why-a-queue\.html/);
+  // a title in any script names its file; only a title with no letters or digits falls back to "draft"
+  assert.match(run('draft', 'ルーティングの説明'), /drafts\/003-ルーティングの説明\.html/);
+  assert.match(run('draft', 'Как работает роутер'), /drafts\/004-как-работает-роутер\.html/);
+  assert.match(run('draft', '🚀 !!'), /drafts\/005-draft\.html/);
 });

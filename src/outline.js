@@ -12,11 +12,14 @@ const TEST = /(^|\/)(tests?|__tests__|spec|fixtures?|examples?|docs?)\//i;
 const BINARY = /\.(png|jpe?g|gif|webp|ico|svg|woff2?|ttf|otf|eot|pdf|zip|gz|tgz|jar|exe|dll|so|dylib|mp4|mp3|wav|lock)$/i;
 
 function listFiles(root) {
+  // Tracked files only: untracked scratch folders (.tmp-walk/, a stray server.ts) are not the project.
+  // A repo with nothing tracked yet falls through to the folder walk.
   try {
-    const outText = execFileSync(gitExe(), ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+    const outText = execFileSync(gitExe(), ['ls-files', '-z', '--cached'], {
       cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     });
-    return { gitRepo: true, files: outText.split('\0').filter(Boolean).filter((f) => !f.split('/').some((p) => SKIP.has(p))) };
+    const files = outText.split('\0').filter(Boolean).filter((f) => !f.split('/').some((p) => SKIP.has(p)));
+    if (files.length) return { gitRepo: true, files };
   } catch { /* not a git repo */ }
   const files = [];
   const walk = (dir, rel, depth) => {
@@ -55,7 +58,8 @@ export function outline(root) {
     if (parts.length <= 4 && ENTRY.test(f) && !TEST.test(f) && !BINARY.test(f)) entries.push(f);
   }
   const dirs = [...groups.values()]
-    .sort((a, b) => (a.path === '.' ? -1 : b.path === '.' ? 1 : a.path.localeCompare(b.path)))
+    // the top level first, then the folders holding the most code, so the cap drops the small ones
+    .sort((a, b) => (a.path === '.' ? -1 : b.path === '.' ? 1 : (b.bytes - a.bytes) || a.path.localeCompare(b.path)))
     .slice(0, 60)
     .map((g) => ({
       path: g.path, files: g.files, lines: Math.round(g.bytes / 36),

@@ -76,8 +76,11 @@
       w.classList.toggle('is-focus', ids.has(from) && ids.has(to));
       w.classList.toggle('is-hot', !!hot && (from === hot || to === hot));
     }
+    const sel = selected?.id;
     for (const w of document.querySelectorAll('.tm-dg-edge, .tm-dg-head, .tm-dg-label')) {
       w.classList.toggle('is-focus', ids.has(w.dataset.from) && ids.has(w.dataset.to));
+      // a re-laid map (its space changed) keeps the selected box's lines lit
+      w.classList.toggle('is-sel', !!sel && (w.dataset.from === sel || w.dataset.to === sel));
     }
     // labels are placed afresh for what is now visible
     window.truemapWires?.labels?.({ hot: hot || null, focus: [...ids] });
@@ -377,6 +380,17 @@
     let left = u.r + 10; let top = u.t - h / 2;
     if (left + w > scrollX + vw - 8) { left = Math.max(scrollX + 8, u.r - w); top = u.t - h - 14; }
     if (top < scrollY + 4) top = u.b + 10;
+    // Never on top of a box, the badge above it ("Plan: edit") or a group's name: the first free spot beside
+    // the plan's boxes.
+    const doc = (r) => ({ l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY });
+    const walls = [...document.querySelectorAll('.tm-node, .tm-step, .tm-dg-glabel')].filter((el) => el.getBoundingClientRect().width).map((el) => { const r = doc(el.getBoundingClientRect()); return { l: r.l - 6, t: r.t - 18, r: r.r + 12, b: r.b + 6 }; });
+    const free = ([x, y]) => x >= scrollX + 8 && x + w <= scrollX + vw - 8 && y >= 4 && !walls.some((o) => x < o.r && x + w > o.l && y < o.b && y + h > o.t);
+    const spots = [[left, top]];
+    for (const r of rs.map(doc)) {
+      const mid = (r.t + r.b) / 2 - h / 2;
+      spots.push([r.r + 16, mid], [r.l - 10 - w, mid], [r.r - w, r.t - h - 20], [r.r - w, r.b + 10]);
+    }
+    [left, top] = spots.find(free) || spots[0];
     box.style.left = `${left}px`; box.style.top = `${top}px`;
     box.onclick = (e) => {
       const act = e.target.closest('[data-pa]')?.dataset.pa; if (!act) return;

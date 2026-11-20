@@ -69,24 +69,60 @@ async function takeSnapshot(kind, extra = {}) {
 const changeCache = new Map(); // base -> { at, promise }
 
 // ---------- what changed in a turn comes to the user, in the conversation ----------
-let lastPostedChanges = snapshots.posted || '';
-async function postChanges(base = 'turn') {
-  if (base === 'turn' && !snapshots.turn) return null;
-  const r = await changes(root, base, snapshots).catch(() => null);
+// One card per turn. `changes`, `plan --done` + `changes` and the end of the turn (listen) all want to post;
+// the first posts the card, the later ones update that same card (same id, same place) when it differs.
+// A turn is the time between the agent picking up a message and listening again; a user message or a
+// finished listen starts a new card.
+function cardThisTurn(turnAt) {
+  if (snapshots.closedTurn !== undefined && snapshots.closedTurn === turnAt) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h.role === 'user') return null;
+    if (h.kind === 'changes') return (h.turn || '') === turnAt ? h : null;
+  }
+  return null;
+}
+function updateEntry(entry) {
+  try {
+    const lines = readFileSync(historyPath(root), 'utf8').split('\n');
+    const i = lines.findLastIndex((l) => l.includes(`"id":"${entry.id}"`));
+    if (i !== -1) { lines[i] = JSON.stringify(entry); writePrivate(historyPath(root), lines.join('\n')); }
+  } catch { /* ignore */ }
+  broadcast({ type: 'chat-update', entry });
+}
+// `given`: the result `truemap changes` just reported, so the card says exactly what the terminal said.
+async function postChanges(base = 'turn', given = null) {
+  const turnAt = snapshots.turn?.at || '';
+  const card = cardThisTurn(turnAt);
+  if (card && base === 'turn') base = card.changes?.base || base; // the end of the turn refreshes the card it has
+  if (!given && base === 'turn' && !snapshots.turn) return null;
+  // no key on the code alone: editing the map moves files between boxes, closing a plan changes what is not done
+  const r = given || await changesFor(base, true);
   if (!r || r.error || !r.files) return r;
-  const key = `${r.base.kind}:${snapshots[r.base.kind]?.tree || ''}:${r.now}`;
-  if (key === lastPostedChanges) return r;
-  lastPostedChanges = key; snapshots.posted = key; saveSnapshots();
-  const p = plan && snapshots.plan?.slug === plan.slug && r.base.kind === 'plan' ? planCheck(root, plan, r) : null;
+  const p = r.plan || null;
+  const summary = {
+    base: r.base.kind, label: r.base.label, files: r.files, add: r.add, del: r.del,
+    boxes: r.boxes.slice(0, 16).map((b) => ({ src: b.src, name: b.name, isNew: !!b.isNew, add: b.add, del: b.del, pages: b.pages, files: b.files.map((x) => x.path) })),
+    unmapped: r.unmapped.flatMap((g) => g.files).slice(0, 30).map((x) => ({ path: x.path, add: x.add, del: x.del })),
+    notDone: p ? p.planned.filter((x) => !x.changed).map((x) => x.name || x.box) : [],
+  };
+  const text = `Changed ${r.files} file${r.files > 1 ? 's' : ''}`;
+  // the same lines changed, whichever base measured them
+  const same = (c) => JSON.stringify([c.files, c.add, c.del, c.boxes.map((b) => [b.src, b.add, b.del]), c.unmapped.map((x) => [x.path, x.add, x.del])]);
+  const live = cardThisTurn(turnAt); // again: history may have moved while the diff ran
+  // a listen after the turn was closed (a timeout, a restart) measures from the same start: no repeat card
+  const last = live ? null : [...history].reverse().find((h) => h.kind === 'changes' && h.changes);
+  if (last && same(last.changes) === same(summary)) return r;
+  if (live) {
+    if (same(live.changes) !== same(summary) || String(live.changes.notDone) !== String(summary.notDone)) {
+      Object.assign(live, { text, changes: summary, updatedAt: new Date().toISOString() });
+      updateEntry(live);
+    }
+    return r;
+  }
   remember({
     role: 'agent', kind: 'changes', id: `c${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName,
-    text: `Changed ${r.files} file${r.files > 1 ? 's' : ''}`,
-    changes: {
-      base: r.base.kind, label: r.base.label, files: r.files, add: r.add, del: r.del,
-      boxes: r.boxes.slice(0, 16).map((b) => ({ src: b.src, name: b.name, isNew: !!b.isNew, add: b.add, del: b.del, pages: b.pages, files: b.files.map((x) => x.path) })),
-      unmapped: r.unmapped.flatMap((g) => g.files).slice(0, 30).map((x) => ({ path: x.path, add: x.add, del: x.del })),
-      notDone: p ? p.planned.filter((x) => !x.changed).map((x) => x.name || x.box) : [],
-    },
+    turn: turnAt, text, changes: summary,
   });
   return r;
 }
@@ -531,7 +567,9 @@ const server = createServer(async (req, res) => {
     if (p === '/api/agent/listen' && req.method === 'POST') {
       const b = await readBody(req);
       // the agent listens again: its turn is over, so what it changed goes to the user
-      postChanges('turn'); // posts only when something changed since the turn began, and only once
+      // posts only when something changed since the turn began, or brings this turn's card up to date
+      const endedTurn = snapshots.turn?.at || '';
+      postChanges('turn').catch(() => null).finally(() => { snapshots.closedTurn = endedTurn; saveSnapshots(); });
       if (listener) finishListen({ status: 'replaced' });
       lastAgentActivity = Date.now();
       noteAgent(b.agent);
@@ -587,12 +625,12 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, browsers: clients.size });
     }
     if (p === '/api/agent/changes' && req.method === 'POST') {
-      // `truemap changes`: the summary for the agent, and the Changes view for the user.
+      // `truemap changes`: the summary for the agent, and this turn's changes card for the user.
       const b = await readBody(req);
       noteAgent(b.agent);
       const base = ['turn', 'plan', 'head', 'main'].includes(b.base) ? b.base : 'auto';
       const r = await changesFor(base, true);
-      if (b.open !== false && !r.error && r.files) await postChanges(r.base.kind);
+      if (b.open !== false && !r.error && r.files) await postChanges(r.base.kind, r);
       return sendJson(res, 200, { ...r, browsers: clients.size });
     }
     if (p === '/api/agent/plan' && req.method === 'POST') {
@@ -617,8 +655,7 @@ const server = createServer(async (req, res) => {
           const conflicts = sts.filter((x) => x.conflict || x.rewritten);
           remember({ role: 'agent', id: `a${Date.now().toString(36)}${(seq++).toString(36)}`, at: new Date().toISOString(), agent: agentName, plan: plan.slug,
             text: [`**Plan closed: ${plan.title}.**${tally ? ` Steps: ${tally}.` : ''}`, ...rpt.map((x, i) => x && x.status !== 'done' ? `- Step ${i + 1} ${x.status.replace('_', ' ')}: ${x.note}` : null).filter(Boolean),
-              ...(conflicts.length ? ['', '**Check before you trust this report:**', ...conflicts.map((x) => `- Step ${x.n}: ${[x.conflict, x.rewritten].filter(Boolean).join(' ')}`)] : []),
-              '', 'Open the Changes tab to see each step beside its diff.'].join('\n') });
+              ...(conflicts.length ? ['', '**Check before you trust this report:**', ...conflicts.map((x) => `- Step ${x.n}: ${[x.conflict, x.rewritten].filter(Boolean).join(' ')}`)] : [])].join('\n') });
         }
         return sendJson(res, 200, { ok: true, plan: plan.slug, status: plan.status, check });
       }

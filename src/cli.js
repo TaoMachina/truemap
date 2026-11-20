@@ -374,7 +374,7 @@ async function cmdChanges(root, args, opts) {
     for (const st of r.plan.steps || []) {
       const quiet = [...st.files.filter((x) => !x.changed).map((x) => x.path), ...st.boxes.filter((x) => !x.changed).map((x) => x.name)];
       out(`  - step ${st.n}${st.report ? ` (you reported: ${st.report.status})` : ''}: ${q(st.text)}${quiet.length ? `   # names ${quiet.map(q).join(', ')} with no changes` : ''}`);
-      if (st.conflict) out(`    conflict: ${q(st.conflict)}   # the user sees this at the top of the Changes view`);
+      if (st.conflict) out(`    conflict: ${q(st.conflict)}   # the user sees this in the conversation when the plan is closed`);
       if (st.rewritten) out(`    report_history: ${q(st.rewritten)}`);
     }
   }
@@ -405,7 +405,7 @@ async function cmdPlan(root, args, opts) {
     out(`status: ${r.body.status}`);
     out(`plan: ${q(r.body.plan)}`);
     for (const st of r.body.check?.steps || []) {
-      if (st.conflict) out(`conflict: step ${st.n}: ${q(st.conflict)}   # shown to the user in the conversation and the Changes view`);
+      if (st.conflict) out(`conflict: step ${st.n}: ${q(st.conflict)}   # shown to the user in the conversation`);
       if (st.rewritten) out(`report_history: step ${st.n}: ${q(st.rewritten)}`);
     }
     const missing = (r.body.check?.planned || []).filter((p) => !p.changed);
@@ -461,7 +461,8 @@ function cmdDraft(root, args, opts) {
   mkdirSync(dir, { recursive: true });
   const nums = readdirSync(dir).map((x) => parseInt(x, 10)).filter(Number.isFinite);
   const n = (nums.length ? Math.max(...nums) : 0) + 1;
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'draft';
+  // Letters and digits of any script, so a title in Japanese, Russian or Arabic still names its file.
+  const slug = [...name.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '')].slice(0, 48).join('').replace(/-+$/, '') || 'draft';
   const file = `drafts/${String(n).padStart(3, '0')}-${slug}.html`;
   const title = opts.title || name.replace(/^./, (c) => c.toUpperCase());
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -480,7 +481,7 @@ function cmdDraft(root, args, opts) {
   </header>
   <!-- Show it in the form that makes it obvious: a real example traced step by step, a drawing, a timeline,
        options side by side, something to try, or the map component. Any HTML, inline SVG, <style>, <script>;
-       colours through var(--tm-…). Words only as captions. -->
+       colours through var(--tm-…). Words only as captions. Write in the user's language and set <html lang> to match. -->
   <section class="tm-section">
   </section>
 </main></body>
@@ -608,7 +609,7 @@ usage:
   ${CMD} plan --file plan.json  before a change that touches 3+ boxes or adds one: show the plan on the map for review
   ${CMD} plan --approve|--done  the user said "go" in the terminal / the plan is built
   ${CMD} changes [--base turn|plan|head|main]
-                                what changed, by box; opens the Changes view for the user
+                                what changed, by box; one card per turn in the conversation
   ${CMD} progress "<text>"      show a short status line in the chat while you work
   ${CMD} stop                   stop the background server
 

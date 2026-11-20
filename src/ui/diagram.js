@@ -102,7 +102,9 @@
   // The layered layout, computed top to bottom ("rows"); left to right is the same picture turned.
   //  - Groups are bands of rows in the author's order: a group never shares a row with another, so groups
   //    never overlap or interleave.
-  //  - Inside a group a box sits one row below the boxes that call it (longest path).
+  //  - Inside a group a box sits one row below the boxes that call it (longest path). Top to bottom, a
+  //    group that fits the width is one row; one that does not wraps into as few rows as fit, callers
+  //    first, so a box is never above the boxes that call it.
   //  - A connection that skips rows reserves a narrow slot in each row it crosses.
   //  - Order within rows: barycenter sweeps, keeping the order with the fewest crossings.
   //  - Positions: as close to the connected boxes as the ordering and spacing allow (block merging).
@@ -134,13 +136,15 @@
       const intra = E.filter((x) => gOf[x.a] === g && gOf[x.b] === g);
       // width of the row in its first order: only neighbours that call each other need room for a label
       const inOrder = [...members].sort((u, v) => local.get(u) - local.get(v) || u - v);
-      let rowW = inOrder.reduce((n, i) => n + S[i].w, 0) + (members.length - 1) * NODESEP;
-      for (let k = 1; k < inOrder.length; k++) {
-        const pair = intra.filter((x) => (x.a === inOrder[k - 1] && x.b === inOrder[k]) || (x.b === inOrder[k - 1] && x.a === inOrder[k]));
-        if (pair.length) rowW += Math.max(...pair.map((x) => (x.e.lw ? x.e.lw + 30 : 28))) - NODESEP;
-      }
-      const oneRow = !lr && rowW <= (room - gutter - 24) / 0.82;
-      for (const i of members) { rank[i] = oneRow ? base : base + local.get(i); localRank[i] = local.get(i); top = Math.max(top, rank[i]); }
+      const sepAt = inOrder.map((i, k) => {
+        if (!k) return 0;
+        const pair = intra.filter((x) => (x.a === inOrder[k - 1] && x.b === i) || (x.b === inOrder[k - 1] && x.a === i));
+        return pair.length ? Math.max(...pair.map((x) => (x.e.lw ? x.e.lw + 30 : 28))) : NODESEP;
+      });
+      const fit = (room - gutter - 24) / 0.82;
+      const wrap = new Map();
+      if (!lr) { let row = 0; let w = 0; inOrder.forEach((i, k) => { if (k && w + sepAt[k] + S[i].w > fit) { row++; w = 0; } else w += sepAt[k]; w += S[i].w; wrap.set(i, row); }); }
+      for (const i of members) { rank[i] = base + (lr ? local.get(i) : wrap.get(i)); localRank[i] = local.get(i); top = Math.max(top, rank[i]); }
       bands.push({ g, from: base, to: top });
       base = top + 1;
     }
@@ -223,12 +227,20 @@
       for (const b of blocks) b.items.forEach((k, j) => { row[k].x = b.pos + b.off[j]; });
     }
     for (const row of rows) { let x = 0; row.forEach((it, k) => { if (k) x += sep(row[k - 1], it); it.x = x + it.w / 2; x += it.w; }); const c = x / 2; for (const it of row) it.x -= c; }
+    // A box is pulled toward everything it connects to, in its own row too: a pair linked to the rest only
+    // by calls inside a row would otherwise keep its first place, past every wire slot at the row's end.
+    // A box with no connections at all sits under the middle of the drawing.
+    const beside = new Map();
+    for (const x of sameEdges) { link(beside, item[x.a], item[x.b]); link(beside, item[x.b], item[x.a]); }
+    const near = (p) => [...(up.get(p) || []), ...(down.get(p) || []), ...(beside.get(p) || [])];
+    const linked = rows.flat().filter((p) => near(p).length);
     for (let it = 0; it < 10; it++) {
       const seq = it % 2 === 0 ? [...rows.keys()] : [...rows.keys()].reverse();
+      const mid = linked.length ? (Math.min(...linked.map((p) => p.x - p.w / 2)) + Math.max(...linked.map((p) => p.x + p.w / 2))) / 2 : 0;
       for (const r of seq) {
         const want = rows[r].map((p) => {
-          const ns = [...(up.get(p) || []), ...(down.get(p) || [])];
-          return ns.length ? ns.reduce((s, q) => s + q.x, 0) / ns.length : p.x;
+          const ns = near(p);
+          return ns.length ? ns.reduce((s, q) => s + q.x, 0) / ns.length : mid;
         });
         settle(rows[r], want);
       }
@@ -378,6 +390,8 @@
     const asked = (fig.getAttribute('data-direction') || '').toUpperCase();
     let L = layered(m, edges, asked === 'TB' ? 'TB' : 'LR', labelW, room);
     if (!asked && L.width > room) L = layered(m, edges, 'TB', labelW, room);
+    // wire slots make a wrapped row wider than its boxes: wrap tighter until it fits at the smallest scale
+    for (let fitTo = room; L.dir === 'TB' && L.width * 0.7 > room - 16 && fitTo > 240;) { fitTo *= 0.85; L = layered(m, edges, 'TB', labelW, fitTo); }
     fig.dataset.laidOut = L.dir;
     if (L.dir === 'TB' && L.width < room) {
       const dx = (room - L.width) / 2;
@@ -449,16 +463,19 @@
       taken.push(best);
     }
     // Edge labels sit on their own edge, at the first spot along it that covers no box and no other label.
-    // The same word on several edges from one box is said once, on the most important of them.
+    // The same word on several edges from one box is said once, on the most important of them ("creates ×3").
+    // Once a box is selected or a flow is lit, each lit edge says its own plain word instead: the repeats
+    // show, and the count hides (kit CSS). Repeats are placed last, so the map at rest is laid out the same.
     const seen = new Set();
     placed.sort((x, y) => (y.key - x.key));
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; pl.dup = seen.has(k); seen.add(k); }
     const bundleSize = new Map();
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; bundleSize.set(k, (bundleSize.get(k) || 0) + 1); }
-    for (const { e, path, key, dup } of placed) {
+    for (const { e, path, key, dup } of [...placed.filter((pl) => !pl.dup), ...placed.filter((pl) => pl.dup)]) {
       const t = document.createElement('span'); t.className = `tm-dg-label${key ? ' is-main' : ''}${dup ? ' is-dup' : ''}`;
       const many = bundleSize.get(`${e.from}|${e.label}`) || 1;
-      t.textContent = !dup && many > 1 ? `${e.label} ×${many}` : e.label;
+      t.textContent = e.label;
+      if (!dup && many > 1) t.dataset.many = `×${many}`;
       t.dataset.from = e.from; t.dataset.to = e.to;
       m.stage.appendChild(t);
       const w = t.offsetWidth; const h = t.offsetHeight; const L = path.getTotalLength();
@@ -466,7 +483,7 @@
       const trunk = bundleSize.get(`${e.from}|${e.label}`) > 1;
       // try every few pixels along the line, nearest the preferred spot first; take the first free one,
       // otherwise the least crowded; a label that would still cover a box only shows when its line is lit
-      const pref = trunk ? 0.15 : 0.5;
+      const pref = trunk && !dup ? 0.15 : 0.5;
       const fr = [pref]; for (let d = 0.04; d < 0.96; d += 0.04) { if (pref + d < 0.97) fr.push(pref + d); if (pref - d > 0.03) fr.push(pref - d); }
       let bestCost = Infinity;
       const overlap = (a, list) => list.reduce((n, o) => n + Math.max(0, Math.min(a.r, o.r) - Math.max(a.l, o.l)) * Math.max(0, Math.min(a.b, o.b) - Math.max(a.t, o.t)), 0);
@@ -478,7 +495,7 @@
         if (!cost) break;
       }
       if (bestCost > 0) t.classList.add('is-crowded');
-      if (!dup && !t.classList.contains('is-crowded')) taken.push(best);
+      if (!t.classList.contains('is-crowded')) taken.push(best);
       t.style.left = `${(best.l + best.r) / 2}px`; t.style.top = `${(best.t + best.b) / 2}px`;
     }
     // main-path edges on top

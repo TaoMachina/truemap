@@ -6,7 +6,7 @@
   const S = {
     placeholder: 'Ask about this page', placeholderNotes: 'Add a message (optional)',
     drawPrompt: 'Read this project and draw its blueprint as .truemap/index.html, then open it for me.',
-    ok: 'Matches the code', changed: (n) => `Map may be out of date (${n})`, broken: (n) => `Map out of date (${n})`,
+    ok: 'Matches the code', changed: (n, what = 'Map') => `${what} may be out of date (${n})`, broken: (n, what = 'Map') => `${what} out of date (${n})`,
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
     state: { listening: 'Listening', working: 'Working', idle: 'Stopped listening', stale: 'No reply yet', offline: 'Not listening', closed: 'Closed' },
@@ -229,7 +229,9 @@
     chip.hidden = !st;
     const { changed, broken } = r.counts;
     chip.dataset.state = st || 'ok';
-    $('checkText').textContent = broken ? S.broken(broken) + (changed ? `, ${S.changed(changed)}` : '') : changed ? S.changed(changed) : S.ok;
+    // name what is stale: the map, a draft or another page
+    const what = state.page === 'index.html' ? 'Map' : state.page.startsWith('drafts/') ? 'Draft' : 'Page';
+    $('checkText').textContent = broken ? S.broken(broken, what) + (changed ? `, ${S.changed(changed, what).toLowerCase()}` : '') : changed ? S.changed(changed, what) : S.ok;
     chip.title = st ? 'Ask the agent to update this page' : `${S.ok}: ${r.counts.ok} boxes checked`;
     if (!st) $('checkText').textContent = '';
     chip.setAttribute('aria-label', st ? $('checkText').textContent : S.ok);
@@ -310,18 +312,30 @@
     const rows = c.boxes.map((b) => `<button type="button" class="cc-row" data-src="${esc(b.src)}" data-page="${esc(b.pages?.includes(state.page) ? state.page : (b.pages?.[0] || state.page))}"><b>${esc(b.name || b.src.split('#')[1] || b.src)}${b.isNew ? '<span class="cc-new">New</span>' : ''}</b>${d(b.add, b.del)}</button>`).join('');
     const loose = c.unmapped?.length ? `<details class="cc-loose"><summary>${c.unmapped.length} file${c.unmapped.length > 1 ? 's' : ''} not on the map</summary>${c.unmapped.map((x) => `<div><code>${esc(x.path)}</code>${d(x.add, x.del)}</div>`).join('')}<button type="button" class="text-btn" data-act="map-these">Ask the agent to map these</button></details>` : '';
     const notDone = c.notDone?.length ? `<p class="cc-warn">Planned, no changes: ${esc(c.notDone.join(', '))}</p>` : '';
-    return `<div class="cc"><div class="cc-head"><b>Changed ${c.files} file${c.files > 1 ? 's' : ''}</b>${d(c.add, c.del)}</div>${rows ? `<div class="cc-rows">${rows}</div>` : ''}${notDone}${loose}<p class="cc-hint">Click a box to see its diff.</p></div>`;
+    return `<div class="cc"><div class="cc-head"><b>Changed ${c.files} file${c.files > 1 ? 's' : ''}</b>${d(c.add, c.del)}</div>${rows ? `<div class="cc-rows">${rows}</div>` : ''}${notDone}${loose}<p class="cc-hint">Click a box name above to see its diff.</p></div>`;
   }
   let latestChanges = null;
   function showChangeBadges() {
     toFrame({ type: 'changes', on: false, items: latestChanges ? latestChanges.boxes.filter((b) => !b.pages || b.pages.includes(state.page)).map((b) => ({ src: b.src, add: b.add, del: b.del, isNew: !!b.isNew })) : [] });
+  }
+  // The server keeps one changes card per turn and updates it in place as the turn goes on.
+  function updateEntry(e) {
+    const i = state.history.findIndex((h) => h.id === e.id);
+    if (i === -1) { state.history.push(e); appendEntry(e, true, true); return; }
+    state.history[i] = e;
+    const el = msgsEl.querySelector(`.msg[data-id="${CSS.escape(e.id)}"]`);
+    if (!el || e.kind !== 'changes' || !e.changes) { renderAll(); return; }
+    el.innerHTML = changesCard(e.changes);
+    // the map's badges follow the newest card
+    const last = [...state.history].reverse().find((h) => h.kind === 'changes' && h.changes);
+    if (last === e) { latestChanges = e.changes; if (showingChanges()) loadChanges(); else showChangeBadges(); }
   }
   function appendEntry(e, scroll = true, live = false) {
     msgsEl.querySelector('.intro')?.remove();
     if (e.role !== lastRole) { msgsEl.appendChild(whoLine(e.role, e.at, e.agent)); lastRole = e.role; }
     const el = document.createElement('div');
     if (e.kind === 'changes' && e.changes) {
-      el.className = 'msg agent';
+      el.className = 'msg agent'; if (e.id) el.dataset.id = e.id;
       el.innerHTML = changesCard(e.changes);
       latestChanges = e.changes; showChangeBadges();
       msgsEl.appendChild(el); renderWorking(); if (scroll) scrollChat();
@@ -1001,6 +1015,9 @@
         target ? go(target, { force: !frame.getAttribute('src') }) : showEmpty();
       } else if (d.type === 'chat') {
         state.history.push(d.entry); appendEntry(d.entry, true, true);
+        if (d.entry.role === 'agent') state.lastAgentEvent = Date.now();
+      } else if (d.type === 'chat-update') {
+        updateEntry(d.entry);
         if (d.entry.role === 'agent') state.lastAgentEvent = Date.now();
       } else if (d.type === 'agent') {
         setAgent(d.agent);

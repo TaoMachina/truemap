@@ -33,6 +33,32 @@ test('parseAnchor and extractAnchors', () => {
   assert.deepEqual(extractAnchors(`<a data-src="x.ts#a"></a><b data-src='y.ts'></b><i data-src="x.ts#a"></i>`), ['x.ts#a', 'y.ts']);
 });
 
+test('extractAnchors counts attributes on elements, not samples in text, code, comments or scripts', () => {
+  const html = `<p>Put data-src="src/server.js#inText" on a box.</p>
+    <pre><code>&lt;div class="tm-node" data-src="src/server.js#escaped"&gt;</code></pre>
+    <pre><div data-src="src/server.js#inPre"></div></pre>
+    <p>Use <code>data-src="src/server.js#inCode"</code> or <code><b data-src="src/a.js#rawInCode"></b></code>.</p>
+    <!-- <div data-src="src/server.js#inComment"></div> -->
+    <script>const s = '<div data-src="src/server.js#inScript">';</script>
+    <span title='data-src="src/x.js#inValue"'>x</span>
+    <div class="tm-node"
+         data-name="Server" data-src="src/server.js#startServer"></div>
+    <code data-src="src/code.js#onCode">onCode</code>
+    <a data-src=src/bare.js>bare</a>`;
+  assert.deepEqual(extractAnchors(html), ['src/server.js#startServer', 'src/code.js#onCode', 'src/bare.js']);
+});
+
+test('a draft that shows an anchor as an example is not reported broken', () => {
+  const dir = repo();
+  mkdirSync(join(dir, '.truemap', 'drafts'), { recursive: true });
+  writeFileSync(join(dir, '.truemap', 'drafts', '001-anchors.html'), `<title>Anchors</title>
+    <p>A box says where its code is: <code>data-src="src/pay.ts#gone"</code>.</p>
+    <pre>&lt;div data-src="src/missing.ts#nothing"&gt;</pre>
+    <div data-src="src/pay.ts#chargeCard"></div>`);
+  const r = checkAll(dir, ['drafts/001-anchors.html']).results[0];
+  assert.deepEqual(r.anchors.map((a) => [a.src, a.state]), [['src/pay.ts#chargeCard', 'ok']]);
+});
+
 test('ok, broken path, broken name, whole-word matching', () => {
   const dir = repo();
   writeFileSync(join(dir, '.truemap', 'index.html'), `<title>Blueprint</title>
