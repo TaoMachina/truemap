@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umami</title>
+<link rel="stylesheet" href="assets/truemap.css">
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <h1 class="tm-title">Umami</h1>
+    <p class="tm-lede">A tracker script on each site sends page views to one endpoint, /api/send.</p>
+  </header>
+  <figure class="tm-diagram">
+    <section class="tm-group" id="site" data-label="Website">
+      <div class="tm-node is-key" id="tracker" data-name="Tracker" data-tag="script.js" data-src="src/tracker/index.ts#send" data-to="send:posts_events">
+        <div class="tm-detail"><p>The script on a tracked site. Sends a page view on load and on route changes.</p></div>
+      </div>
+    </section>
+    <section class="tm-group" id="collect" data-label="Collect">
+      <div class="tm-node is-key" id="send" data-name="Send API" data-tag="/api/send" data-src="src/app/api/send/route.ts#POST" data-to="sessions:resolves events:saves">
+        <div class="tm-detail"><p>Validates the payload, reads the client (IP, device, location), drops bots and blocked IPs, resolves the session, then saves the event.</p></div>
+      </div>
+      <div class="tm-node is-key" id="sessions" data-name="Sessions" data-tag="visits" data-src="src/lib/collection-session.ts#resolveIdentifiedSession">
+        <div class="tm-detail"><p>Finds or starts the session and the visit a page view belongs to.</p></div>
+      </div>
+    </section>
+    <section class="tm-group" id="storage" data-label="Storage">
+      <div class="tm-node is-key" id="events" data-name="Event queries" data-tag="saveEvent" data-src="src/queries/sql/events/saveEvent.ts#saveEvent" data-to="db:inserts">
+        <div class="tm-detail"><p>Writes one event row: URL, referrer, page title, session and visit.</p></div>
+      </div>
+      <div class="tm-node is-key" id="db" data-name="Database" data-tag="Postgres, ClickHouse" data-src="src/lib/db.ts#runQuery">
+        <div class="tm-detail"><p>Runs each query on Postgres through Prisma, or on ClickHouse when it is configured.</p></div>
+      </div>
+    </section>
+    <ol class="tm-flows">
+      <li data-path="tracker send events db" data-note="The tracker posts, the API checks it, the event is saved.">A page view is recorded</li>
+    </ol>
+  </figure>
+</main></body>
+</html>

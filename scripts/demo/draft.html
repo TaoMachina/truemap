@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a page view is recorded</title>
+<link rel="stylesheet" href="../assets/truemap.css">
+<style>
+  .trace { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
+  .trace li { display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: start; padding: 10px 14px; border: 1px solid var(--tm-rule); border-radius: 10px; background: var(--tm-sheet); }
+  .trace .who { display: grid; gap: 2px; }
+  .trace .who a { font-weight: 600; color: var(--tm-ink); text-decoration: none; border-bottom: 2px solid var(--tm-mark); width: fit-content; }
+  .trace .who span { color: var(--tm-graphite); font-size: 13px; line-height: 1.35; }
+  .trace pre { margin: 0; font-family: var(--tm-code); font-size: 12.5px; line-height: 1.5; color: var(--tm-text); white-space: pre; overflow: hidden; }
+  .trace pre b { color: var(--tm-ink); font-weight: 600; }
+  .trace pre i { font-style: normal; color: var(--tm-graphite); }
+</style>
+</head>
+<body><main class="tm-page">
+  <header class="tm-header">
+    <h1 class="tm-title">How a page view is recorded</h1>
+    <p class="tm-lede">One visit to /pricing, followed from the browser to the database.</p>
+  </header>
+  <ol class="trace">
+    <li><div class="who"><a href="../index.html#tracker">Tracker</a><span>posts on page load</span></div>
+<pre>POST /api/send
+{ type: "event", payload: { url: <b>"/pricing"</b>,
+  referrer: "https://news.ycombinator.com/" } }</pre></li>
+    <li><div class="who"><a href="../index.html#send">Send API</a><span>checks, then reads the client</span></div>
+<pre>isbot(userAgent)   <i>→</i> false
+hasBlockedIp(ip)   <i>→</i> false
+getClientInfo()    <i>→</i> chrome, Mac OS, laptop, <b>DE</b></pre></li>
+    <li><div class="who"><a href="../index.html#sessions">Sessions</a><span>finds the visit, or starts one</span></div>
+<pre>sessionId <b>7c1e…</b> <i>(new)</i>   visitId 2b90…</pre></li>
+    <li><div class="who"><a href="../index.html#events">Event queries</a><span>one row per page view</span></div>
+<pre>eventType 1 <i>(page view)</i>   urlPath <b>"/pricing"</b>
+referrerDomain "news.ycombinator.com"</pre></li>
+    <li><div class="who"><a href="../index.html#db">Database</a><span>Postgres, or ClickHouse</span></div>
+<pre>INSERT INTO <b>website_event</b> <i>…</i></pre></li>
+  </ol>
+</main></body>
+</html>
