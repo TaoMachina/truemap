@@ -397,7 +397,7 @@
     box.onclick = (e) => {
       const act = e.target.closest('[data-pa]')?.dataset.pa; if (!act) return;
       if (act === 'ask') { const r = box.getBoundingClientRect(); openCard({ text: p.title, rect: docRect(r), planComment: true }); return; }
-      post({ type: 'plan-act', act });
+      post({ type: 'plan-act', act, trusted: e.isTrusted });
     };
   }
   rings = shadow.getElementById('rings');
@@ -469,7 +469,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     target?.setAttribute('data-tm-active', '');
     card = { el, target, text, noteId, label, src, rect: r, range };
     paintHighlights(); paintRings();
-    const finish = (sendNow) => {
+    const finish = (sendNow, trusted) => {
       const value = ta.value.trim();
       if (!value) { ta.focus(); return; }
       const id = noteId || `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -479,13 +479,13 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
         selector: target ? cssPath(target) : '', rect: target ? null : r,
       };
       notes.set(id, { ...note, el: target, range });
-      post({ type: existing ? 'note-update' : 'note', page: pagePath(), note: { ...note, rect: note.rect ? { left: note.rect.left, top: note.rect.top, right: note.rect.right, bottom: note.rect.bottom } : null }, send: !!sendNow });
+      post({ type: existing ? 'note-update' : 'note', page: pagePath(), note: { ...note, rect: note.rect ? { left: note.rect.left, top: note.rect.top, right: note.rect.right, bottom: note.rect.bottom } : null }, send: !!sendNow, trusted: trusted === true });
       closeCard(); placePins();
       getSelection()?.removeAllRanges();
     };
     el.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
-      if (act === 'add') finish(planComment);
+      if (act === 'add') finish(planComment, e.isTrusted);
       else if (act === 'details') { closeCard(); peek(target); }
       else if (act === 'comment') { el.classList.remove('viewing'); el.setAttribute('aria-label', 'Comment'); ta.focus({ preventScroll: true }); }
       else if (act === 'cancel') closeCard();
@@ -493,7 +493,7 @@ el.querySelector('.hint').textContent = ''; el.querySelector('[data-act="add"]')
     });
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCard(); }
-      else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); finish(e.ctrlKey || e.metaKey); }
+      else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); finish(e.ctrlKey || e.metaKey, e.isTrusted); }
     });
     if (!view) setTimeout(() => ta.focus({ preventScroll: true }), 0);
     else el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); closeCard(); } });

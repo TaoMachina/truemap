@@ -5,7 +5,7 @@
   const AGENTS = { 'claude-code': 'Claude Code', codex: 'Codex' };
   const S = {
     placeholder: 'Ask about this page', placeholderNotes: 'Add a message (optional)',
-    drawPrompt: 'Read this project and draw its blueprint as .truemap/index.html, then open it for me.',
+    drawPrompt: 'Read this project and draw its map as .truemap/index.html, then open it for me.',
     ok: 'Matches the code', changed: (n, what = 'Map') => `${what} may be out of date (${n})`, broken: (n, what = 'Map') => `${what} out of date (${n})`,
     fixPrompt: (p, c, b) => `Check ${p} against the code and update it: ${[b && `${b} anchor(s) no longer match`, c && `${c} anchor(s) whose code changed after the page was written`].filter(Boolean).join(', ')}.`,
     chose: 'Chose', fromPage: 'Sent by the page’s own script', waiting: 'Waiting for the agent', you: 'You',
@@ -108,7 +108,7 @@
   // ---------- page switcher ----------
   const resultFor = (page) => state.check.results?.find((r) => r.page === page);
   const stateOf = (r) => (r?.counts?.broken ? 'broken' : r?.counts?.changed ? 'changed' : '');
-  const titleOf = (p) => (p.page === 'index.html' && (!p.title || p.title === 'index') ? 'Blueprint' : p.title || p.page);
+  const titleOf = (p) => (p.page === 'index.html' && (!p.title || p.title === 'index') ? 'Map' : p.title || p.page);
 
   // Drafts are the record of what the agent explained, newest first; other pages after them.
   const isDraft = (p) => /^drafts\//.test(p.page);
@@ -665,10 +665,10 @@
     }
     return rows.length ? `<pre>${rows.join('')}</pre>` : '<div class="code-note">No text changes (binary or mode only).</div>';
   }
-  async function loadDiff(path, holder) {
+  async function loadDiff(path, holder, base) {
     holder.innerHTML = '<div class="code-note">Reading the diff…</div>';
     let r = {};
-    try { r = await fetch(`/api/diff?base=${encodeURIComponent(ch.data?.base?.kind || ch.base)}&path=${encodeURIComponent(path)}&t=${encodeURIComponent(TOKEN)}`).then((x) => x.json()); } catch { r = { error: 'Could not read the diff' }; }
+    try { r = await fetch(`/api/diff?base=${encodeURIComponent(base || ch.data?.base?.kind || ch.base)}&path=${encodeURIComponent(path)}&t=${encodeURIComponent(TOKEN)}`).then((x) => x.json()); } catch { r = { error: 'Could not read the diff' }; }
     holder.innerHTML = r.error ? `<div class="code-note">${esc(r.error)}</div>` : diffHtml(r.text);
   }
   $('changes').addEventListener('change', (e) => {
@@ -706,12 +706,11 @@
   function changeSection(box) {
     const b = latestChanges?.boxes?.find((x) => x.src === box.src);
     if (!b) return '';
-    ch.data = { base: { kind: latestChanges.base, label: latestChanges.label } };
-    return `<div class="insp-change"><div><span>Changed in the last turn</span>${delta(b.add, b.del)}</div>${b.files.map((p, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(p)}"><summary><span>${esc(p)}</span></summary><div class="code-box"></div></details>`).join('')}</div>`;
+    return `<div class="insp-change" data-base="${esc(latestChanges.base || '')}"><div><span>Changed in the last turn</span>${delta(b.add, b.del)}</div>${b.files.map((p, i) => `<details${i === 0 ? ' open' : ''} data-path="${esc(p)}"><summary><span>${esc(p)}</span></summary><div class="code-box"></div></details>`).join('')}</div>`;
   }
   function wireChangeSection() {
     for (const d of inspBody.querySelectorAll('.insp-change details')) {
-      const load = () => { if (d.open && !d.dataset.loaded) { d.dataset.loaded = '1'; loadDiff(d.dataset.path, d.querySelector('.code-box')); } };
+      const load = () => { if (d.open && !d.dataset.loaded) { d.dataset.loaded = '1'; loadDiff(d.dataset.path, d.querySelector('.code-box'), d.closest('.insp-change')?.dataset.base); } };
       d.addEventListener('toggle', load); load();
     }
   }
@@ -907,7 +906,9 @@
 
   // A decision only counts as the user's if the user actually moved focus into the page.
   window.addEventListener('blur', () => { setTimeout(() => { if (document.activeElement === frame) state.frameFocusAt = Date.now(); }, 0); });
-  const userIsInFrame = () => document.activeElement === frame && state.frameFocusAt > 0;
+  // A real click or key inside the frame also activates this window (user activation reaches ancestors), so a page
+  // script can't fake one between the user's actions. Older browsers without the API fall back to focus alone.
+  const userIsInFrame = () => document.activeElement === frame && state.frameFocusAt > 0 && (navigator.userActivation ? navigator.userActivation.isActive : true);
 
   // ---------- messages from the page frame ----------
   window.addEventListener('message', async (e) => {
@@ -937,7 +938,8 @@
       const i = state.notes.findIndex((x) => x.id === note.id);
       if (i >= 0) state.notes[i] = note; else state.notes.push(note);
       renderNotes(); syncFrameNotes();
-      if (d.send) send(input.value).then(() => { input.value = ''; autosize(); });
+      // Sending on a page's behalf needs the user's own click or key in the frame, like answers.
+      if (d.send && d.trusted === true && userIsInFrame()) send(input.value).then(() => { input.value = ''; autosize(); });
       else if (!panelOpen() && !narrow()) setPanel(true, false);
     } else if (d.type === 'plan-unsupported') {
       state.planUnsupported = true; renderPlan();
@@ -948,6 +950,8 @@
     } else if (d.type === 'focus-cleared') {
       $('litPill').hidden = true; unpin();
     } else if (d.type === 'plan-act') {
+      // A page script must not approve or reject a plan for the user.
+      if (!(d.trusted === true && userIsInFrame())) return;
       if (d.act === 'approve') {
         if (state.notes.length || input.value.trim()) { const t = input.value; input.value = ''; autosize(); await send(t, { approving: true }); }
         await api('/api/plan', { action: 'approve' });
