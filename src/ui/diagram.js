@@ -116,6 +116,9 @@
     const idx = new Map(nodes.map((n, i) => [n.id, i]));
     const S = nodes.map((n) => (lr ? { w: n.offsetHeight, h: n.offsetWidth } : { w: n.offsetWidth, h: n.offsetHeight }));
     const NODESEP = lr ? 18 : 24; const SLOT = 12;
+    // Lines side by side (lanes in a gap, points along a box edge) keep PAR apart: at the smallest scale (0.7)
+    // that is still 8px of clear paper between two lines, enough to follow each one by eye.
+    const PAR = 12;
     // Top to bottom, groups are swimlanes with their label in a left gutter; left to right, columns with
     // the label above the boxes.
     const gutter = Math.max(72, ...m.groups.map((gr) => (gr.el.firstChild?.offsetWidth || 0) + 30));
@@ -287,12 +290,13 @@
     const adjacent = (x) => Math.abs(item[x.a].k - item[x.b].k) === 1;
     const needsBelow = new Set(sameEdges.filter((x) => !adjacent(x)).map((x) => rank[x.a]));
     // a gap grows with the lines that turn in it, so their lanes and labels have room
-    const turning = new Array(R).fill(0);
+    // (one lane per line that turns there; lines from one box with one word share a lane)
+    const turning = Array.from({ length: R }, () => new Set());
     for (const x of E) {
-      if (x.same) { if (!adjacent(x)) turning[rank[x.a]] += 1; continue; }
-      for (let k = 0; k + 1 < x.chain.length; k++) if (Math.abs((x.chain[k].x ?? 0) - (x.chain[k + 1].x ?? 0)) > 2) turning[x.chain[k].row] += 1;
+      if (x.same) { if (!adjacent(x)) turning[rank[x.a]].add(`${x.e.name}:same`); continue; }
+      for (let k = 0; k + 1 < x.chain.length; k++) if (Math.abs((x.chain[k].x ?? 0) - (x.chain[k + 1].x ?? 0)) > 2) turning[x.chain[k].row].add(k ? `${x.e.name}:${k}` : `${x.a}|${x.e.back ? '<' : '>'}|${x.e.label}`);
     }
-    const roomFor = (r, base) => Math.min(lr ? 200 : 110, Math.max(base, 18 + turning[r] * 9));
+    const roomFor = (r, base) => Math.min(lr ? 220 : 160, Math.max(base, turning[r].size ? 24 + (turning[r].size - 1) * PAR : 0));
     for (let r = 0; r < R; r++) {
       const b = bandOf(r);
       if (b.from === r) y += HEAD;
@@ -313,7 +317,8 @@
     const portX = (it, list, keyOf, otherX) => {
       const keys = [...new Set(list.map(keyOf))];
       keys.sort((p, q) => otherX(p) - otherX(q));
-      const step = Math.min(16, (it.w * 0.7) / Math.max(1, keys.length));
+      // as far apart as the box allows, at least PAR, never past its corners
+      const step = Math.min(Math.max(PAR, Math.min(16, (it.w * 0.7) / Math.max(1, keys.length))), (it.w - 16) / Math.max(1, keys.length - 1));
       return new Map(keys.map((k, i) => [k, it.x + (i - (keys.length - 1) / 2) * step]));
     };
     // A box's bottom edge carries its exits down and both ends of its loops under the row; each gets its own
@@ -357,19 +362,34 @@
       x.pts = pts;
     }
     // Two lines never run down one vertical in a gap, or one reads as the other's continuation: a loop end
-    // or an entry that lands on another line slides along its box to a free spot.
+    // or an entry that lands on another line slides along its box to a free spot, and a line crossing a row
+    // through its slot shifts a little inside the slot (both gaps it touches move with it).
     const stems = [];
     for (const h of hops) {
       const x = h.x; const last = h.k + 1 === (x.same ? 1 : x.chain.length - 1);
       stems.push({ h, end: 'px', key: x.same ? `${x.e.name}:a` : h.k === 0 ? `>${x.bundle}` : `${x.e.name}:${h.k}p`, box: x.same ? item[x.a] : null });
       stems.push({ h, end: 'qx', key: `${x.e.name}:${h.k}q`, box: last ? item[x.b] : null });
     }
-    const clash = (s, v) => stems.some((o) => o !== s && o.h.row === s.h.row && o.h.x !== s.h.x && o.key !== s.key && Math.abs(o.h[o.end] - v) < 5);
+    const clash = (s, v) => stems.some((o) => o !== s && o.h.row === s.h.row && o.h.x !== s.h.x && o.key !== s.key && Math.abs(o.h[o.end] - v) < PAR - 2);
+    const hopOf = (x, k) => hops.find((z) => z.x === x && z.k === k);
+    for (const s of stems) {
+      if (s.box || !clash(s, s.h[s.end])) continue;
+      const x = s.h.x; if (x.same) continue;
+      const other = s.end === 'px' ? (s.h.k > 0 && hopOf(x, s.h.k - 1)) : hopOf(x, s.h.k + 1);
+      if (!other) continue;
+      const partner = stems.find((o) => o.h === other && o.end === (s.end === 'px' ? 'qx' : 'px'));
+      const slot = x.chain[s.end === 'px' ? s.h.k : s.h.k + 1];
+      const clear = (c) => rows[slot.row].every((it) => it.dummy || c < it.x - it.w / 2 - 6 || c > it.x + it.w / 2 + 6);
+      const v0 = s.h[s.end]; let v;
+      for (let d = 2; v === undefined && d <= PAR; d += 2) v = [v0 + d, v0 - d].find((c) => clear(c) && !clash(s, c) && !clash(partner, c));
+      if (v === undefined) continue;
+      s.h[s.end] = v; partner.h[partner.end] = v;
+    }
     for (const s of stems) {
       if (!s.box || !clash(s, s.h[s.end])) continue;
       const v0 = s.h[s.end]; const lo = s.box.x - s.box.w / 2 + 6; const hi = s.box.x + s.box.w / 2 - 6;
       let v;
-      for (let d = 6; v === undefined && d < s.box.w; d += 6) v = [v0 + d, v0 - d].find((c) => c > lo && c < hi && !clash(s, c));
+      for (let d = 4; v === undefined && d < s.box.w; d += 4) v = [v0 + d, v0 - d].find((c) => c > lo && c < hi && !clash(s, c));
       if (v === undefined) continue;
       s.h[s.end] = v;
       if (s.h.x.same) s.h.x.below[s.end] = v; else s.h.x.entry = v;
@@ -387,7 +407,10 @@
     // In a gap, a lane whose line comes down from above through another lane's run has to sit above it, and
     // one whose line goes on down through it has to sit below; order the lanes to break as few as possible.
     const inside = (v, B) => v > B.lo + 1 && v < B.hi - 1;
-    const wrong = (A, B) => A.bottoms.filter((v) => inside(v, B)).length + B.tops.filter((v) => inside(v, A)).length; // A placed above B
+    // A placed above B: A's line going on down through B's run, B's line coming in from above through A's run,
+    // or A going down right beside where B comes in (the two would read as one line running on)
+    const nearBy = (P, Q) => P.reduce((n, v) => n + Q.filter((w) => Math.abs(v - w) < PAR).length, 0);
+    const wrong = (A, B) => A.bottoms.filter((v) => inside(v, B)).length + B.tops.filter((v) => inside(v, A)).length + nearBy(A.bottoms, B.tops);
     const orderLanes = (list) => {
       for (let pass = 0; pass < list.length; pass++) {
         let moved = false;
@@ -402,7 +425,7 @@
     const laneY = new Map();
     for (const [row, L] of lanes) {
       const g = gapAfter[row]; const list = orderLanes([...L.entries()].sort((p, q) => p[1].lo - q[1].lo));
-      const span = g.bottom - g.top; const step = Math.min(11, Math.max(6, (span - 16) / Math.max(1, list.length)));
+      const span = g.bottom - g.top; const step = Math.min(14, Math.max(PAR, (span - 16) / Math.max(1, list.length)));
       list.forEach(([key], i) => laneY.set(`${row}|${key}`, g.top + span / 2 + (i - (list.length - 1) / 2) * step));
     }
     for (const x of E) {

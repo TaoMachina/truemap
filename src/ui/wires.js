@@ -9,7 +9,8 @@
 (() => {
   if (window.truemapWires) return;
   const SVGNS = 'http://www.w3.org/2000/svg';
-  const LANE = 9; const R = 7;
+  // LANE: tracks in a gap and free columns keep this far apart, so side-by-side lines stay apart at a glance
+  const LANE = 12; const R = 7;
 
   // An orthogonal path through the given points with rounded corners.
   function ortho(points) {
@@ -72,9 +73,9 @@
     function column(e, lo, hi, prefer) {
       const blockers = rects.filter((o) => { const r = rowOf(o); return r > lo && r < hi; });
       const free = (x) => !blockers.some((o) => x > o.l - 7 && x < o.r + 7)
-        && !columns.some((c) => Math.abs(c.x - x) < 8 && c.src !== e.src && c.lo < hi && c.hi > lo);
+        && !columns.some((c) => Math.abs(c.x - x) < LANE && c.src !== e.src && c.lo < hi && c.hi > lo);
       const cands = [prefer[0], prefer[1], ...blockers.flatMap((o) => [o.l - 13, o.r + 13])];
-      for (const c of [...cands]) for (let k = 1; k <= 4; k++) cands.push(c + k * 9, c - k * 9);
+      for (const c of [...cands]) for (let k = 1; k <= 4; k++) cands.push(c + k * LANE, c - k * LANE);
       const x = cands.filter(free).sort((p, q) => Math.abs(p - prefer[0]) + Math.abs(p - prefer[1]) - Math.abs(q - prefer[0]) - Math.abs(q - prefer[1]))[0] ?? prefer[0];
       columns.push({ x, lo, hi, src: e.src });
       return x;
