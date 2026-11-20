@@ -1,6 +1,6 @@
 {
   "name": "truemap-cli",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "A map of your code that your coding agent keeps true. It explains, plans and shows its changes on the map; plain HTML in your repo, checked against the code.",
   "repository": {
     "type": "git",
