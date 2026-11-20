@@ -1,22 +1,27 @@
 truemap guide – how to write pages, plans, and show your changes
 
 WHAT TRUEMAP IS FOR
-- The user reviews what you PLAN and what you CHANGED on a map of their system that stays true to the code.
-  The map (.truemap/index.html) is the base; plans and changes are drawn on top of it.
+- truemap is the map of this codebase (.truemap/index.html): you keep it true to the code, and it is where you
+  talk with the user. You explain on it, draw your plans on it, and show what you changed on it.
+- Read the map before working on code you don't know yet. It is a checked summary of the system and tells you
+  which boxes a change touches. A box marked changed or broken may be out of date: check it against the code
+  and fix the map.
+- Only for this repository's code. A page that is not about this code (a product plan, comparing libraries)
+  does not belong in .truemap/.
 - When the user asks you to explain something (how it works, walk me through, I don't get it, make it clear,
   in any language), draw a draft and open it, even for one function or one file. No map is needed first, and
   don't build the whole map unless asked. Short factual questions (which file, which flag, yes or no) get a
   terminal answer only. Always also give a 1-3 line answer in the terminal.
 - Before writing a new page, look in .truemap/ – updating an existing page beats creating a new one.
 
-THE FIRST BLUEPRINT (be fast)
+THE FIRST MAP (be fast)
 - Run `{{CMD}} outline`. Read the manifests and entry points it lists, not every file.
 - Write .truemap/index.html with one map of 7-12 boxes in 3-5 groups, open it, then go deeper where the user asks.
   A rough true map in two minutes beats a perfect one in twenty.
 
 FOLDER RULES
 - Pages live in .truemap/ at the repo root. Plain HTML, one topic per page, short kebab-case names
-  (payments.html, auth-flow.html). index.html is the blueprint; link module pages from it and back.
+  (payments.html, auth-flow.html). index.html is the map; link module pages from it and back.
 - Write pages in the user's language.
 - Link the kit and nothing else: <link rel="stylesheet" href="assets/truemap.css"> (from a subfolder
   ../assets/truemap.css). No frameworks, no CDNs, no web fonts, no build step. Colours only through the kit's
@@ -83,7 +88,7 @@ DESIGN AND WRITING RULES – no generic "AI look"
 - No gradients, shadows, glows, background patterns, animation or colours of your own.
 - Write like a senior engineer to a colleague: plain verbs, names from the code, numbers when the code has them.
   No filler (seamless, robust, powerful, leverage, comprehensive, delve). Start with the fact.
-- Keep a page to about two screens. Longer: split it and link from the blueprint.
+- Keep a page to about two screens. Longer: split it and link from the map.
 
 PAGE SKELETON
 <!doctype html>
@@ -95,7 +100,7 @@ PAGE SKELETON
 </head>
 <body><main class="tm-page">
   <header class="tm-header">
-    <nav class="tm-crumb"><a href="index.html">Shop blueprint</a> / Payments</nav>   (module pages only)
+    <nav class="tm-crumb"><a href="index.html">Shop map</a> / Payments</nav>   (module pages only)
     <h1 class="tm-title">Payments</h1>
     <p class="tm-lede">Charges the card when an order is created and retries failed charges.</p>
   </header>

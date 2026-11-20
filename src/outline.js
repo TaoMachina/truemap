@@ -1,4 +1,4 @@
-// A compact, language-agnostic outline of a repo, so an agent can draw a first blueprint
+// A compact, language-agnostic outline of a repo, so an agent can draw a first map
 // without reading every file: folders (two levels), file counts, rough size, manifests, likely entry points.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';

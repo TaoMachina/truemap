@@ -1,10 +1,10 @@
 # Project Vision v0.2: A Visual Control Layer Shared by Humans and Agents (truemap)
 
 > Status: draft v0.2 · 2026-11-19 · MIT open source
-> The previous version ("session change review") and its red-team and neutral review records are in [archive/VISION-v0.1-session-diff.md](archive/VISION-v0.1-session-diff.md).
+> The previous version ("session change review") and its red-team and neutral review records are in [VISION-v0.1-session-diff.md](VISION-v0.1-session-diff.md).
 > Competitor data comes from a sub-agent's fact-finding on 2026-11-19; items marked "unverified" are second-hand.
 >
-> ⚠️ **Implementation follows [ARCHITECTURE.md](ARCHITECTURE.md) (the minimal version).** The designs for data files, entity IDs, inbox, hooks and so on in sections 3, 4 and 6 of this document have been cut: the first version is just "plain HTML in a `.truemap/` folder" plus "one command-line tool".
+> ⚠️ **Implementation follows [ARCHITECTURE.md](../ARCHITECTURE.md) (the minimal version).** The designs for data files, entity IDs, inbox, hooks and so on in sections 3, 4 and 6 of this document have been cut: the first version is just "plain HTML in a `.truemap/` folder" plus "one command-line tool".
 
 ## 1. In one sentence
 

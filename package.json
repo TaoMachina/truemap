@@ -1,7 +1,7 @@
 {
   "name": "truemap-cli",
   "version": "0.5.3",
-  "description": "Agents explain your project with living HTML pages that stay true to the code. Click, ask, and decide right on the page.",
+  "description": "A map of your code that your coding agent keeps true. It explains, plans and shows its changes on the map; plain HTML in your repo, checked against the code.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TaoMachina/truemap.git"
@@ -29,6 +29,8 @@
     "test": "node --test"
   },
   "keywords": [
+    "codebase-map",
+    "code-review",
     "agent",
     "claude-code",
     "codex",

@@ -155,7 +155,7 @@ function printCheck(result, indent = '') {
   for (const l of result.layout || []) out(`${indent}  - layout: ${l}`);
 }
 
-const SETUP_NOTE = `This project has a map in \`${FOLDER}/\` (index.html), checked against the code with truemap. Before a change that touches 3+ boxes on the map or adds one, show the plan first: \`${CMD} plan --file plan.json\`, and wait for approval. After editing code, run \`${CMD} changes\` so the user can review what changed, by box. Before explaining architecture or a flow, update the page that covers it and run \`${CMD} <page>\`. Run \`${CMD} guide\` for the details. Always also give a 1-3 line answer in the terminal.`;
+const SETUP_NOTE = `This project has a map in \`${FOLDER}/\` (index.html), checked against the code with truemap. Read it before working on code you don't know yet: it shows how the system fits together, and the boxes whose data-src covers the files you will edit are the ones your change touches (\`${CMD} check\` lists boxes whose code changed since). Before a change that touches 3+ boxes on the map or adds one, show the plan first: \`${CMD} plan --file plan.json\`, and wait for approval. After a change across several files, run \`${CMD} changes\` so the user can review what changed, by box. To explain how something works, make a draft (\`${CMD} draft "<name>"\`) and open it; when the structure changes, update the map. Run \`${CMD} guide\` for the details. Always also give a 1-3 line answer in the terminal.`;
 
 // ---------- commands ----------
 async function cmdOpen(root, args, opts = {}) {
@@ -587,7 +587,7 @@ function cmdGuide() {
 }
 
 function help() {
-  out(`truemap ${VERSION} – agents explain your project with living HTML pages that stay true to the code.
+  out(`truemap ${VERSION} – a map of your code that your agent keeps true.
 
 usage:
   ${CMD} [page]                 open a page from ${FOLDER}/ (default: index.html) in the user's browser
@@ -596,7 +596,7 @@ usage:
                                 show your answer in the page chat (--listen: then wait for the next message)
   ${CMD} check [page...]        check data-src anchors against the code
   ${CMD} check --ok <page>      mark a page as reviewed after its code changed
-  ${CMD} outline                a compact map of the repo (folders, sizes, entry points) for a fast first blueprint
+  ${CMD} outline                a compact map of the repo (folders, sizes, entry points) for a fast first map
   ${CMD} guide                  how to write pages: folder rules, data-src, page kit, decisions
   ${CMD} export <page> [--out f] write the page as one self-contained HTML file to share
   ${CMD} show [page] --focus id,id [--note "…"]
