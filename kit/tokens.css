@@ -19,6 +19,7 @@
   --tm-pencil: #9a9a92;         /* hints */
   --tm-rule: #e6e6e1;
   --tm-rule-strong: #d2d2cb;
+  --tm-wire: #989892;           /* wires at rest: about 2.6:1 on a group, 2.9:1 on the page; the main path is ink */
   --tm-accent: #141413;         /* the primary action; the project's own colour when truemap finds one */
   --tm-accent-text: #ffffff;    /* text on the accent */
   --tm-chrome: #fafaf9;         /* the workspace bars and panel */
@@ -50,6 +51,7 @@
     --tm-pencil: #75756e;
     --tm-rule: #2f2f2c;
     --tm-rule-strong: #44443f;
+    --tm-wire: #62625c;
     --tm-accent: #f2f2ee;
     --tm-accent-text: #141413;
     --tm-chrome: #1b1b1a;

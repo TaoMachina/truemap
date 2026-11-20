@@ -204,6 +204,38 @@
     }
     for (let r = 0; r < R; r++) rows[r] = best[r];
     number();
+    // A call inside a row between boxes that aren't neighbours is drawn as a loop under the row, across
+    // the wires leaving every box it passes. Finish the order with neighbour swaps that cut crossings and
+    // loop lengths together; callers stay left of callees, and on a tie the author's order stays.
+    const authorK = new Map(); for (const row of rows) [...row].sort((p, q) => p.order - q.order).forEach((it, k) => authorK.set(it, k));
+    const cost = () => {
+      let c = crossings();
+      for (const x of sameEdges) c += 2 * (Math.abs(item[x.a].k - item[x.b].k) - 1);
+      for (const row of rows) for (const it of row) if (!it.dummy) c += 0.001 * Math.abs(it.k - authorK.get(it));
+      return c;
+    };
+    const callsOk = (row) => sameEdges.every((x) => item[x.a].row !== row[0]?.row || item[x.a].k < item[x.b].k);
+    let cur = cost();
+    const renumber = (row) => row.forEach((it, k) => { it.k = k; });
+    for (let pass = 0; pass < 6; pass++) {
+      let better = false;
+      for (const row of rows) {
+        // take each box (or wire slot) out and put it back where the whole drawing costs least
+        for (const it of [...row]) {
+          const from = row.indexOf(it); let bestAt = from;
+          row.splice(from, 1);
+          for (let at = 0; at <= row.length; at++) {
+            if (at === from) continue;
+            row.splice(at, 0, it); renumber(row);
+            const c = callsOk(row) ? cost() : Infinity;
+            if (c < cur - 1e-9) { cur = c; bestAt = at; better = true; }
+            row.splice(at, 1);
+          }
+          row.splice(bestAt, 0, it); renumber(row);
+        }
+      }
+      if (!better) break;
+    }
     // 3. positions across the rows
     const pairGap = new Map();
     for (const x of sameEdges) { const k = [x.a, x.b].sort((u, v) => u - v).join('|'); pairGap.set(k, Math.max(pairGap.get(k) || 0, x.e.lw ? x.e.lw + 30 : 28)); }
@@ -284,10 +316,24 @@
       const step = Math.min(16, (it.w * 0.7) / Math.max(1, keys.length));
       return new Map(keys.map((k, i) => [k, it.x + (i - (keys.length - 1) / 2) * step]));
     };
-    for (const [a, list] of out) {
-      const it = item[a];
-      const ports = portX(it, list, (x) => x.bundle, (k) => { const x = list.find((z) => z.bundle === k); return x.chain[1].x; });
-      for (const x of list) x.exit = ports.get(x.bundle);
+    // A box's bottom edge carries its exits down and both ends of its loops under the row; each gets its own
+    // point there, ordered by where the line goes, so a loop in and a loop out never share a vertical line.
+    const bottom = new Map();
+    const atBottom = (i, key, other, set) => { if (!bottom.has(i)) bottom.set(i, new Map()); const B = bottom.get(i); if (!B.has(key)) B.set(key, { other, sets: [] }); B.get(key).sets.push(set); };
+    for (const [a, list] of out) for (const x of list) atBottom(a, `>${x.bundle}`, x.chain[1].x, (v) => { x.exit = v; });
+    for (const x of E) {
+      if (!x.same || adjacent(x)) continue;
+      x.below = {};
+      atBottom(x.a, `${x.e.name}:a`, item[x.b].x, (v) => { x.below.px = v; });
+      atBottom(x.b, `${x.e.name}:b`, item[x.a].x, (v) => { x.below.qx = v; });
+    }
+    for (const [i, B] of bottom) {
+      // exits in the middle by where they go; loops to the left and right, the farther one further out so
+      // they nest instead of crossing
+      const cx = item[i].x; const W = 1e6;
+      const rankOf = (k) => { const o = B.get(k).other; return k.startsWith('>') ? o : o < cx ? -W - o : W - o; };
+      const ports = portX(item[i], [...B.keys()], (k) => k, rankOf);
+      for (const [k, v] of B) for (const set of v.sets) set(ports.get(k));
     }
     for (const [b, list] of inc) {
       const it = item[b];
@@ -300,7 +346,7 @@
     for (const x of E) {
       const pts = [];
       if (x.same) {
-        if (!adjacent(x)) { const a = item[x.a]; const b = item[x.b]; const dir = Math.sign(b.x - a.x); x.below = { px: a.x + dir * a.w / 4, qx: b.x - dir * b.w / 4 }; hops.push({ x, k: 0, row: a.row, px: x.below.px, qx: x.below.qx, key: `${x.e.name}:same` }); }
+        if (!adjacent(x)) hops.push({ x, k: 0, row: item[x.a].row, px: x.below.px, qx: x.below.qx, key: `${x.e.name}:same` });
         x.pts = pts; continue;
       }
       for (let k = 0; k + 1 < x.chain.length; k++) {
@@ -310,16 +356,52 @@
       }
       x.pts = pts;
     }
+    // Two lines never run down one vertical in a gap, or one reads as the other's continuation: a loop end
+    // or an entry that lands on another line slides along its box to a free spot.
+    const stems = [];
+    for (const h of hops) {
+      const x = h.x; const last = h.k + 1 === (x.same ? 1 : x.chain.length - 1);
+      stems.push({ h, end: 'px', key: x.same ? `${x.e.name}:a` : h.k === 0 ? `>${x.bundle}` : `${x.e.name}:${h.k}p`, box: x.same ? item[x.a] : null });
+      stems.push({ h, end: 'qx', key: `${x.e.name}:${h.k}q`, box: last ? item[x.b] : null });
+    }
+    const clash = (s, v) => stems.some((o) => o !== s && o.h.row === s.h.row && o.h.x !== s.h.x && o.key !== s.key && Math.abs(o.h[o.end] - v) < 5);
+    for (const s of stems) {
+      if (!s.box || !clash(s, s.h[s.end])) continue;
+      const v0 = s.h[s.end]; const lo = s.box.x - s.box.w / 2 + 6; const hi = s.box.x + s.box.w / 2 - 6;
+      let v;
+      for (let d = 6; v === undefined && d < s.box.w; d += 6) v = [v0 + d, v0 - d].find((c) => c > lo && c < hi && !clash(s, c));
+      if (v === undefined) continue;
+      s.h[s.end] = v;
+      if (s.h.x.same) s.h.x.below[s.end] = v; else s.h.x.entry = v;
+    }
     for (const h of hops) {
       if (Math.abs(h.px - h.qx) < 1) continue;
       if (!lanes.has(h.row)) lanes.set(h.row, new Map());
       const L = lanes.get(h.row);
+      if (!L.has(h.key)) L.set(h.key, { lo: Infinity, hi: -Infinity, tops: [], bottoms: [] });
       const cur = L.get(h.key);
-      if (cur) { cur.lo = Math.min(cur.lo, h.px, h.qx); cur.hi = Math.max(cur.hi, h.px, h.qx); } else L.set(h.key, { lo: Math.min(h.px, h.qx), hi: Math.max(h.px, h.qx) });
+      cur.lo = Math.min(cur.lo, h.px, h.qx); cur.hi = Math.max(cur.hi, h.px, h.qx);
+      // a line comes into its lane from above at px and leaves downwards at qx; a loop goes back up at qx
+      cur.tops.push(h.px); (h.x.same ? cur.tops : cur.bottoms).push(h.qx);
     }
+    // In a gap, a lane whose line comes down from above through another lane's run has to sit above it, and
+    // one whose line goes on down through it has to sit below; order the lanes to break as few as possible.
+    const inside = (v, B) => v > B.lo + 1 && v < B.hi - 1;
+    const wrong = (A, B) => A.bottoms.filter((v) => inside(v, B)).length + B.tops.filter((v) => inside(v, A)).length; // A placed above B
+    const orderLanes = (list) => {
+      for (let pass = 0; pass < list.length; pass++) {
+        let moved = false;
+        for (let i = 0; i + 1 < list.length; i++) {
+          const A = list[i][1]; const B = list[i + 1][1];
+          if (wrong(B, A) < wrong(A, B)) { [list[i], list[i + 1]] = [list[i + 1], list[i]]; moved = true; }
+        }
+        if (!moved) break;
+      }
+      return list;
+    };
     const laneY = new Map();
     for (const [row, L] of lanes) {
-      const g = gapAfter[row]; const list = [...L.entries()].sort((p, q) => p[1].lo - q[1].lo);
+      const g = gapAfter[row]; const list = orderLanes([...L.entries()].sort((p, q) => p[1].lo - q[1].lo));
       const span = g.bottom - g.top; const step = Math.min(11, Math.max(6, (span - 16) / Math.max(1, list.length)));
       list.forEach(([key], i) => laneY.set(`${row}|${key}`, g.top + span / 2 + (i - (list.length - 1) / 2) * step));
     }
@@ -361,7 +443,9 @@
       if (x.e.back) pts = pts.reverse();
       return [x.e.name, pts];
     }));
-    return { width: lr ? H : W, height: lr ? W : H, pos, bands: bandBoxes, routes, dir, gutter: lr ? 0 : gutter };
+    // the gaps between rows and how many lanes run in each, so a label can stay out of a crowded one
+    const gaps = gapAfter.map((g, r) => g && { a: g.top, b: g.bottom, n: lanes.get(r)?.size || 0 }).filter(Boolean);
+    return { width: lr ? H : W, height: lr ? W : H, pos, bands: bandBoxes, routes, dir, gutter: lr ? 0 : gutter, gaps };
   }
 
   function layout(fig) {
@@ -462,7 +546,10 @@
       lab.style.left = `${best.l - l + 3}px`; lab.style.top = `${best.t - t + 2}px`;
       taken.push(best);
     }
-    // Edge labels sit on their own edge, at the first spot along it that covers no box and no other label.
+    // Edge labels sit on their own edge, at the first spot along it that covers no box, no other label and,
+    // where it can, no other line. At rest a label shows on the main path, and on any other line where it
+    // found such a clean spot outside a gap crowded with three or more lanes; the rest wait for their line
+    // to be lit.
     // The same word on several edges from one box is said once, on the most important of them ("creates ×3").
     // Once a box is selected or a flow is lit, each lit edge says its own plain word instead: the repeats
     // show, and the count hides (kit CSS). Repeats are placed last, so the map at rest is laid out the same.
@@ -471,6 +558,12 @@
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; pl.dup = seen.has(k); seen.add(k); }
     const bundleSize = new Map();
     for (const pl of placed) { const k = `${pl.e.from}|${pl.e.label}`; bundleSize.set(k, (bundleSize.get(k) || 0) + 1); }
+    // every line as straight runs, to keep labels off lines that aren't theirs (a shared trunk is one line)
+    const runs = [];
+    for (const e of edges) { const pts = L.routes.get(e.name) || []; for (let i = 0; i + 1 < pts.length; i++) runs.push({ e, a: pts[i], b: pts[i + 1] }); }
+    const lineHits = (r, e) => runs.filter((s) => !(s.e === e || (s.e.from === e.from && s.e.label === e.label))
+      && Math.min(s.a.x, s.b.x) < r.r - 1 && Math.max(s.a.x, s.b.x) > r.l + 1 && Math.min(s.a.y, s.b.y) < r.b - 1 && Math.max(s.a.y, s.b.y) > r.t + 1).length;
+    const lanesAt = (p) => { const v = L.dir === 'LR' ? p.x : p.y; return (L.gaps || []).find((g) => v > g.a && v < g.b)?.n || 0; };
     for (const { e, path, key, dup } of [...placed.filter((pl) => !pl.dup), ...placed.filter((pl) => pl.dup)]) {
       const t = document.createElement('span'); t.className = `tm-dg-label${key ? ' is-main' : ''}${dup ? ' is-dup' : ''}`;
       const many = bundleSize.get(`${e.from}|${e.label}`) || 1;
@@ -485,16 +578,18 @@
       // otherwise the least crowded; a label that would still cover a box only shows when its line is lit
       const pref = trunk && !dup ? 0.15 : 0.5;
       const fr = [pref]; for (let d = 0.04; d < 0.96; d += 0.04) { if (pref + d < 0.97) fr.push(pref + d); if (pref - d > 0.03) fr.push(pref - d); }
-      let bestCost = Infinity;
+      let bestCost = Infinity; let bestLines = Infinity; let clean = null;
       const overlap = (a, list) => list.reduce((n, o) => n + Math.max(0, Math.min(a.r, o.r) - Math.max(a.l, o.l)) * Math.max(0, Math.min(a.b, o.b) - Math.max(a.t, o.t)), 0);
       for (const f of fr) {
         const p = path.getPointAtLength(L * f);
         const r = { l: p.x - w / 2, r: p.x + w / 2, t: p.y - h / 2, b: p.y + h / 2 };
         const cost = overlap(r, boxes) * 4 + overlap(r, badges) * 4 + overlap(r, taken) * 2;
-        if (cost < bestCost) { bestCost = cost; best = r; }
-        if (!cost) break;
+        const lines = cost ? Infinity : lineHits(r, e);
+        if (cost < bestCost || (cost === bestCost && lines < bestLines)) { bestCost = cost; bestLines = lines; best = r; }
+        if (!cost && !lines) { clean = p; break; }
       }
       if (bestCost > 0) t.classList.add('is-crowded');
+      else if (clean && !key && !dup && many === 1 && lanesAt(clean) < 3) t.classList.add('is-rest'); // a count ("creates ×3") waits for its lines to be lit
       if (!t.classList.contains('is-crowded')) taken.push(best);
       t.style.left = `${(best.l + best.r) / 2}px`; t.style.top = `${(best.t + best.b) / 2}px`;
     }

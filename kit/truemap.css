@@ -89,10 +89,10 @@ html[style*="--tm-vw"] .tm-map, html[style*="--tm-vw"] .tm-blueprint { width: ca
 /* Wires (drawn by truemap into svg.tm-wires) */
 .tm-wires { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; overflow: visible; z-index: 0; }
 /* Quiet by default: the main path is the only strong line. Hover a box and its own wires come forward. */
-.tm-wire { fill: none; stroke: var(--tm-rule-strong); stroke-width: 1.25; }
+.tm-wire { fill: none; stroke: var(--tm-wire, var(--tm-rule-strong)); stroke-width: 1.25; }
 .tm-wire.is-key { stroke: var(--tm-route); stroke-width: 2; }
 .tm-wire.is-ext { stroke-dasharray: 4 4; }
-.tm-wire-head { fill: var(--tm-rule-strong); }
+.tm-wire-head { fill: var(--tm-wire, var(--tm-rule-strong)); }
 .tm-wire-head.is-key { fill: var(--tm-route); }
 /* Labels: the main path's always show; any other wire's label shows when its box is hovered or its path is lit. */
 .tm-wire-label { font: 500 11.5px var(--tm-font); fill: var(--tm-pencil); paint-order: stroke; stroke: var(--tm-paper); stroke-width: 6px; stroke-linejoin: round; opacity: 0; transition: opacity .15s ease; }
@@ -122,8 +122,8 @@ html[data-tm-focusing] .tm-wire-label:not(.is-focus) { opacity: 0; }
 .tm-legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 22px 0 0 132px; font-size: 13px; color: var(--tm-graphite); }
 .tm-legend span { display: inline-flex; align-items: center; gap: 8px; }
 .tm-legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--tm-route); }
-.tm-legend i.is-wire { border-top: 1.5px solid var(--tm-rule-strong); }
-.tm-legend i.is-ext { border-top: 1.5px dashed var(--tm-rule-strong); }
+.tm-legend i.is-wire { border-top: 1.5px solid var(--tm-wire, var(--tm-rule-strong)); }
+.tm-legend i.is-ext { border-top: 1.5px dashed var(--tm-wire, var(--tm-rule-strong)); }
 .tm-legend span:has(> i.is-mark) { display: none; } /* older pages: the corner mark is gone */
 
 /* ---------- flow: a real sequence ---------- */
@@ -255,6 +255,7 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 /* ===================== diagrams (v0.5): small nodes in groups, laid out left to right ===================== */
 .tm-diagram {
   --dg-bg: var(--tm-paper); --dg-surface: var(--tm-wash); --dg-line: var(--tm-rule); --dg-line-strong: var(--tm-rule-strong);
+  --dg-wire: var(--tm-wire, var(--tm-rule-strong));
   --dg-muted: var(--tm-graphite); --dg-text: var(--tm-text); --dg-ink: var(--tm-ink); --dg-mark: var(--tm-mark);
   --dg-font: var(--tm-font); --dg-code: var(--tm-code);
   position: relative; margin: 20px 0 8px; font-family: var(--dg-font);
@@ -279,18 +280,23 @@ pre { font-family: var(--tm-code); font-size: 13px; line-height: 1.6; background
 .tm-diagram .tm-node.is-ext { background: var(--dg-bg); border-style: dashed; border-color: var(--dg-line-strong); }
 .tm-diagram .tm-node.is-ext .tm-dg-name { color: var(--dg-muted); }
 .tm-diagram .tm-detail { display: none; }
-.tm-dg-edge { fill: none; stroke: var(--dg-line-strong); stroke-width: 1.25; }
+.tm-dg-edge { fill: none; stroke: var(--dg-wire); stroke-width: 1.25; }
 .tm-dg-edge.is-main { stroke: var(--dg-ink); stroke-width: 1.6; }
 .tm-dg-edge.is-ext { stroke-dasharray: 3 4; }
-.tm-dg-head { fill: var(--dg-line-strong); }
+.tm-dg-head { fill: var(--dg-wire); }
 .tm-dg-head.is-main { fill: var(--dg-ink); }
 .tm-dg-edge.is-hot, .tm-dg-edge.is-flow { stroke: var(--dg-ink); stroke-width: 1.75; }
 .tm-dg-head.is-hot, .tm-dg-head.is-flow { fill: var(--dg-ink); }
 .tm-dg-label { position: absolute; z-index: 3; transform: translate(-50%, -50%); font: 400 11px/1.3 var(--dg-code); color: var(--dg-muted); background: var(--dg-bg); padding: 1px 4px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
 .tm-dg-group ~ .tm-dg-label { background: var(--dg-bg); }
 .tm-dg-label.is-hot, .tm-dg-label.is-flow { color: var(--dg-ink); }
-/* at rest only the main path says its verbs; a hovered or selected box, a lit path or a flow shows the rest */
-.tm-dg-label:not(.is-main):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-dup:not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+/* at rest the main path says its verbs, and so does any other line whose label found a clean spot (is-rest);
+   a hovered or selected box, a lit path or a flow shows the rest, and then only its own lines speak */
+.tm-dg-label:not(.is-main):not(.is-rest):not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel),
+.tm-diagram[data-flow] .tm-dg-label.is-rest:not(.is-flow):not(.is-sel):not(.is-hot), html[data-tm-focusing] .tm-dg-label.is-rest:not(.is-focus):not(.is-sel):not(.is-hot),
+html[data-tm-changes] .tm-dg-label.is-rest:not(.is-hot):not(.is-flow):not(.is-sel), .tm-dg-label.is-dup:not(.is-flow):not(.is-focus):not(.is-sel), .tm-dg-label.is-crowded:not(.is-hot):not(.is-flow):not(.is-focus):not(.is-sel) { visibility: hidden; }
+/* own rule: a browser without :has() drops only this one */
+.tm-diagram:has([data-tm-selected]) .tm-dg-label.is-rest:not(.is-sel):not(.is-hot) { visibility: hidden; }
 /* one word said once for several edges carries a count at rest; a lit edge says only its own word */
 .tm-dg-label[data-many]::after { content: attr(data-many); margin-left: .4em; }
 .tm-dg-label.is-sel[data-many]::after, .tm-dg-label.is-flow[data-many]::after, .tm-dg-label.is-focus[data-many]::after { content: none; }

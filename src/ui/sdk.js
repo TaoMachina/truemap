@@ -384,6 +384,8 @@
     // the plan's boxes.
     const doc = (r) => ({ l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY });
     const walls = [...document.querySelectorAll('.tm-node, .tm-step, .tm-dg-glabel')].filter((el) => el.getBoundingClientRect().width).map((el) => { const r = doc(el.getBoundingClientRect()); return { l: r.l - 6, t: r.t - 18, r: r.r + 12, b: r.b + 6 }; });
+    // nor on a wire's label, including one that only shows when its box is selected
+    for (const el of document.querySelectorAll('.tm-dg-label')) { const b = el.getBoundingClientRect(); if (b.width) { const r = doc(b); walls.push({ l: r.l - 4, t: r.t - 4, r: r.r + 4, b: r.b + 4 }); } }
     const free = ([x, y]) => x >= scrollX + 8 && x + w <= scrollX + vw - 8 && y >= 4 && !walls.some((o) => x < o.r && x + w > o.l && y < o.b && y + h > o.t);
     const spots = [[left, top]];
     for (const r of rs.map(doc)) {
