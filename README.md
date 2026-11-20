@@ -8,7 +8,7 @@ Your coding agent keeps a map of your project in your repo: small boxes in group
 
 You talk to the agent in a panel next to that map, in your browser. It explains things on the map, draws its plan there before a bigger change, and shows you there what it changed.
 
-![The truemap workspace: you ask where a charge can go wrong; the answer lights up the Payments box on the map and pins a note beside it](docs/images/workspace.png)
+![truemap on the Umami codebase: a question lights up the boxes it is about; asked for rate limits, the agent draws its plan on the map; after approval the map shows the new box and what changed, and one click opens the diff](docs/images/demo.gif)
 
 ## Install
 
